@@ -17,6 +17,11 @@ site/
 # opencode local runtime state (wiring stays versioned via .opencode/.gitignore)
 .opencode/node_modules/
 
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
 # OS
 .DS_Store
 Thumbs.db

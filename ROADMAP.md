@@ -1,4 +1,4 @@
-# Roadmap: gi-clinicadental
+﻿# Roadmap: gi-clinicadental
 
 Cada feature nueva se implementa siguiendo el circuito agéntico de
 [AGENTS.md](AGENTS.md): Analyst → Reviewer → Builder → QA →
@@ -86,7 +86,7 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 - [x] 00-aprovisionamiento-entorno-vercel — Rotar inmediatamente la contraseña SMTP y la clave secreta de Supabase que fueron expuestas. Actualizar sus nuevos valores exclusivamente en la interfaz segura de Vercel para los entornos Production y Preview. Confirmar el hostname SMTP real proporcionado por Ferozo. Ninguna credencial deberá quedar almacenada en el repositorio, documentación, historial Git, logs o prompts.
 
-- [ ] 01-configuracion-variables-entorno — Crear `.env.example` en la raíz del repositorio utilizando únicamente valores vacíos o placeholders ficticios. Documentar las variables `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `LEADS_NOTIFICATION_EMAIL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` y `SITE_URL`. Verificar que `.env`, `.env.local` y todas sus variantes confidenciales estén excluidas mediante `.gitignore`.
+- [-] 01-configuracion-variables-entorno — Crear `.env.example` en la raíz del repositorio utilizando únicamente valores vacíos o placeholders ficticios. Documentar las variables `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `LEADS_NOTIFICATION_EMAIL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` y `SITE_URL`. Verificar que `.env`, `.env.local` y todas sus variantes confidenciales estén excluidas mediante `.gitignore`.
 
 - [ ] 02-inicializacion-supabase-schema — Crear una migración SQL declarativa y versionada para la tabla `leads`. La estructura deberá incluir: `id` uuid como llave primaria automática, `nombre` text no nulo, `email` text no nulo, `telefono` text, `servicio` text, `mensaje` text, `estado` text no nulo con valor inicial `nuevo`, `origen` text no nulo con valor inicial `formulario_web`, `consentimiento_privacidad` boolean no nulo, `version_politica_privacidad` text no nulo, `notificacion_clinica_enviada` boolean no nulo con valor inicial false, `confirmacion_paciente_enviada` boolean no nulo con valor inicial false, `fecha_creacion` timestamp with time zone con valor predeterminado `now()` y `fecha_actualizacion` timestamp with time zone con valor predeterminado `now()`. Limitar `estado` a los valores `nuevo`, `contactado`, `confirmado` y `descartado`. Habilitar RLS y bloquear todas las operaciones directas del rol `anon`.
 
