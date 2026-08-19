@@ -24,3 +24,15 @@ jobs:
 
       - name: Tests (pytest)
         run: pytest -v
+
+      - name: Instalar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependencias Node
+        run: npm ci
+
+      - name: Tests (node --test)
+        run: npm test
