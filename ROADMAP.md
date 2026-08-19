@@ -1,4 +1,4 @@
-﻿# Roadmap: gi-clinicadental
+# Roadmap: gi-clinicadental
 
 Cada feature nueva se implementa siguiendo el circuito agéntico de
 [AGENTS.md](AGENTS.md): Analyst → Reviewer → Builder → QA →
@@ -90,7 +90,7 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 - [x] 02-inicializacion-supabase-schema — Crear una migración SQL declarativa y versionada para la tabla `leads`. La estructura deberá incluir: `id` uuid como llave primaria automática, `nombre` text no nulo, `email` text no nulo, `telefono` text, `servicio` text, `mensaje` text, `estado` text no nulo con valor inicial `nuevo`, `origen` text no nulo con valor inicial `formulario_web`, `consentimiento_privacidad` boolean no nulo, `version_politica_privacidad` text no nulo, `notificacion_clinica_enviada` boolean no nulo con valor inicial false, `confirmacion_paciente_enviada` boolean no nulo con valor inicial false, `fecha_creacion` timestamp with time zone con valor predeterminado `now()` y `fecha_actualizacion` timestamp with time zone con valor predeterminado `now()`. Limitar `estado` a los valores `nuevo`, `contactado`, `confirmado` y `descartado`. Habilitar RLS y bloquear todas las operaciones directas del rol `anon`.
 
-- [-] 03-endpoint-recepcion-leads — Desarrollar la función API Serverless `POST /api/leads` utilizando Node.js. Validar campos obligatorios, tipos, formato del correo, teléfono, consentimiento, longitudes máximas, tamaño de la solicitud y rechazo de propiedades desconocidas. Escapar cualquier contenido que posteriormente se incorpore a correos HTML. Insertar el lead en Supabase exclusivamente desde el servidor y devolver HTTP 201 sin exponer información técnica. Implementar respuestas controladas para códigos 400, 405, 413, 429 y 500.
+- [x] 03-endpoint-recepcion-leads — Desarrollar la función API Serverless `POST /api/leads` utilizando Node.js. Validar campos obligatorios, tipos, formato del correo, teléfono, consentimiento, longitudes máximas, tamaño de la solicitud y rechazo de propiedades desconocidas. Escapar cualquier contenido que posteriormente se incorpore a correos HTML. Insertar el lead en Supabase exclusivamente desde el servidor y devolver HTTP 201 sin exponer información técnica. Implementar respuestas controladas para códigos 400, 405, 413, 429 y 500.
 
 - [ ] 04-proteccion-antispam-y-abuso — Proteger el endpoint público mediante rate limiting, validación de origen y un mecanismo antispam como campo trampa, control temporal o CAPTCHA cuando resulte necesario. Evitar envíos duplicados accidentales mediante una estrategia de idempotencia o detección de solicitudes repetidas. Registrar los rechazos sin almacenar innecesariamente datos personales.
 
@@ -117,6 +117,7 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 - [ ] 15-observabilidad-y-operacion — Incorporar logs estructurados y seguros para solicitudes, validaciones, inserciones y errores de Supabase o SMTP. No registrar contraseñas, claves ni mensajes sensibles completos. Definir un procedimiento para diagnóstico, recuperación, rotación de credenciales, revisión de leads pendientes y detección de notificaciones fallidas. Utilizar inicialmente el panel protegido de Supabase para administrar los estados `nuevo`, `contactado`, `confirmado` y `descartado`, sin construir todavía un panel administrativo propio.
 
 - [ ] 16-validacion-mvp-produccion — Ejecutar una validación funcional completa en producción utilizando datos de prueba controlados: completar el formulario, aceptar la política, enviar la solicitud, verificar la respuesta de la API, confirmar la creación del lead en Supabase, comprobar la notificación a la clínica y recibir la confirmación como paciente. Verificar además la visualización desde computadora y celular. El MVP solamente podrá cerrarse cuando todo el circuito funcione sin credenciales expuestas, errores críticos ni pasos manuales no documentados.
+
 
 
 
