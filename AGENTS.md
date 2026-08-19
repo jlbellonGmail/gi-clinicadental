@@ -1,4 +1,4 @@
-# Proyecto: gi-clinicadental (Savia Dental)
+# Proyecto: gi-clinicadental (Sonríe más)
 
 Sitio web de captación de pacientes para una clínica dental: landing
 page informativa con formulario de contacto/leads. Hoy es 100% estático
@@ -7,15 +7,25 @@ leads todavía no existe (ver "Estado actual" en `ROADMAP.md`).
 
 ## Stack
 
-- Frontend: HTML + CSS + JavaScript vanilla, sin build ni framework
-  (`index.html`, `style.css`, `script.js` en la raíz del repo).
-- Backend: no existe todavía. El formulario de contacto (`#leadForm` en
-  `script.js`) está **simulado** (`setTimeout`, comentario literal
-  `// Simulate API call`) — no envía datos a ningún servidor real.
-- Documentación: MkDocs Material, publicada en GitHub Pages.
-- Testing: no hay tests de producto todavía (no hay lógica de servidor
-  que testear). `tests/` en este repo son los tests del propio circuito
-  (`scripts/*.ps1`), no del sitio.
+- Frontend: HTML5 + CSS3 + JavaScript vanilla, sin framework ni proceso de build (`index.html`, `style.css` y `script.js` en la raíz del repositorio).
+
+- Backend objetivo: funciones Serverless de Node.js que se implementarán y desplegarán en Vercel. El endpoint principal de captación será `POST /api/leads`, implementado dentro de `api/`. La lógica del servidor deberá permanecer separada del frontend y nunca exponer credenciales privadas.
+
+- Base de datos objetivo: Supabase PostgreSQL. La tabla principal será `leads` y su estructura se administrará mediante migraciones SQL declarativas y versionadas dentro del repositorio. El acceso de escritura se realizará exclusivamente desde el backend mediante la clave secreta almacenada en Vercel.
+
+- Integración Supabase: cliente oficial `@supabase/supabase-js`. La clave pública podrá utilizarse en el frontend solamente cuando resulte necesario y esté protegida mediante RLS. La clave secreta o `service_role` será de uso exclusivo del backend.
+
+- Correo transaccional: Nodemailer conectado al servidor SMTP de Ferozo mediante TLS. Enviará la notificación interna a la clínica y la confirmación de recepción al paciente. Las credenciales SMTP se consumirán exclusivamente desde variables de entorno de Vercel.
+
+- Hosting: Vercel. `develop` se utilizará para integración y despliegues Preview; `main` será la rama estable asociada al despliegue Production.
+
+- Variables de entorno: administradas en Vercel para los entornos Preview y Production. `.env.example` documentará solamente los nombres requeridos y valores ficticios o vacíos. Ninguna credencial real deberá incorporarse al repositorio.
+
+- CI/CD: GitHub Actions ejecutará las verificaciones del circuito y los tests del producto. La integración Git nativa de Vercel generará despliegues Preview para las Pull Requests y desplegará a Production después del merge autorizado hacia `main`.
+
+- Documentación: MkDocs Material, publicada mediante GitHub Pages. La documentación técnica y de usuario permanecerá separada del sitio público desplegado en Vercel.
+
+- Testing: pytest continuará validando los scripts del circuito agéntico. A medida que se incorporen el backend y las integraciones se agregarán pruebas de producto para la API, validaciones, Supabase, SMTP, seguridad y flujo end-to-end.
 
 ## Estructura del repo
 
@@ -186,10 +196,9 @@ merge solo puede quedar pendiente `[ ]` o `READY_FOR_PR` `[-]`.
   (`git tag vX.Y.Z && git push origin vX.Y.Z`).
 - Los agentes nunca crean tags — es una decisión del humano, en el momento
   de release hacia `main`.
-- Empaquetado/despliegue (Docker, hosting estático, `release.yml`)
-  todavía no existe: se agrega como tarea futura del `ROADMAP.md` cuando
-  haya una decisión de hosting concreta. No inventar esa infraestructura
-  sin esa decisión.
+- El sitio está alojado en Vercel. Los despliegues Preview se generan desde
+  Pull Requests y ramas de integración. Production se actualiza exclusivamente
+  desde `main` después del HITL correspondiente.
 
 ## CI/CD
 
@@ -220,6 +229,7 @@ merge solo puede quedar pendiente `[ ]` o `READY_FOR_PR` `[-]`.
 ## Artefactos
 
 Cada ciclo de feature genera su carpeta en `runs/<NN>-<slug>/` con:
+
 - `spec.md`
 - `audit-N.md` (uno por intento del reviewer-agent)
 - `test-report-N.md` (uno por intento del qa-agent)
