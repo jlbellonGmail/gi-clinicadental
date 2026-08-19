@@ -1,0 +1,22 @@
+# Python (tooling del circuito: pytest para tests/*.ps1 wrappers)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local editor / agent settings
+.claude/settings.local.json
+.cursor/
+.vscode/
+.idea/
+
+# MkDocs build output
+site/
+
+# opencode local runtime state (wiring stays versioned via .opencode/.gitignore)
+.opencode/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
