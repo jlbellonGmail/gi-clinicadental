@@ -1,4 +1,4 @@
-# Proyecto: gi-clinicadental (Sonríe más)
+# Proyecto: gi-clinicadental
 
 Sitio web de captación de pacientes para una clínica dental: landing
 page informativa con formulario de contacto/leads. Hoy es 100% estático

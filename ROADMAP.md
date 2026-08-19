@@ -1,4 +1,4 @@
-# Roadmap: gi-clinicadental (Sonríe más)
+# Roadmap: gi-clinicadental
 
 Cada feature nueva se implementa siguiendo el circuito agéntico de
 [AGENTS.md](AGENTS.md): Analyst → Reviewer → Builder → QA →
