@@ -1,0 +1,5 @@
+# Documentación de usuario
+
+Un archivo por feature: para qué sirve, cómo verla/usarla.
+
+- [Landing page](landing.md)

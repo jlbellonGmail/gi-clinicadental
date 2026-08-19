@@ -1,0 +1,22 @@
+site_name: gi-clinicadental
+docs_dir: docs
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      accent: teal
+    - scheme: slate
+      primary: teal
+      accent: teal
+  features:
+    - navigation.tabs
+    - navigation.instant
+    - search.suggest
+nav:
+  - Inicio: index.md
+  - Técnica: tecnica/index.md
+  - Usuario: usuario/index.md
+plugins:
+  - search
+  - tags
