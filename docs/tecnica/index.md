@@ -61,6 +61,7 @@ hide:
 - [Protección antispam y abuso](proteccion-antispam-y-abuso.md)
 - [Notificación de nuevo lead a la clínica](notificacion-clinica-smtp-ferozo.md)
 - [Confirmación automática al paciente](confirmacion-automatica-paciente.md)
+- [Seguridad y política de privacidad](seguridad-y-politica-privacidad.md)
 
 <!-- FEATURE_LINKS_END -->
 

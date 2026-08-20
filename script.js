@@ -1,3 +1,9 @@
+// Debe coincidir exactamente con el texto "Versión: ..." mostrado en
+// politica-privacidad.html. Actualizar ambos valores juntos cada vez
+// que cambie el contenido de la política (ver
+// docs/tecnica/seguridad-y-politica-privacidad.md).
+const POLITICA_PRIVACIDAD_VERSION = 'v1-2026-08-20';
+
 document.addEventListener('DOMContentLoaded', () => {
     // Header Scroll Effect
     const header = document.querySelector('header');
@@ -30,9 +36,34 @@ document.addEventListener('DOMContentLoaded', () => {
     if (leadForm) {
         leadForm.addEventListener('submit', (e) => {
             e.preventDefault();
+
+            // Segunda capa explícita de validación del consentimiento:
+            // el atributo `required` del checkbox #consent ya impide que
+            // este listener se dispare si no está marcado (validación
+            // nativa HTML5), pero se verifica también aquí de forma
+            // defensiva, sin reemplazar esa validación nativa.
+            const consentCheckbox = document.getElementById('consent');
+            if (!consentCheckbox || !consentCheckbox.checked) {
+                return;
+            }
+
             const btn = leadForm.querySelector('button');
             const originalText = btn.textContent;
-            
+
+            // Payload listo para que la feature 08-conexion-frontend-api
+            // lo envíe con fetch('/api/leads', { method: 'POST', body:
+            // JSON.stringify(leadPayload) }); no se transmite todavía en
+            // esta feature.
+            const leadPayload = {
+                nombre: document.getElementById('name').value.trim(),
+                email: document.getElementById('email').value.trim(),
+                telefono: null, // el formulario actual no tiene campo de teléfono
+                servicio: document.getElementById('service').value,
+                mensaje: document.getElementById('message').value.trim() || null,
+                consentimiento_privacidad: consentCheckbox.checked,
+                version_politica_privacidad: POLITICA_PRIVACIDAD_VERSION,
+            };
+
             btn.disabled = true;
             btn.textContent = 'Enviando...';
             btn.style.opacity = '0.7';
