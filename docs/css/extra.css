@@ -1,0 +1,375 @@
+/* =========================================================
+   IDENTIDAD VISUAL — SONRÍE MÁS
+   ========================================================= */
+
+:root,
+[data-md-color-scheme="default"] {
+  --sonrie-header: #087c7c;
+  --sonrie-teal: #0fa9a9;
+  --sonrie-teal-light: #53d4d1;
+  --sonrie-petrol: #063b3b;
+  --sonrie-petrol-deep: #031f20;
+  --sonrie-white: #ffffff;
+
+  --md-primary-fg-color: var(--sonrie-header);
+  --md-primary-fg-color--light: var(--sonrie-teal);
+  --md-primary-fg-color--dark: var(--sonrie-petrol);
+  --md-accent-fg-color: var(--sonrie-teal);
+}
+
+[data-md-color-scheme="slate"] {
+  --sonrie-header: #075f63;
+  --md-primary-fg-color: var(--sonrie-header);
+  --md-primary-fg-color--light: #0fa9a9;
+  --md-primary-fg-color--dark: #063b3b;
+  --md-accent-fg-color: #20c4c4;
+}
+
+/* Cabecera y pestañas en el mismo tono teal de la fotografía. */
+.md-header,
+.md-tabs {
+  background-color: var(--sonrie-header) !important;
+}
+
+.md-search__form {
+  background-color: rgba(3, 31, 32, 0.34);
+}
+
+
+/* =========================================================
+   PORTADAS SIN MÁRGENES INTERNOS DE MKDOCS
+   ========================================================= */
+
+.md-main__inner:has(.page-hero) {
+  display: block;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.md-content:has(.page-hero) {
+  margin: 0;
+  padding: 0;
+}
+
+.md-content:has(.page-hero) .md-content__inner {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.md-content:has(.page-hero) .md-content__inner::before {
+  display: none;
+}
+
+
+/* =========================================================
+   HERO A TODO EL ANCHO
+   ========================================================= */
+
+.page-hero {
+  --hero-image: none;
+
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(100svh - 4.8rem);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+
+  background-image:
+    linear-gradient(
+      90deg,
+      rgba(3, 31, 32, 0.99) 0%,
+      rgba(4, 48, 49, 0.96) 28%,
+      rgba(5, 75, 76, 0.78) 48%,
+      rgba(5, 75, 76, 0.32) 68%,
+      rgba(5, 75, 76, 0.05) 86%
+    ),
+    var(--hero-image);
+
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+/* Cada portada utiliza su imagen específica. */
+.page-hero--home {
+  --hero-image: url("../assets/hero-sonrie-mas.png");
+}
+
+.page-hero--technical {
+  --hero-image: url("../assets/hero-tecnica.png");
+}
+
+.page-hero--user {
+  --hero-image: url("../assets/hero-usuario.png");
+}
+
+.page-hero__content {
+  position: relative;
+  z-index: 2;
+
+  box-sizing: border-box;
+  width: min(720px, 55%);
+  padding:
+    clamp(3rem, 7vh, 6rem)
+    clamp(2rem, 7vw, 8rem);
+
+  color: var(--sonrie-white);
+}
+
+.page-hero__eyebrow {
+  display: block;
+  margin-bottom: 1.2rem;
+
+  color: #75e2df;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.page-hero h1 {
+  margin: 0 0 1.5rem;
+
+  color: var(--sonrie-white);
+  font-size: clamp(2.8rem, 5vw, 5rem);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.045em;
+
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.page-hero h1 em {
+  display: block;
+
+  color: var(--sonrie-teal-light);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.page-hero__description {
+  max-width: 590px;
+  margin: 0 0 2.2rem;
+
+  color: rgba(255, 255, 255, 0.86);
+  font-size: clamp(1rem, 1.3vw, 1.22rem);
+  line-height: 1.65;
+}
+
+
+/* =========================================================
+   BOTONES DEL HERO
+   ========================================================= */
+
+.page-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.hero-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 50px;
+  padding: 0.75rem 1.65rem;
+
+  border: 2px solid transparent;
+  border-radius: 999px;
+
+  font-weight: 700;
+  text-decoration: none;
+
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.hero-button:hover {
+  transform: translateY(-2px);
+}
+
+.hero-button--primary {
+  background: var(--sonrie-teal);
+  color: var(--sonrie-white) !important;
+}
+
+.hero-button--primary:hover {
+  background: #20bdbc;
+}
+
+.hero-button--secondary {
+  border-color: rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--sonrie-white) !important;
+  backdrop-filter: blur(8px);
+}
+
+.hero-button--secondary:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+
+/* =========================================================
+   DIRECTORIOS DE DOCUMENTACIÓN
+   ========================================================= */
+
+.documentation-directory {
+  box-sizing: border-box;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 5rem 2rem;
+  scroll-margin-top: 5rem;
+}
+
+.documentation-directory__header {
+  max-width: 760px;
+  margin-bottom: 2.5rem;
+}
+
+.documentation-directory__header h2 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 1.15;
+}
+
+.documentation-directory__header p {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 1.02rem;
+  line-height: 1.65;
+}
+
+.documentation-directory__grid > ul {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, 290px), 1fr)
+  );
+  gap: 1.25rem;
+
+  margin: 0;
+  padding: 0;
+}
+
+.documentation-directory__grid > ul > li {
+  list-style: none;
+  margin: 0;
+}
+
+.documentation-directory__grid > ul > li > a {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+
+  min-height: 105px;
+  padding: 1.4rem 1.5rem;
+
+  border: 1px solid rgba(15, 169, 169, 0.26);
+  border-radius: 14px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(15, 169, 169, 0.10),
+      rgba(15, 169, 169, 0.025)
+    );
+
+  color: var(--md-typeset-color);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.4;
+  text-decoration: none;
+
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.documentation-directory__grid > ul > li > a::before {
+  content: "→";
+
+  flex: 0 0 auto;
+  margin-right: 0.9rem;
+  color: var(--sonrie-teal);
+  font-size: 1.5rem;
+}
+
+.documentation-directory__grid > ul > li > a:hover {
+  transform: translateY(-3px);
+  border-color: var(--sonrie-teal);
+  box-shadow: 0 12px 30px rgba(3, 31, 32, 0.13);
+}
+
+[data-md-color-scheme="slate"]
+  .documentation-directory__grid > ul > li > a {
+  border-color: rgba(32, 196, 196, 0.28);
+  background: rgba(15, 169, 169, 0.075);
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media screen and (max-width: 800px) {
+  .page-hero {
+    align-items: flex-end;
+    min-height: calc(100svh - 4.8rem);
+
+    background-image:
+      linear-gradient(
+        180deg,
+        rgba(3, 31, 32, 0.06) 0%,
+        rgba(3, 31, 32, 0.44) 42%,
+        rgba(3, 31, 32, 0.98) 82%
+      ),
+      var(--hero-image);
+
+    background-position: 68% center;
+  }
+
+  .page-hero__content {
+    width: 100%;
+    padding: 3rem 1.5rem;
+  }
+
+  .page-hero h1 {
+    font-size: clamp(2.6rem, 12vw, 4rem);
+  }
+
+  .page-hero__actions {
+    flex-direction: column;
+  }
+
+  .hero-button {
+    width: 100%;
+  }
+
+  .documentation-directory {
+    padding: 3.5rem 1.25rem;
+  }
+
+  .documentation-directory__grid > ul {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-button,
+  .documentation-directory__grid > ul > li > a {
+    transition: none;
+  }
+}

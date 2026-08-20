@@ -10,6 +10,45 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "scripts" / "feature-contract.ps1"
 UPDATE_INDEXES = ROOT / "scripts" / "update-doc-indexes.ps1"
 READY_FOR_PR = ROOT / "scripts" / "ready-for-pr.ps1"
+START_MARKER = "<!-- FEATURE_LINKS_START -->"
+END_MARKER = "<!-- FEATURE_LINKS_END -->"
+
+
+def index_template(label: str) -> str:
+    return f"""---
+hide:
+  - navigation
+  - toc
+---
+
+<section class="page-hero page-hero--{label.lower()}">
+  <div class="page-hero__content">Hero {label}</div>
+</section>
+
+<section class="documentation-directory" markdown="1">
+  <div class="documentation-directory__header">
+    <h2>{label}</h2>
+    <p>Texto externo</p>
+  </div>
+
+  <div class="documentation-directory__grid" markdown="1">
+
+{START_MARKER}
+
+{END_MARKER}
+
+  </div>
+</section>
+"""
+
+
+def managed_zone(content: str) -> str:
+    assert content.count(START_MARKER) == 1
+    assert content.count(END_MARKER) == 1
+    start = content.index(START_MARKER) + len(START_MARKER)
+    end = content.index(END_MARKER)
+    assert start < end
+    return content[start:end]
 
 
 def powershell() -> str:
@@ -88,10 +127,10 @@ def make_contract_repo(tmp_path: Path, slug: str = "99-demo-feature", title: str
     (repo / "docs" / "tecnica" / f"{doc_slug}.md").write_text("# Tecnica\n", encoding="utf-8")
     (repo / "docs" / "usuario" / f"{doc_slug}.md").write_text("# Usuario\n", encoding="utf-8")
     (repo / "docs" / "tecnica" / "index.md").write_text(
-        "# Tecnica\n\nTexto externo\n", encoding="utf-8"
+        index_template("Tecnica"), encoding="utf-8"
     )
     (repo / "docs" / "usuario" / "index.md").write_text(
-        "# Usuario\n\nTexto externo\n", encoding="utf-8"
+        index_template("Usuario"), encoding="utf-8"
     )
     (repo / "ROADMAP.md").write_text(f"- [ ] {slug} - Demo\n", encoding="utf-8")
     return repo, slug, title
@@ -99,6 +138,14 @@ def make_contract_repo(tmp_path: Path, slug: str = "99-demo-feature", title: str
 
 def test_scaffolding_decision_docs_and_index_links_are_idempotent(tmp_path: Path):
     repo, slug, title = make_contract_repo(tmp_path)
+
+    untouched_parts = {}
+    for index in [repo / "docs" / "tecnica" / "index.md", repo / "docs" / "usuario" / "index.md"]:
+        content = index.read_text(encoding="utf-8")
+        untouched_parts[index] = (
+            content[: content.index(START_MARKER) + len(START_MARKER)],
+            content[content.index(END_MARKER) :],
+        )
 
     create_decision = (
         f". '{CONTRACT}'; "
@@ -120,6 +167,9 @@ def test_scaffolding_decision_docs_and_index_links_are_idempotent(tmp_path: Path
         content = index.read_text(encoding="utf-8")
         assert content.count("- [Demo feature](demo-feature.md)") == 1
         assert "Texto externo" in content
+        assert managed_zone(content).count("- [Demo feature](demo-feature.md)") == 1
+        assert content.startswith(untouched_parts[index][0])
+        assert content.endswith(untouched_parts[index][1])
 
 
 def test_index_update_fails_for_missing_destination_and_ambiguous_links(tmp_path: Path):
@@ -134,12 +184,99 @@ def test_index_update_fails_for_missing_destination_and_ambiguous_links(tmp_path
 
     missing.write_text("# Tecnica\n", encoding="utf-8")
     index = repo / "docs" / "tecnica" / "index.md"
-    index.write_text("- [Uno](demo-feature.md)\n- [Dos](demo-feature.md)\n", encoding="utf-8")
+    content = index_template("Tecnica").replace(
+        END_MARKER,
+        "- [Uno](demo-feature.md)\n- [Dos](demo-feature.md)\n\n" + END_MARKER,
+    )
+    index.write_text(content, encoding="utf-8")
 
     result = run_file(UPDATE_INDEXES, [slug, title], repo)
 
     assert result.returncode != 0
     assert "ambigua" in result.stderr.lower()
+
+
+@pytest.mark.parametrize(
+    "broken_content",
+    [
+        index_template("Tecnica").replace(START_MARKER, ""),
+        index_template("Tecnica").replace(END_MARKER, ""),
+        index_template("Tecnica").replace(START_MARKER, START_MARKER + "\n" + START_MARKER),
+        index_template("Tecnica").replace(END_MARKER, END_MARKER + "\n" + END_MARKER),
+        index_template("Tecnica").replace(
+            START_MARKER + "\n\n" + END_MARKER,
+            END_MARKER + "\n\n" + START_MARKER,
+        ),
+    ],
+)
+def test_index_update_rejects_invalid_markers_without_modifying_file(
+    tmp_path: Path, broken_content: str
+):
+    repo, slug, title = make_contract_repo(tmp_path)
+    index = repo / "docs" / "tecnica" / "index.md"
+    index.write_text(broken_content, encoding="utf-8")
+    before = index.read_bytes()
+
+    result = run_file(UPDATE_INDEXES, [slug, title], repo)
+
+    assert result.returncode != 0
+    assert "FEATURE_LINKS" in result.stderr
+    assert index.read_bytes() == before
+
+
+def test_index_update_rejects_existing_link_outside_managed_zone(tmp_path: Path):
+    repo, slug, title = make_contract_repo(tmp_path)
+    index = repo / "docs" / "tecnica" / "index.md"
+    content = index.read_text(encoding="utf-8")
+    index.write_text(content + "\n- [Demo feature](demo-feature.md)\n", encoding="utf-8")
+    before = index.read_bytes()
+
+    result = run_file(UPDATE_INDEXES, [slug, title], repo)
+
+    assert result.returncode != 0
+    assert "fuera de la zona FEATURE_LINKS" in result.stderr
+    assert index.read_bytes() == before
+
+
+def test_preflight_prevents_partial_update_when_second_index_is_invalid(tmp_path: Path):
+    repo, slug, title = make_contract_repo(tmp_path)
+    technical_index = repo / "docs" / "tecnica" / "index.md"
+    user_index = repo / "docs" / "usuario" / "index.md"
+    user_index.write_text(
+        user_index.read_text(encoding="utf-8").replace(END_MARKER, ""),
+        encoding="utf-8",
+    )
+    technical_before = technical_index.read_bytes()
+    user_before = user_index.read_bytes()
+
+    result = run_file(UPDATE_INDEXES, [slug, title], repo)
+
+    assert result.returncode != 0
+    assert "FEATURE_LINKS_END" in result.stderr
+    assert technical_index.read_bytes() == technical_before
+    assert user_index.read_bytes() == user_before
+
+
+def test_contract_rejects_link_outside_managed_zone(tmp_path: Path):
+    repo, slug, title = make_contract_repo(tmp_path)
+    run_ps(
+        f". '{CONTRACT}'; "
+        "New-DecisionFile -Slug '99-demo-feature' -Title 'Demo feature' "
+        "-Decisions @('Decision demostrable')",
+        repo,
+    )
+    for index in [repo / "docs" / "tecnica" / "index.md", repo / "docs" / "usuario" / "index.md"]:
+        content = index.read_text(encoding="utf-8")
+        index.write_text(content + "\n- [Demo feature](demo-feature.md)\n", encoding="utf-8")
+
+    command = (
+        f". '{CONTRACT}'; "
+        f"Assert-FeatureContract -Slug '{slug}' -Title '{title}'"
+    )
+    result = run_ps(command, repo)
+
+    assert result.returncode != 0
+    assert "zona FEATURE_LINKS" in result.stderr
 
 
 def test_ready_gate_fails_when_decision_or_index_link_is_missing(tmp_path: Path):

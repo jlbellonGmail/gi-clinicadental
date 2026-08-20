@@ -126,3 +126,4 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 
 
+- [-] 99-personalizacion-wiki — Personalizar la documentación MkDocs y proteger la actualización automática de sus índices.
