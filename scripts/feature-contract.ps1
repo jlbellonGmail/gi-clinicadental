@@ -104,6 +104,46 @@ function Get-FirstExistingArtifact {
         Select-Object -First 1
 }
 
+function Get-DocsIndexManagedRegion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $IndexPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Content
+    )
+
+    $startMarker = "<!-- FEATURE_LINKS_START -->"
+    $endMarker = "<!-- FEATURE_LINKS_END -->"
+
+    $startCount = [int] (($Content.Length - $Content.Replace($startMarker, "").Length) / $startMarker.Length)
+    $endCount = [int] (($Content.Length - $Content.Replace($endMarker, "").Length) / $endMarker.Length)
+
+    if ($startCount -ne 1) {
+        throw "El indice $IndexPath debe contener exactamente un marcador $startMarker. Encontrados: $startCount."
+    }
+
+    if ($endCount -ne 1) {
+        throw "El indice $IndexPath debe contener exactamente un marcador $endMarker. Encontrados: $endCount."
+    }
+
+    $startIndex = $Content.IndexOf($startMarker)
+    $endIndex = $Content.IndexOf($endMarker)
+    $managedStart = $startIndex + $startMarker.Length
+
+    if ($managedStart -ge $endIndex) {
+        throw "El indice $IndexPath tiene los marcadores FEATURE_LINKS en orden invalido."
+    }
+
+    return [pscustomobject]@{
+        StartMarker = $startMarker
+        EndMarker = $endMarker
+        StartIndex = $managedStart
+        EndIndex = $endIndex
+        Content = $Content.Substring($managedStart, $endIndex - $managedStart)
+    }
+}
+
 function Assert-IndexLink {
     param(
         [Parameter(Mandatory = $true)]
@@ -126,16 +166,23 @@ function Assert-IndexLink {
 
     $targetName = Split-Path -Leaf $TargetPath
     $content = Get-Content -LiteralPath $IndexPath -Raw -Encoding UTF8
+    $region = Get-DocsIndexManagedRegion -IndexPath $IndexPath -Content $content
     $escapedTarget = [regex]::Escape($targetName)
-    $targetMatches = [regex]::Matches($content, "\]\($escapedTarget\)")
+    $targetPattern = "(?m)^- \[[^\]]+\]\($escapedTarget\)\s*$"
+    $targetMatches = [regex]::Matches($content, $targetPattern)
 
     if ($targetMatches.Count -ne 1) {
         throw "El indice $IndexPath debe contener exactamente un enlace a $targetName. Encontrados: $($targetMatches.Count)."
     }
 
+    $managedTargetMatches = [regex]::Matches($region.Content, $targetPattern)
+    if ($managedTargetMatches.Count -ne 1) {
+        throw "El enlace a $targetName debe estar dentro de la zona FEATURE_LINKS de $IndexPath. Encontrados dentro de la zona: $($managedTargetMatches.Count)."
+    }
+
     $expectedLine = "- [$Title]($targetName)"
     $escapedExpectedLine = [regex]::Escape($expectedLine)
-    if ($content -notmatch "(?m)^$escapedExpectedLine\s*$") {
+    if ($region.Content -notmatch "(?m)^$escapedExpectedLine\s*$") {
         throw "El indice $IndexPath contiene $targetName, pero no con el enlace exacto '$expectedLine'."
     }
 }
@@ -149,7 +196,9 @@ function Update-DocsIndex {
         [string] $TargetPath,
 
         [Parameter(Mandatory = $true)]
-        [string] $Title
+        [string] $Title,
+
+        [switch] $ValidateOnly
     )
 
     if (-not (Test-Path -LiteralPath $TargetPath -PathType Leaf)) {
@@ -160,16 +209,23 @@ function Update-DocsIndex {
         throw "No existe el indice requerido: $IndexPath"
     }
 
+    $content = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $IndexPath).Path, [System.Text.Encoding]::UTF8)
+    $region = Get-DocsIndexManagedRegion -IndexPath $IndexPath -Content $content
     $targetName = Split-Path -Leaf $TargetPath
     $expectedLine = "- [$Title]($targetName)"
-    $content = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $IndexPath).Path, [System.Text.Encoding]::UTF8)
     $escapedTarget = [regex]::Escape($targetName)
-    $targetLines = [regex]::Matches($content, "(?m)^- \[[^\]]+\]\($escapedTarget\)\s*$")
+    $targetPattern = "(?m)^- \[[^\]]+\]\($escapedTarget\)\s*$"
+    $targetLines = [regex]::Matches($content, $targetPattern)
     if ($targetLines.Count -gt 1) {
         throw "Coincidencia ambigua: $IndexPath contiene mas de un enlace a $targetName."
     }
 
     if ($targetLines.Count -eq 1) {
+        $managedTargetLines = [regex]::Matches($region.Content, $targetPattern)
+        if ($managedTargetLines.Count -ne 1) {
+            throw "El enlace existente a $targetName esta fuera de la zona FEATURE_LINKS de $IndexPath."
+        }
+
         if ($targetLines[0].Value.TrimEnd() -ne $expectedLine) {
             throw "Coincidencia ambigua: $IndexPath ya enlaza $targetName con otro titulo: '$($targetLines[0].Value.Trim())'."
         }
@@ -182,8 +238,30 @@ function Update-DocsIndex {
         throw "Coincidencia ambigua: $IndexPath ya contiene el titulo '$Title' apuntando a otro destino."
     }
 
-    $separator = if ($content.EndsWith("`r`n") -or $content.EndsWith("`n")) { "" } else { [Environment]::NewLine }
-    Add-Content -LiteralPath $IndexPath -Value ($separator + $expectedLine) -Encoding UTF8
+    if ($ValidateOnly) {
+        return $true
+    }
+
+    $newLine = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $managedContent = $region.Content.TrimEnd([char[]]@("`r", "`n", " ", "`t"))
+    if ([string]::IsNullOrWhiteSpace($managedContent)) {
+        $updatedManagedContent = $newLine + $newLine + $expectedLine + $newLine + $newLine
+    }
+    else {
+        $updatedManagedContent = $managedContent + $newLine + $expectedLine + $newLine + $newLine
+    }
+
+    $updatedContent = (
+        $content.Substring(0, $region.StartIndex) +
+        $updatedManagedContent +
+        $content.Substring($region.EndIndex)
+    )
+
+    [System.IO.File]::WriteAllText(
+        (Resolve-Path -LiteralPath $IndexPath).Path,
+        $updatedContent,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
     return $true
 }
 

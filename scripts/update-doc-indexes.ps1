@@ -12,6 +12,11 @@ $ErrorActionPreference = "Stop"
 $info = Get-FeatureInfo -Slug $Slug -Title $Title
 $changed = $false
 
+# Preflight de ambos indices antes de escribir. Evita que un indice quede
+# modificado si el otro tiene marcadores, enlaces o destinos invalidos.
+[void] (Update-DocsIndex -IndexPath $info.TechnicalIndex -TargetPath $info.TechnicalDoc -Title $info.Title -ValidateOnly)
+[void] (Update-DocsIndex -IndexPath $info.UserIndex -TargetPath $info.UserDoc -Title $info.Title -ValidateOnly)
+
 if (Update-DocsIndex -IndexPath $info.TechnicalIndex -TargetPath $info.TechnicalDoc -Title $info.Title) {
     Write-Host "==> Agregado enlace tecnico: $($info.TechnicalIndex) -> $($info.DocSlug).md"
     $changed = $true

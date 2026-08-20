@@ -13,6 +13,7 @@ SLUG = "06-patente"
 BRANCH = f"feature/{SLUG}"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 WHITESPACE_RE = re.compile(r"\s+")
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
 def powershell() -> str:
@@ -60,6 +61,7 @@ def run(command: list[str], cwd: Path, env: dict[str, str] | None = None, check:
         text=True,
         capture_output=True,
         check=False,
+        creationflags=CREATE_NO_WINDOW,
     )
     if check and result.returncode != 0:
         raise AssertionError(f"Command failed: {command}\n{captured_output(result)}")

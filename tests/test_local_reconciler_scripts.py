@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 START_SCRIPT = ROOT / "scripts" / "start-local-reconciler.ps1"
 SLUG = "99-demo"
 BRANCH = f"feature/{SLUG}"
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 pytestmark = pytest.mark.skipif(
     os.name != "nt" or shutil.which("powershell.exe") is None,
@@ -41,6 +42,7 @@ def run(command: list[str], cwd: Path, check: bool = True):
         text=True,
         capture_output=True,
         check=False,
+        creationflags=CREATE_NO_WINDOW,
     )
     if check and result.returncode != 0:
         raise AssertionError(f"Command failed: {command}\n{result.stdout}\n{result.stderr}")
@@ -220,6 +222,7 @@ def test_start_reconciler_does_not_duplicate_while_running(tmp_path, cleanup_rec
         env=command_env(),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        creationflags=CREATE_NO_WINDOW,
     )
     try:
         lock = lock_path(main, SLUG)
