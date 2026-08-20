@@ -8,3 +8,4 @@ agentes (`AGENTS.md`): decisiones de diseño/implementación y casos borde.
 - [Inicialización del esquema Supabase](inicializacion-supabase-schema.md)
 - [Endpoint de recepción de leads](endpoint-recepcion-leads.md)
 - [Arquitectura](arquitectura.md)
+- [Protección antispam y abuso](proteccion-antispam-y-abuso.md)

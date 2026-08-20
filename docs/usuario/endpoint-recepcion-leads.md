@@ -21,10 +21,14 @@ pasado.
   recolecta).
 - **No envía ningún email.** La notificación a la clínica y la
   confirmación al paciente son las features `05` y `06`.
-- **No tiene protección robusta contra abuso.** Sí corta después de 5
-  solicitudes por minuto desde la misma IP (ver abajo), pero es una
-  protección mínima y "mejor esfuerzo" — la protección real (CAPTCHA,
-  campo trampa, validación de origen) es la feature `04`.
+- **Actualizado por la feature `04-proteccion-antispam-y-abuso`:** además
+  del límite de 5 solicitudes por minuto por IP descrito abajo, el
+  endpoint ahora valida el origen de la solicitud, tiene un campo trampa
+  contra bots, un control de tiempo mínimo de llenado y evita guardar
+  contactos duplicados accidentales. Ver
+  `docs/usuario/proteccion-antispam-y-abuso.md` para el detalle en
+  lenguaje no técnico. Sigue sin CAPTCHA visible (decisión explícita,
+  ver esa misma página).
 
 ## Cómo probarlo manualmente (desarrollo local)
 

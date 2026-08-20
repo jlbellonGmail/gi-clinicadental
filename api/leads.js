@@ -1,17 +1,22 @@
 'use strict';
 
+const crypto = require('crypto');
 const { getSupabaseClient } = require('./_lib/supabase-client');
 
-// Contrato completo en runs/03-endpoint-recepcion-leads/spec.md y en
-// docs/tecnica/endpoint-recepcion-leads.md (version legible para
-// mantenimiento). Los comentarios de este archivo solo señalan a que
-// paso del orden de evaluacion (criterio 3 del spec) corresponde cada
+// Contrato completo de la feature 03 en runs/03-endpoint-recepcion-leads/
+// spec.md y en docs/tecnica/endpoint-recepcion-leads.md. El contrato de
+// esta feature (04) en runs/04-proteccion-antispam-y-abuso/spec.md y en
+// docs/tecnica/proteccion-antispam-y-abuso.md. Los comentarios de este
+// archivo solo señalan a que paso del "orden de evaluacion extendido"
+// (feature 04, que reemplaza el orden de la feature 03) corresponde cada
 // bloque, no repiten el contrato completo.
 
 const ALLOWED_METHOD = 'POST';
-const MAX_BODY_BYTES = 10 * 1024; // 10 KB (10240 bytes) — criterio 14
-const RATE_LIMIT_MAX_REQUESTS = 5; // criterio 18
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 60 segundos — criterio 18
+const MAX_BODY_BYTES = 10 * 1024; // 10 KB (10240 bytes) — criterio 14 (f03)
+const RATE_LIMIT_MAX_REQUESTS = 5; // criterio 18 (f03)
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 60 segundos — criterio 18 (f03)
+const MIN_FORM_FILL_MS = 3000; // 3 segundos — control temporal, criterio 9 (f04)
+const DUPLICATE_WINDOW_MINUTES = 5; // ventana de idempotencia, criterio 12/13 (f04)
 
 const ALLOWED_KEYS = [
   'nombre',
@@ -21,25 +26,36 @@ const ALLOWED_KEYS = [
   'mensaje',
   'consentimiento_privacidad',
   'version_politica_privacidad',
+  // Campos nuevos de la feature 04 (antispam). Ver diseño puntos 2 y 3
+  // del spec: ambos quedan FUERA de STRING_FIELDS a proposito (ver mas
+  // abajo), su validacion de tipo es exclusiva del honeypot/control
+  // temporal, nunca produce tipo_invalido.
+  'sitio_web',
+  'formulario_mostrado_en',
 ];
 
-// Campos obligatorios evaluados en el paso 6 (criterio 7). NO incluye
-// consentimiento_privacidad: ese campo sigue exclusivamente la regla
-// del criterio 15 (paso 9), ver la excepcion explicita en el criterio 7.
+// Campos obligatorios evaluados en el paso 10 (criterio 7, f03). NO
+// incluye consentimiento_privacidad (criterio 15/f03) ni los campos
+// nuevos de la feature 04 (honeypot/control temporal, ambos opcionales).
 const REQUIRED_STRING_FIELDS = ['nombre', 'email', 'version_politica_privacidad'];
 
 // Campos que deben ser `string` cuando estan presentes, evaluados en el
-// paso 7 (criterio 9). NO incluye consentimiento_privacidad (criterio 9
-// lo excluye explicitamente; ver criterio 15 / paso 9).
+// paso 10 (criterio 9, f03). NO incluye consentimiento_privacidad
+// (criterio 9/f03 lo excluye explicitamente) NI `sitio_web` NI
+// `formulario_mostrado_en` (criterios 7 y 11 de la feature 04: ambos
+// quedan explicitamente excluidos de este arreglo por diseño — un valor
+// no-string en cualquiera de los dos NUNCA debe producir `tipo_invalido`,
+// su propia validacion vive en los pasos 8 y 9 respectivamente). No
+// agregar ninguno de los dos aca bajo ninguna circunstancia.
 const STRING_FIELDS = ['nombre', 'email', 'telefono', 'servicio', 'mensaje', 'version_politica_privacidad'];
 
-// Campos opcionales (criterio 8): ausentes o vacios tras trim() -> null.
+// Campos opcionales (criterio 8, f03): ausentes o vacios tras trim() -> null.
 const OPTIONAL_STRING_FIELDS = ['telefono', 'servicio', 'mensaje'];
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Digitos, espacios, '+', '-', parentesis; longitud 6-30 ya impuesta por
-// el propio patron (criterio 11: format y longitud del telefono estan
-// unificados en un unico criterio).
+// el propio patron (criterio 11/f03: format y longitud del telefono
+// estan unificados en un unico chequeo).
 const TELEFONO_PATTERN = /^[0-9+\-() ]{6,30}$/;
 
 const LENGTHS = {
@@ -53,10 +69,12 @@ const LENGTHS = {
 class PayloadTooLargeError extends Error {}
 
 // Rate limiter en memoria, best-effort, a nivel de modulo/proceso
-// (criterio 18): Map de IP -> { count, windowStart }. Documentado como
-// provisional en docs/tecnica/endpoint-recepcion-leads.md — no persiste
-// entre cold starts ni se comparte entre instancias serverless
-// concurrentes (ver "Riesgos/supuestos" del spec).
+// (criterio 18/f03): Map de IP -> { count, windowStart }. Documentado
+// como provisional en docs/tecnica/endpoint-recepcion-leads.md — no
+// persiste entre cold starts ni se comparte entre instancias serverless
+// concurrentes (ver "Riesgos/supuestos" del spec de la f03 y de la f04:
+// esta feature 04 decide explicitamente NO reemplazar este mecanismo por
+// almacenamiento persistente/distribuido, ver decision.md).
 const rateLimitStoreDefault = new Map();
 
 /**
@@ -76,6 +94,35 @@ function getClientIp(req) {
   return 'ip-desconocida';
 }
 
+/**
+ * Hash truncado (16 hex chars, primeros 64 bits de un sha256) de la IP,
+ * usado exclusivamente en logs de rechazo (criterio 5/f04). Nunca
+ * persiste la IP en texto plano. No pretende ser una garantia
+ * criptografica irreversible frente a un atacante con recursos para
+ * probar rangos de IP conocidos — ver "Riesgos / supuestos" del spec y
+ * docs/tecnica/proteccion-antispam-y-abuso.md.
+ */
+function hashIp(ip) {
+  return crypto.createHash('sha256').update(String(ip)).digest('hex').slice(0, 16);
+}
+
+/**
+ * Emite un log estructurado de rechazo (criterio 5/15/f04), sin PII:
+ * nunca nombre/email/telefono/mensaje/sitio_web ni la IP en texto plano,
+ * solo `motivo` (uno de 'rate_limit' | 'origen_no_permitido' |
+ * 'antispam') y el hash truncado de la IP.
+ */
+function logRejection(motivo, ip) {
+  console.warn(
+    JSON.stringify({
+      evento: 'lead_rechazado',
+      motivo,
+      ip_hash: hashIp(ip),
+      timestamp: new Date().toISOString(),
+    })
+  );
+}
+
 function checkRateLimit(store, ip, now) {
   const entry = store.get(ip);
 
@@ -93,6 +140,107 @@ function checkRateLimit(store, ip, now) {
   return { limited: true, retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)) };
 }
 
+/**
+ * Parsea `ALLOWED_ORIGINS` (lista separada por comas, criterio 17/f04)
+ * en un arreglo de origenes ya recortados (`trim()`), descartando
+ * entradas vacias. Tolera espacios alrededor de las comas (caso borde
+ * explicito del spec).
+ */
+function parseAllowedOrigins(raw) {
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    return [];
+  }
+  return raw
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+/**
+ * Resuelve la configuracion de origenes permitidos desde `process.env`
+ * en el momento de la solicitud (no se cachea a nivel de modulo, para
+ * poder reflejar cambios de entorno entre invocaciones sin necesitar
+ * reiniciar el proceso). `createHandler` permite inyectar un
+ * `originConfig` fijo para tests (ver mas abajo).
+ */
+function resolveOriginConfigFromEnv() {
+  return {
+    siteUrl: process.env.SITE_URL,
+    allowedOrigins: parseAllowedOrigins(process.env.ALLOWED_ORIGINS),
+    // VERCEL_URL la provee automaticamente la plataforma Vercel para el
+    // propio deployment (Preview/Production); no definida en local/tests.
+    vercelUrl: process.env.VERCEL_URL,
+  };
+}
+
+/**
+ * Origen efectivo de la solicitud (criterio 2/f04): el header `Origin`
+ * si esta presente; si no, se deriva de `Referer` (protocolo + host); si
+ * ninguno esta presente o `Referer` no es una URL parseable, se trata
+ * como ausente (-> no permitido).
+ */
+function getEffectiveOrigin(req) {
+  const originHeader = req.headers['origin'];
+  if (typeof originHeader === 'string' && originHeader.trim().length > 0) {
+    return originHeader.trim();
+  }
+
+  const refererHeader = req.headers['referer'];
+  if (typeof refererHeader === 'string' && refererHeader.trim().length > 0) {
+    try {
+      const parsedUrl = new URL(refererHeader.trim());
+      return `${parsedUrl.protocol}//${parsedUrl.host}`;
+    } catch (err) {
+      // Referer presente pero no es una URL parseable: tratado como
+      // origen ausente (caso borde explicito del spec), no como
+      // excepcion no controlada.
+      return null;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Un origen se considera permitido si coincide EXACTAMENTE con
+ * `SITE_URL`, alguna entrada de `ALLOWED_ORIGINS`, o
+ * `https://${VERCEL_URL}` cuando esa variable esta definida (criterios
+ * 2/3/4 de la feature 04).
+ */
+function isOriginAllowed(origin, originConfig) {
+  if (!origin) {
+    return false;
+  }
+
+  const { siteUrl, allowedOrigins, vercelUrl } = originConfig || {};
+  const candidates = [];
+
+  if (typeof siteUrl === 'string' && siteUrl.trim().length > 0) {
+    candidates.push(siteUrl.trim());
+  }
+  if (Array.isArray(allowedOrigins)) {
+    candidates.push(...allowedOrigins);
+  }
+  if (typeof vercelUrl === 'string' && vercelUrl.trim().length > 0) {
+    candidates.push(`https://${vercelUrl.trim()}`);
+  }
+
+  return candidates.includes(origin);
+}
+
+/**
+ * Escapa los caracteres especiales de un patron `ilike` de PostgREST
+ * (`%`, `_`, `\`) antes de usarlos como valor literal en el chequeo de
+ * duplicados (paso 11/f04). Sin este escape, un `email` que contuviera
+ * `%` o `_` (tecnicamente valido segun EMAIL_PATTERN) actuaria como
+ * comodin SQL y podria matchear de mas. No es un criterio de aceptacion
+ * explicito del spec; es una decision de implementacion defensiva
+ * documentada en docs/tecnica/proteccion-antispam-y-abuso.md.
+ */
+function escapeIlikeValue(value) {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
 function sendJson(res, statusCode, body, extraHeaders = {}) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -105,7 +253,7 @@ function sendJson(res, statusCode, body, extraHeaders = {}) {
 /**
  * Lee el body crudo del request como Buffer, cortando con
  * PayloadTooLargeError apenas se superan `maxBytes` — antes de intentar
- * ningun JSON.parse (criterio 14: el auto body-parser de Vercel se
+ * ningun JSON.parse (criterio 14/f03: el auto body-parser de Vercel se
  * deshabilita via `module.exports.config`, ver el final de este
  * archivo, precisamente para que esta funcion pueda medir el tamaño
  * crudo del payload).
@@ -169,11 +317,10 @@ function readRawBody(req, maxBytes) {
 
 /**
  * Normaliza un campo opcional ya validado como tipo correcto (string,
- * null o undefined) en el paso 7: si no es un string no vacio tras
- * trim(), se trata como ausente -> null (criterio 8). Se asume que el
- * valor ya paso el chequeo de tipos del paso 7 (cualquier otro tipo,
- * ej. numero/objeto/array, ya respondio tipo_invalido antes de llegar
- * aca).
+ * null o undefined) en el paso 10: si no es un string no vacio tras
+ * trim(), se trata como ausente -> null (criterio 8/f03). Se asume que
+ * el valor ya paso el chequeo de tipos (cualquier otro tipo, ej.
+ * numero/objeto/array, ya respondio tipo_invalido antes de llegar aca).
  */
 function normalizeOptionalString(rawValue) {
   if (typeof rawValue !== 'string') {
@@ -185,16 +332,20 @@ function normalizeOptionalString(rawValue) {
 
 /**
  * Fabrica del handler de `POST /api/leads`. Permite inyectar
- * dependencias para tests (criterio 23: cliente Supabase inyectable) y
- * para poder testear rate limiting y el limite de tamaño de forma
- * determinista, sin depender de temporizadores reales ni de una
- * instancia de proceso compartida entre tests.
+ * dependencias para tests (criterio 23/f03: cliente Supabase
+ * inyectable) y para poder testear rate limiting, origen y el limite de
+ * tamaño de forma determinista, sin depender de temporizadores reales ni
+ * de una instancia de proceso compartida entre tests.
  *
  * @param {object} [options]
  * @param {() => object} [options.supabaseClientFactory]
  * @param {Map} [options.rateLimitStore]
  * @param {() => number} [options.now]
  * @param {number} [options.maxBodyBytes]
+ * @param {{siteUrl?: string, allowedOrigins?: string[], vercelUrl?: string}} [options.originConfig]
+ *   Override de la configuracion de origenes permitidos (criterio 4/f04).
+ *   Si se omite, se resuelve desde `process.env` en cada solicitud
+ *   (`SITE_URL`, `ALLOWED_ORIGINS`, `VERCEL_URL`).
  */
 function createHandler(options = {}) {
   const {
@@ -202,6 +353,7 @@ function createHandler(options = {}) {
     rateLimitStore = rateLimitStoreDefault,
     now = () => Date.now(),
     maxBodyBytes = MAX_BODY_BYTES,
+    originConfig = null,
   } = options;
 
   return async function leadsHandler(req, res) {
@@ -213,25 +365,37 @@ function createHandler(options = {}) {
     }
 
     try {
-      // Paso 1 (criterio 2, orden del criterio 3): metodo HTTP.
+      // Paso 1 (criterio 2/f03, orden extendido paso 1/f04): metodo HTTP.
       if (req.method !== ALLOWED_METHOD) {
         respond(405, { error: 'metodo_no_permitido' }, { Allow: ALLOWED_METHOD });
         return;
       }
 
-      // Rate limiting best-effort (criterio 18). Decision de
-      // implementacion (documentada en runs/03-endpoint-recepcion-leads/
-      // decision.md): el spec no incluye este chequeo dentro de los 9
-      // pasos numerados del criterio 3 (esos 9 pasos cubren solo las
-      // validaciones de contenido del body). Se ubica aca, inmediatamente
-      // despues de confirmar el metodo POST y antes de leer/validar el
-      // body, para no gastar ciclos parseando contenido de un cliente ya
-      // limitado, y para que una rafaga de solicitudes con body invalido
-      // tambien cuente contra el limite (protege igual contra abuso con
-      // basura como con solicitudes bien formadas).
       const ip = getClientIp(req);
+
+      // Paso 2 (nuevo, criterios 2/3/4 de la f04): validacion de origen.
+      // Se evalua ANTES del rate limiting (orden de evaluacion extendido
+      // de la f04, que reemplaza el de la f03) para no gastar cupo del
+      // rate limiter con trafico que ya se va a rechazar por origen.
+      const effectiveOriginConfig = originConfig || resolveOriginConfigFromEnv();
+      const requestOrigin = getEffectiveOrigin(req);
+      if (!isOriginAllowed(requestOrigin, effectiveOriginConfig)) {
+        logRejection('origen_no_permitido', ip);
+        respond(403, { error: 'origen_no_permitido' });
+        return;
+      }
+
+      // Rate limiting best-effort (criterio 18/f03; logging agregado por
+      // criterio 5/f04). Decision de implementacion (documentada en
+      // runs/03-endpoint-recepcion-leads/decision.md, vigente en la
+      // f04): se ubica inmediatamente despues de confirmar el metodo
+      // POST y el origen, y antes de leer/validar el body, para no
+      // gastar ciclos parseando contenido de un cliente ya limitado, y
+      // para que una rafaga de solicitudes con body invalido tambien
+      // cuente contra el limite.
       const rateLimitResult = checkRateLimit(rateLimitStore, ip, now());
       if (rateLimitResult.limited) {
+        logRejection('rate_limit', ip);
         respond(
           429,
           { error: 'demasiadas_solicitudes' },
@@ -240,7 +404,7 @@ function createHandler(options = {}) {
         return;
       }
 
-      // Paso 2 (criterio 4): Content-Type, ignorando parametros como
+      // Paso 4 (criterio 4/f03): Content-Type, ignorando parametros como
       // charset. Se toma la porcion antes del primer ';', trim +
       // lowercase, comparacion estricta contra "application/json".
       const contentTypeHeader = req.headers['content-type'] || '';
@@ -250,8 +414,8 @@ function createHandler(options = {}) {
         return;
       }
 
-      // Paso 3 (criterio 14): tamaño del body, medido crudo, antes de
-      // JSON.parse.
+      // Paso 5 (criterio 14/f03): tamaño del body, medido crudo, antes
+      // de JSON.parse.
       let rawBody;
       try {
         rawBody = await readRawBody(req, maxBodyBytes);
@@ -263,7 +427,7 @@ function createHandler(options = {}) {
         throw err;
       }
 
-      // Paso 4 (criterio 5): JSON valido.
+      // Paso 6 (criterio 5/f03): JSON valido.
       let payload;
       try {
         payload = JSON.parse(rawBody.toString('utf8'));
@@ -277,7 +441,8 @@ function createHandler(options = {}) {
         return;
       }
 
-      // Paso 5 (criterio 6): whitelist estricta de propiedades. Una
+      // Paso 7 (criterio 6/f03): whitelist estricta de propiedades,
+      // ampliada con `sitio_web` y `formulario_mostrado_en` (f04). Una
       // sola propiedad desconocida rechaza la solicitud entera.
       const unknownKey = Object.keys(payload).find((key) => !ALLOWED_KEYS.includes(key));
       if (unknownKey) {
@@ -285,7 +450,47 @@ function createHandler(options = {}) {
         return;
       }
 
-      // Paso 6 (criterio 7): presencia de campos obligatorios, sin
+      // Paso 8 (nuevo, criterios 6/7/8 de la f04): honeypot `sitio_web`.
+      // Presente y, tras trim(), no vacio -> rechazo. Presente pero no
+      // string (numero/objeto/array/booleano) -> tambien rechazo, con el
+      // MISMO codigo generico (a diferencia del resto de campos de la
+      // f03, no se distingue con tipo_invalido: cualquier señal en este
+      // campo es sospechosa por definicion). Ausente o vacio tras trim
+      // -> no afecta el flujo. Se evalua ANTES de los campos obligatorios
+      // (paso 10): un body con sitio_web relleno y sin `nombre` responde
+      // solicitud_rechazada, nunca campo_requerido_faltante (caso borde
+      // explicito del spec).
+      const sitioWeb = payload.sitio_web;
+      if (sitioWeb !== undefined) {
+        const esHoneypotDisparado = typeof sitioWeb !== 'string' || sitioWeb.trim().length > 0;
+        if (esHoneypotDisparado) {
+          logRejection('antispam', ip);
+          respond(400, { error: 'solicitud_rechazada' });
+          return;
+        }
+      }
+
+      // Paso 9 (nuevo, criterio 9/f04): control temporal
+      // `formulario_mostrado_en`. Solo se evalua si el valor es un
+      // string parseable como fecha valida (Date.parse no da NaN); en
+      // cualquier otro caso (ausente, no-string, no parseable) se omite
+      // el chequeo sin rechazar la solicitud completa. Un delta negativo
+      // (reloj de cliente adelantado) se trata igual que "menos de
+      // 3000 ms" (caso borde explicito del spec).
+      const formularioMostradoEn = payload.formulario_mostrado_en;
+      if (typeof formularioMostradoEn === 'string') {
+        const parsedTimestamp = Date.parse(formularioMostradoEn);
+        if (!Number.isNaN(parsedTimestamp)) {
+          const deltaMs = now() - parsedTimestamp;
+          if (deltaMs < MIN_FORM_FILL_MS) {
+            logRejection('antispam', ip);
+            respond(400, { error: 'solicitud_rechazada' });
+            return;
+          }
+        }
+      }
+
+      // Paso 10 (criterios 7/f03): presencia de campos obligatorios, sin
       // incluir consentimiento_privacidad.
       for (const field of REQUIRED_STRING_FIELDS) {
         if (payload[field] === undefined) {
@@ -294,16 +499,17 @@ function createHandler(options = {}) {
         }
       }
 
-      // Paso 7 (criterio 9): tipos de los campos presentes, sin incluir
-      // consentimiento_privacidad. Decision de implementacion (ver
-      // decision.md): para los campos OPCIONALES (telefono/servicio/
-      // mensaje), un valor explicito `null` se trata igual que ausente
-      // (no dispara tipo_invalido) porque la columna en Supabase acepta
-      // NULL y es una forma razonable/comun de que un cliente JSON
-      // exprese "sin valor". Para los campos OBLIGATORIOS (nombre,
-      // email, version_politica_privacidad) `null` SI dispara
-      // tipo_invalido, ya presente y confirmado como obligatorio en el
-      // paso 6.
+      // Paso 10 (criterio 9/f03): tipos de los campos presentes, sin
+      // incluir consentimiento_privacidad NI sitio_web/
+      // formulario_mostrado_en (ver STRING_FIELDS mas arriba, criterios
+      // 7/11 de la f04). Decision de implementacion (ver decision.md):
+      // para los campos OPCIONALES (telefono/servicio/mensaje), un valor
+      // explicito `null` se trata igual que ausente (no dispara
+      // tipo_invalido) porque la columna en Supabase acepta NULL y es
+      // una forma razonable/comun de que un cliente JSON exprese "sin
+      // valor". Para los campos OBLIGATORIOS (nombre, email,
+      // version_politica_privacidad) `null` SI dispara tipo_invalido, ya
+      // presente y confirmado como obligatorio en el paso anterior.
       for (const field of STRING_FIELDS) {
         const value = payload[field];
         if (value === undefined) continue;
@@ -314,17 +520,16 @@ function createHandler(options = {}) {
         }
       }
 
-      // Paso 8 (criterios 10, 11, 12): formatos y longitudes. Sub-orden
-      // explicito, campo por campo (longitud antes que formato dentro
-      // de cada campo, siguiendo la sugerencia no vinculante de
-      // audit-3.md): nombre -> email -> telefono ->
+      // Paso 10 (criterios 10, 11, 12 de la f03): formatos y longitudes.
+      // Sub-orden explicito, campo por campo (longitud antes que formato
+      // dentro de cada campo): nombre -> email -> telefono ->
       // version_politica_privacidad -> servicio -> mensaje. Documentado
       // en decision.md y en docs/tecnica/endpoint-recepcion-leads.md.
 
-      // nombre: obligatorio, ya garantizado string por los pasos 6/7.
+      // nombre: obligatorio, ya garantizado string por los pasos previos.
       const nombre = payload.nombre.trim();
       if (nombre.length === 0) {
-        // Vacio tras trim(): tratado como ausente (criterio 12,
+        // Vacio tras trim(): tratado como ausente (criterio 12/f03,
         // "Casos borde"), no como longitud_excedida.
         respond(400, { error: 'campo_requerido_faltante', campo: 'nombre' });
         return;
@@ -346,7 +551,7 @@ function createHandler(options = {}) {
       }
 
       // telefono: opcional. normalizeOptionalString ya aplica la regla
-      // de "vacio tras trim() -> null" (criterio 8).
+      // de "vacio tras trim() -> null" (criterio 8/f03).
       const telefono = normalizeOptionalString(payload.telefono);
       if (telefono !== null && !TELEFONO_PATTERN.test(telefono)) {
         respond(400, { error: 'formato_telefono_invalido' });
@@ -367,7 +572,7 @@ function createHandler(options = {}) {
         return;
       }
 
-      // servicio: opcional, sin validacion de enum (criterio 13).
+      // servicio: opcional, sin validacion de enum (criterio 13/f03).
       const servicio = normalizeOptionalString(payload.servicio);
       if (servicio !== null && servicio.length > LENGTHS.servicio.max) {
         respond(400, { error: 'longitud_excedida', campo: 'servicio' });
@@ -381,19 +586,20 @@ function createHandler(options = {}) {
         return;
       }
 
-      // Paso 9 (criterio 15): consentimiento_privacidad. Unico criterio
-      // que determina su codigo de error en cualquier escenario de
-      // falla (ausente, false, tipo no-booleano) — nunca
-      // campo_requerido_faltante ni tipo_invalido (ver criterios 7 y 9).
+      // Paso 10 (criterio 15/f03): consentimiento_privacidad. Unico
+      // criterio que determina su codigo de error en cualquier escenario
+      // de falla (ausente, false, tipo no-booleano) — nunca
+      // campo_requerido_faltante ni tipo_invalido.
       if (payload.consentimiento_privacidad !== true) {
         respond(400, { error: 'consentimiento_requerido' });
         return;
       }
 
-      // Insercion en Supabase (criterios 16, 17, 23). El cliente se
-      // obtiene recien aca (nunca antes de pasar todas las
-      // validaciones) para no inicializar una conexion real en
-      // solicitudes que de todas formas van a rechazarse.
+      // Cliente Supabase (criterios 16, 17, 23 de la f03): se obtiene
+      // recien aca (nunca antes de pasar todas las validaciones) para no
+      // inicializar una conexion real en solicitudes que de todas formas
+      // van a rechazarse. Se reutiliza tanto para el chequeo de
+      // duplicados (paso 11) como para el insert (paso 12).
       let supabase;
       try {
         supabase = supabaseClientFactory();
@@ -403,6 +609,46 @@ function createHandler(options = {}) {
         return;
       }
 
+      // Paso 11 (nuevo, criterios 12/13/14 de la f04): idempotencia /
+      // duplicados accidentales. Busca un lead reciente (ventana de
+      // DUPLICATE_WINDOW_MINUTES) con el mismo email (case-insensitive,
+      // tras trim) y el mismo nombre (case-sensitive, tras trim). Si
+      // existe, responde 201 con su id SIN insertar un lead nuevo.
+      // Limitacion conocida y aceptada, no mitigada en esta feature:
+      // condicion de carrera (TOCTOU) entre este SELECT y el INSERT del
+      // paso 12 — ver docs/tecnica/proteccion-antispam-y-abuso.md y el
+      // spec ("Riesgos / supuestos") para la justificacion completa.
+      const duplicateWindowStartIso = new Date(now() - DUPLICATE_WINDOW_MINUTES * 60 * 1000).toISOString();
+
+      let existingLeads;
+      try {
+        const { data: dupData, error: dupError } = await supabase
+          .from('leads')
+          .select('id')
+          .ilike('email', escapeIlikeValue(email))
+          .eq('nombre', nombre)
+          .gte('fecha_creacion', duplicateWindowStartIso)
+          .limit(1);
+
+        if (dupError) {
+          console.error('[api/leads] Error consultando duplicados en Supabase:', dupError);
+          respond(500, { error: 'error_interno' });
+          return;
+        }
+        existingLeads = dupData;
+      } catch (err) {
+        console.error('[api/leads] Error no controlado consultando duplicados en Supabase:', err);
+        respond(500, { error: 'error_interno' });
+        return;
+      }
+
+      if (Array.isArray(existingLeads) && existingLeads.length > 0 && existingLeads[0] && existingLeads[0].id) {
+        respond(201, { id: existingLeads[0].id });
+        return;
+      }
+
+      // Paso 12 (criterios 16, 17 de la f03): insercion normal, sin
+      // cambios en el mapeo campo->columna.
       const { data, error } = await supabase
         .from('leads')
         .insert([
@@ -421,7 +667,7 @@ function createHandler(options = {}) {
 
       if (error || !data || !data.id) {
         // El detalle real (mensaje de Postgres/Supabase) se loguea solo
-        // server-side (criterio 19): nunca en la respuesta HTTP.
+        // server-side (criterio 19/f03): nunca en la respuesta HTTP.
         console.error('[api/leads] Error insertando lead en Supabase:', error);
         respond(500, { error: 'error_interno' });
         return;
@@ -429,8 +675,8 @@ function createHandler(options = {}) {
 
       respond(201, { id: data.id });
     } catch (err) {
-      // Cualquier error no controlado (criterio 19): 500 generico, sin
-      // stack trace ni mensaje interno en la respuesta.
+      // Cualquier error no controlado (criterio 19/f03): 500 generico,
+      // sin stack trace ni mensaje interno en la respuesta.
       console.error('[api/leads] Error no controlado:', err);
       respond(500, { error: 'error_interno' });
     }
@@ -442,7 +688,7 @@ const handler = createHandler();
 module.exports = handler;
 module.exports.createHandler = createHandler;
 
-// Nota de implementacion obligatoria (criterio 14): deshabilita el
+// Nota de implementacion obligatoria (criterio 14/f03): deshabilita el
 // auto-parseo de body de Vercel para poder leer el stream crudo y medir
 // su tamaño antes de JSON.parse (ver readRawBody arriba).
 module.exports.config = {

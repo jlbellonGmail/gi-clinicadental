@@ -12,6 +12,17 @@ de aceptación, aprobado en `audit-3.md`).
 
 ## Orden de evaluación de validaciones
 
+> **Nota (feature `04-proteccion-antispam-y-abuso`):** el orden real que
+> ejecuta hoy `api/leads.js` es el "orden de evaluación extendido" de la
+> feature `04` (12 pasos: agrega validación de origen, honeypot, control
+> temporal y detección de duplicados alrededor de los pasos descritos
+> abajo), documentado completo en
+> `docs/tecnica/proteccion-antispam-y-abuso.md`. Esta sección se conserva
+> tal cual la dejó la feature `03` porque los 10 pasos de validación de
+> **contenido del body** que describe siguen vigentes sin cambios de
+> comportamiento ni de códigos de error (criterio 16 de la feature `04`);
+> lo que cambió es qué se evalúa *antes* y *entre* estos pasos.
+
 El handler evalúa las condiciones en este orden estricto y responde con
 el primer error que encuentra, sin evaluar los pasos restantes
 (criterio 3 del spec):

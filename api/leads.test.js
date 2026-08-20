@@ -12,6 +12,14 @@ const { createHandler } = require('./leads');
 // depender de Vercel ni de un servidor HTTP real levantado.
 // ---------------------------------------------------------------------
 
+// Origen "valido" de referencia para los tests (feature 04): analogo a
+// SITE_URL en produccion/local (ver .env.example). makeReq() lo agrega
+// por defecto como header Origin, y newHandler() lo agrega por defecto
+// como originConfig.siteUrl, para que los tests preexistentes de la
+// feature 03 (que no conocen el concepto de origen) sigan pasando sin
+// modificarse.
+const TEST_SITE_URL = 'http://localhost:3000';
+
 function makeReq({ method = 'POST', headers = {}, body, ip = '203.0.113.10' } = {}) {
   let bodyBuffer;
   if (body === undefined) {
@@ -33,6 +41,9 @@ function makeReq({ method = 'POST', headers = {}, body, ip = '203.0.113.10' } = 
   }
   if (normalizedHeaders['x-forwarded-for'] === undefined) {
     normalizedHeaders['x-forwarded-for'] = ip;
+  }
+  if (normalizedHeaders['origin'] === undefined) {
+    normalizedHeaders['origin'] = TEST_SITE_URL;
   }
 
   const req = new Readable({
@@ -69,10 +80,30 @@ function makeRes() {
   };
 }
 
-function makeFakeSupabaseClient({ fail = false, id = '11111111-1111-1111-1111-111111111111' } = {}) {
+/**
+ * Cliente Supabase falso. Soporta dos flujos usados por el handler:
+ *
+ * - `from('leads').insert(rows).select().single()`: insercion (feature
+ *   03). `calls` registra cada invocacion a `insert()` — varios tests
+ *   (existentes y nuevos) verifican `calls.length` para confirmar que
+ *   NO se inserta un lead en escenarios de rechazo o de duplicado.
+ * - `from('leads').select('id').ilike(...).eq(...).gte(...).limit(n)`:
+ *   chequeo de duplicados (feature 04, paso 11). `selectCalls` registra
+ *   cada invocacion. Por defecto no hay duplicados (`existingLeads: []`);
+ *   los tests de idempotencia inyectan `existingLeads` para simular un
+ *   match.
+ */
+function makeFakeSupabaseClient({
+  fail = false,
+  id = '11111111-1111-1111-1111-111111111111',
+  existingLeads = [],
+  failOnSelect = false,
+} = {}) {
   const calls = [];
+  const selectCalls = [];
   const client = {
     calls,
+    selectCalls,
     from(table) {
       return {
         insert(rows) {
@@ -89,6 +120,31 @@ function makeFakeSupabaseClient({ fail = false, id = '11111111-1111-1111-1111-11
               };
             },
           };
+        },
+        select(columns) {
+          const filters = {};
+          const builder = {
+            ilike(column, value) {
+              filters[column] = { op: 'ilike', value };
+              return builder;
+            },
+            eq(column, value) {
+              filters[column] = { op: 'eq', value };
+              return builder;
+            },
+            gte(column, value) {
+              filters[column] = { op: 'gte', value };
+              return builder;
+            },
+            async limit(n) {
+              selectCalls.push({ table, columns, filters, limit: n });
+              if (failOnSelect) {
+                return { data: null, error: { message: 'fallo simulado de Supabase (select)' } };
+              }
+              return { data: existingLeads, error: null };
+            },
+          };
+          return builder;
         },
       };
     },
@@ -113,6 +169,7 @@ function newHandler(opts = {}) {
     rateLimitStore: opts.rateLimitStore || new Map(),
     now: opts.now || (() => Date.now()),
     maxBodyBytes: opts.maxBodyBytes,
+    originConfig: opts.originConfig || { siteUrl: TEST_SITE_URL, allowedOrigins: [], vercelUrl: undefined },
   });
   return { handler, supabaseClient };
 }
@@ -826,6 +883,7 @@ test('cliente Supabase que lanza una excepcion -> 500 error_interno', async () =
       throw new Error('SUPABASE_SERVICE_ROLE_KEY invalida o ausente');
     },
     rateLimitStore: new Map(),
+    originConfig: { siteUrl: TEST_SITE_URL, allowedOrigins: [], vercelUrl: undefined },
   });
   const req = makeReq({ body: validPayload() });
   const res = makeRes();
@@ -942,4 +1000,583 @@ test('ninguna respuesta incluye texto de variables sensibles', async () => {
 test('exporta config.api.bodyParser = false', () => {
   const leadsModule = require('./leads');
   assert.equal(leadsModule.config.api.bodyParser, false);
+});
+
+// =======================================================================
+// Feature 04: proteccion antispam y abuso
+// Spec: runs/04-proteccion-antispam-y-abuso/spec.md
+// =======================================================================
+
+// ---------------------------------------------------------------------
+// Validacion de origen (criterios 1-4, paso 2 del orden extendido)
+// ---------------------------------------------------------------------
+
+test('Origin distinto de SITE_URL/ALLOWED_ORIGINS/VERCEL_URL -> 403 origen_no_permitido', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload(), headers: { origin: 'https://sitio-malicioso.example' } });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.json.error, 'origen_no_permitido');
+});
+
+test('sin header Origin ni Referer -> 403 origen_no_permitido', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload() });
+  delete req.headers['origin'];
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.json.error, 'origen_no_permitido');
+});
+
+test('sin Origin pero con Referer valido (mismo protocolo+host que SITE_URL) -> pasa la validacion', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload() });
+  delete req.headers['origin'];
+  req.headers['referer'] = `${TEST_SITE_URL}/contacto`;
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('Referer con formato no parseable (sin Origin) -> 403 origen_no_permitido', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload() });
+  delete req.headers['origin'];
+  req.headers['referer'] = 'no-es-una-url';
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.json.error, 'origen_no_permitido');
+});
+
+test('Origin igual a SITE_URL -> pasa la validacion de origen', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload(), headers: { origin: TEST_SITE_URL } });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('Origin dentro de ALLOWED_ORIGINS (no SITE_URL) -> pasa la validacion', async () => {
+  const { handler } = newHandler({
+    originConfig: {
+      siteUrl: TEST_SITE_URL,
+      allowedOrigins: ['https://sonriemascorrientes.com', 'https://preview-123.vercel.app'],
+      vercelUrl: undefined,
+    },
+  });
+  const req = makeReq({ body: validPayload(), headers: { origin: 'https://preview-123.vercel.app' } });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('ALLOWED_ORIGINS con espacios alrededor de las comas se parsea correctamente', async () => {
+  const rawAllowedOrigins = 'https://a.example, https://b.example ,https://c.example';
+  const parsed = rawAllowedOrigins.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
+  const { handler } = newHandler({
+    originConfig: { siteUrl: TEST_SITE_URL, allowedOrigins: parsed, vercelUrl: undefined },
+  });
+  const req = makeReq({ body: validPayload(), headers: { origin: 'https://b.example' } });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('Origin igual a https://${VERCEL_URL} -> pasa la validacion', async () => {
+  const { handler } = newHandler({
+    originConfig: { siteUrl: TEST_SITE_URL, allowedOrigins: [], vercelUrl: 'mi-deploy-preview.vercel.app' },
+  });
+  const req = makeReq({ body: validPayload(), headers: { origin: 'https://mi-deploy-preview.vercel.app' } });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('VERCEL_URL no definido no lanza excepcion y esa rama simplemente no aplica', async () => {
+  const { handler } = newHandler({
+    originConfig: { siteUrl: TEST_SITE_URL, allowedOrigins: [], vercelUrl: undefined },
+  });
+  const req = makeReq({ body: validPayload(), headers: { origin: 'https://algo-que-no-es-vercel-url' } });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.json.error, 'origen_no_permitido');
+});
+
+test('origen invalido + rate limit ya excedido -> responde 403 (origen), no 429 (orden extendido, criterio 1)', async () => {
+  const rateLimitStore = new Map();
+  const { handler } = newHandler({ rateLimitStore });
+
+  // Agota el rate limit con solicitudes de origen valido.
+  for (let i = 0; i < 5; i += 1) {
+    const req = makeReq({ body: validPayload(), ip: '198.51.100.55' });
+    const res = makeRes();
+    await handler(req, res);
+    assert.equal(res.statusCode, 201);
+  }
+
+  // La 6ta solicitud, con origen invalido, debe responder 403 (paso 2),
+  // no 429 (paso 3): el orden extendido evalua el origen antes que el
+  // rate limit.
+  const req = makeReq({
+    body: validPayload(),
+    ip: '198.51.100.55',
+    headers: { origin: 'https://sitio-malicioso.example' },
+  });
+  const res = makeRes();
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.json.error, 'origen_no_permitido');
+});
+
+// ---------------------------------------------------------------------
+// Honeypot `sitio_web` (criterios 6-8, paso 8 del orden extendido)
+// ---------------------------------------------------------------------
+
+test('sitio_web no vacio tras trim -> 400 solicitud_rechazada, no inserta lead', async () => {
+  const { supabaseClient, handler } = newHandler();
+  const req = makeReq({ body: validPayload({ sitio_web: 'https://bot.example' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json.error, 'solicitud_rechazada');
+  assert.equal(supabaseClient.calls.length, 0, 'no debe llamarse a insert()');
+});
+
+for (const invalidValue of [123, true, {}, ['a']]) {
+  test(`sitio_web de tipo no-string (${JSON.stringify(invalidValue)}) -> 400 solicitud_rechazada (no tipo_invalido)`, async () => {
+    const { supabaseClient, handler } = newHandler();
+    const req = makeReq({ body: validPayload({ sitio_web: invalidValue }) });
+    const res = makeRes();
+
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.json.error, 'solicitud_rechazada');
+    assert.notEqual(res.json.error, 'tipo_invalido');
+    assert.equal(supabaseClient.calls.length, 0);
+  });
+}
+
+test('sitio_web ausente no afecta el flujo', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('sitio_web vacio tras trim ("   ") no afecta el flujo', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload({ sitio_web: '   ' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('sitio_web relleno + nombre ausente -> gana el honeypot (solicitud_rechazada), no campo_requerido_faltante', async () => {
+  const { handler } = newHandler();
+  const payload = validPayload({ sitio_web: 'contenido-de-bot' });
+  delete payload.nombre;
+  const req = makeReq({ body: payload });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json.error, 'solicitud_rechazada');
+});
+
+// ---------------------------------------------------------------------
+// Control temporal `formulario_mostrado_en` (criterios 9-11, paso 9)
+// ---------------------------------------------------------------------
+
+test('formulario_mostrado_en a menos de 3000ms de la solicitud -> 400 solicitud_rechazada', async () => {
+  const fixedNow = Date.parse('2026-01-01T00:00:02.000Z');
+  const { supabaseClient, handler } = newHandler({ now: () => fixedNow });
+  const req = makeReq({
+    body: validPayload({ formulario_mostrado_en: '2026-01-01T00:00:00.000Z' }),
+  });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json.error, 'solicitud_rechazada');
+  assert.equal(supabaseClient.calls.length, 0);
+});
+
+test('formulario_mostrado_en a exactamente 3000ms o mas -> pasa el chequeo temporal', async () => {
+  const fixedNow = Date.parse('2026-01-01T00:00:03.000Z');
+  const { handler } = newHandler({ now: () => fixedNow });
+  const req = makeReq({
+    body: validPayload({ formulario_mostrado_en: '2026-01-01T00:00:00.000Z' }),
+  });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('formulario_mostrado_en ausente -> se omite el chequeo, no rechaza', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('formulario_mostrado_en no parseable como fecha -> se omite el chequeo, no rechaza ni produce tipo_invalido', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload({ formulario_mostrado_en: 'no-es-una-fecha' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('formulario_mostrado_en de tipo no-string (numero) -> se omite el chequeo, no rechaza ni produce tipo_invalido', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload({ formulario_mostrado_en: 1234567890 }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('formulario_mostrado_en de tipo no-string (booleano) -> se omite el chequeo, no rechaza ni produce tipo_invalido', async () => {
+  const { handler } = newHandler();
+  const req = makeReq({ body: validPayload({ formulario_mostrado_en: true }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+});
+
+test('formulario_mostrado_en con reloj de cliente adelantado (delta negativo) -> se trata como rechazo', async () => {
+  const fixedNow = Date.parse('2026-01-01T00:00:00.000Z');
+  const { supabaseClient, handler } = newHandler({ now: () => fixedNow });
+  const req = makeReq({
+    // El formulario se "mostro" en el futuro respecto al reloj del
+    // servidor -> delta = ahora - formulario_mostrado_en < 0.
+    body: validPayload({ formulario_mostrado_en: '2026-01-01T00:05:00.000Z' }),
+  });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.json.error, 'solicitud_rechazada');
+  assert.equal(supabaseClient.calls.length, 0);
+});
+
+// ---------------------------------------------------------------------
+// STRING_FIELDS no debe incluir los campos nuevos (criterios 7 y 11)
+// ---------------------------------------------------------------------
+
+test('STRING_FIELDS (inspeccion de codigo) no incluye sitio_web ni formulario_mostrado_en', () => {
+  const leadsSource = require('node:fs').readFileSync(require.resolve('./leads.js'), 'utf8');
+  const match = leadsSource.match(/const STRING_FIELDS = \[([^\]]*)\];/);
+  assert.ok(match, 'no se encontro la declaracion de STRING_FIELDS en api/leads.js');
+  assert.equal(match[1].includes('sitio_web'), false);
+  assert.equal(match[1].includes('formulario_mostrado_en'), false);
+});
+
+// ---------------------------------------------------------------------
+// Idempotencia / duplicados accidentales (criterios 12-14, paso 11)
+// ---------------------------------------------------------------------
+
+test('email+nombre coinciden con un lead insertado hace menos de 5 minutos -> 201 con id existente, sin insertar de nuevo', async () => {
+  const existingId = '22222222-2222-2222-2222-222222222222';
+  const supabaseClient = makeFakeSupabaseClient({ existingLeads: [{ id: existingId }] });
+  const { handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, existingId);
+  assert.equal(supabaseClient.calls.length, 0, 'insert() no debe invocarse cuando hay un duplicado');
+});
+
+test('duplicado detectado -> el mock falla el test si insert() se invoca mas de una vez', async () => {
+  const existingId = '33333333-3333-3333-3333-333333333333';
+  let insertCallCount = 0;
+  const supabaseClient = {
+    from(table) {
+      return {
+        insert(rows) {
+          insertCallCount += 1;
+          if (insertCallCount > 1) {
+            throw new Error('insert() invocado mas de una vez ante un duplicado detectado');
+          }
+          return {
+            select() {
+              return { async single() { return { data: { id: 'no-deberia-usarse' }, error: null }; } };
+            },
+          };
+        },
+        select() {
+          const builder = {
+            ilike() { return builder; },
+            eq() { return builder; },
+            gte() { return builder; },
+            async limit() { return { data: [{ id: existingId }], error: null }; },
+          };
+          return builder;
+        },
+      };
+    },
+  };
+  const { handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, existingId);
+  assert.equal(insertCallCount, 0);
+});
+
+test('lead existente insertado hace mas de 5 minutos -> NO se considera duplicado, se inserta uno nuevo', async () => {
+  // El mock de duplicados (paso 11) siempre filtra por
+  // fecha_creacion >= ventana de 5 minutos en la query; simular "hace
+  // mas de 5 minutos" es simplemente que el SELECT no devuelva filas
+  // (el filtro gte ya lo habria excluido en Supabase real).
+  const supabaseClient = makeFakeSupabaseClient({ existingLeads: [] });
+  const { handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(supabaseClient.calls.length, 1, 'debe insertarse un lead nuevo');
+});
+
+test('mismo nombre, email distinto -> ambos se insertan como leads independientes (no se deduplican)', async () => {
+  // El SELECT de duplicados filtra por email exacto (case-insensitive);
+  // con un email distinto, el mock (que simula la query real) no
+  // devuelve coincidencias -> sigue el flujo normal de insert.
+  const supabaseClient = makeFakeSupabaseClient({ existingLeads: [] });
+  const { handler } = newHandler({ supabaseClient });
+
+  const req1 = makeReq({ body: validPayload({ nombre: 'Juan Perez', email: 'juan1@example.com' }) });
+  const res1 = makeRes();
+  await handler(req1, res1);
+  assert.equal(res1.statusCode, 201);
+
+  const req2 = makeReq({ body: validPayload({ nombre: 'Juan Perez', email: 'juan2@example.com' }) });
+  const res2 = makeRes();
+  await handler(req2, res2);
+  assert.equal(res2.statusCode, 201);
+
+  assert.equal(supabaseClient.calls.length, 2, 'ambos deben insertarse, no deduplicarse entre si');
+});
+
+test('chequeo de duplicados usa email normalizado (trim) e ilike, y nombre normalizado (trim) con eq', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ existingLeads: [] });
+  const { handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload({ nombre: '  Ana Perez  ', email: '  ANA@EXAMPLE.COM  ' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(supabaseClient.selectCalls.length, 1);
+  const dupCall = supabaseClient.selectCalls[0];
+  assert.equal(dupCall.filters.email.op, 'ilike');
+  assert.equal(dupCall.filters.email.value, 'ANA@EXAMPLE.COM');
+  assert.equal(dupCall.filters.nombre.op, 'eq');
+  assert.equal(dupCall.filters.nombre.value, 'Ana Perez');
+});
+
+test('fallo del SELECT de duplicados -> 500 error_interno, sin insertar', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ failOnSelect: true });
+  const { handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 500);
+  assert.equal(res.json.error, 'error_interno');
+  assert.equal(supabaseClient.calls.length, 0);
+});
+
+// ---------------------------------------------------------------------
+// Logging de rechazos sin PII (criterio 15)
+// ---------------------------------------------------------------------
+
+test('rechazo por origen invalido no loguea PII ni la IP en texto plano', async () => {
+  const warnCalls = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnCalls.push(args.join(' '));
+  try {
+    const { handler } = newHandler();
+    const req = makeReq({
+      body: validPayload({ nombre: 'Fulano Secreto', email: 'fulano.secreto@example.com' }),
+      headers: { origin: 'https://sitio-malicioso.example' },
+      ip: '203.0.113.77',
+    });
+    const res = makeRes();
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 403);
+    assert.ok(warnCalls.length >= 1, 'debe emitirse al menos un log de rechazo');
+    const serialized = warnCalls.join('\n');
+    for (const pii of ['Fulano Secreto', 'fulano.secreto@example.com', '203.0.113.77']) {
+      assert.equal(serialized.includes(pii), false, `no debe loguear: ${pii}`);
+    }
+    const parsed = JSON.parse(warnCalls[0]);
+    assert.equal(parsed.evento, 'lead_rechazado');
+    assert.equal(parsed.motivo, 'origen_no_permitido');
+    assert.equal(typeof parsed.ip_hash, 'string');
+    assert.notEqual(parsed.ip_hash, '203.0.113.77');
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test('rechazo por rate limit no loguea PII ni la IP en texto plano', async () => {
+  const warnCalls = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnCalls.push(args.join(' '));
+  try {
+    const rateLimitStore = new Map();
+    const { handler } = newHandler({ rateLimitStore });
+    for (let i = 0; i < 5; i += 1) {
+      const req = makeReq({
+        body: validPayload({ nombre: 'Rate Limit Secreto', email: 'ratelimit.secreto@example.com' }),
+        ip: '203.0.113.88',
+      });
+      const res = makeRes();
+      await handler(req, res);
+    }
+    warnCalls.length = 0; // solo interesa el log del rechazo, no de las 5 previas exitosas
+
+    const req = makeReq({
+      body: validPayload({ nombre: 'Rate Limit Secreto', email: 'ratelimit.secreto@example.com' }),
+      ip: '203.0.113.88',
+    });
+    const res = makeRes();
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 429);
+    assert.ok(warnCalls.length >= 1);
+    const serialized = warnCalls.join('\n');
+    for (const pii of ['Rate Limit Secreto', 'ratelimit.secreto@example.com', '203.0.113.88']) {
+      assert.equal(serialized.includes(pii), false, `no debe loguear: ${pii}`);
+    }
+    const parsed = JSON.parse(warnCalls[0]);
+    assert.equal(parsed.motivo, 'rate_limit');
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test('rechazo por honeypot no loguea PII ni la IP en texto plano', async () => {
+  const warnCalls = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnCalls.push(args.join(' '));
+  try {
+    const { handler } = newHandler();
+    const req = makeReq({
+      body: validPayload({
+        nombre: 'Honeypot Secreto',
+        email: 'honeypot.secreto@example.com',
+        telefono: '+54 11 5555-5555',
+        mensaje: 'mensaje secreto del paciente',
+        sitio_web: 'https://bot-secreto.example',
+      }),
+      ip: '203.0.113.99',
+    });
+    const res = makeRes();
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 400);
+    assert.ok(warnCalls.length >= 1);
+    const serialized = warnCalls.join('\n');
+    for (const pii of [
+      'Honeypot Secreto',
+      'honeypot.secreto@example.com',
+      '+54 11 5555-5555',
+      'mensaje secreto del paciente',
+      'https://bot-secreto.example',
+      '203.0.113.99',
+    ]) {
+      assert.equal(serialized.includes(pii), false, `no debe loguear: ${pii}`);
+    }
+    const parsed = JSON.parse(warnCalls[0]);
+    assert.equal(parsed.motivo, 'antispam');
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test('rechazo por control temporal no loguea PII ni la IP en texto plano', async () => {
+  const warnCalls = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnCalls.push(args.join(' '));
+  try {
+    const fixedNow = Date.parse('2026-01-01T00:00:01.000Z');
+    const { handler } = newHandler({ now: () => fixedNow });
+    const req = makeReq({
+      body: validPayload({
+        nombre: 'Timing Secreto',
+        email: 'timing.secreto@example.com',
+        formulario_mostrado_en: '2026-01-01T00:00:00.000Z',
+      }),
+      ip: '203.0.113.111',
+    });
+    const res = makeRes();
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 400);
+    assert.ok(warnCalls.length >= 1);
+    const serialized = warnCalls.join('\n');
+    for (const pii of ['Timing Secreto', 'timing.secreto@example.com', '203.0.113.111']) {
+      assert.equal(serialized.includes(pii), false, `no debe loguear: ${pii}`);
+    }
+    const parsed = JSON.parse(warnCalls[0]);
+    assert.equal(parsed.motivo, 'antispam');
+  } finally {
+    console.warn = originalWarn;
+  }
 });
