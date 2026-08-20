@@ -118,4 +118,5 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 - [ ] 16-validacion-mvp-produccion — Ejecutar una validación funcional completa en producción utilizando datos de prueba controlados: completar el formulario, aceptar la política, enviar la solicitud, verificar la respuesta de la API, confirmar la creación del lead en Supabase, comprobar la notificación a la clínica y recibir la confirmación como paciente. Verificar además la visualización desde computadora y celular. El MVP solamente podrá cerrarse cuando todo el circuito funcione sin credenciales expuestas, errores críticos ni pasos manuales no documentados.
 
-- [-] 99-personalizacion-wiki — Personalizar la documentación MkDocs y proteger la actualización automática de sus índices.
+- [x] 99-personalizacion-wiki — Personalizar la documentación MkDocs y proteger la actualización automática de sus índices.
+
