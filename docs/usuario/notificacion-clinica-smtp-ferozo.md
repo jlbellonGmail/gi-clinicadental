@@ -69,9 +69,10 @@ sitio.
   en el futuro se detectan fallos frecuentes de envío, agregar un
   reintento automático es una mejora a evaluar más adelante, no algo que
   esta versión resuelva.
-- **No envía todavía una confirmación al paciente** (un email
-  "recibimos tu mensaje" para quien completó el formulario) — esa es una
-  etapa posterior del proyecto, independiente de esta.
+- **La confirmación al propio paciente** (un email "recibimos tu
+  mensaje" para quien completó el formulario) es un envío aparte,
+  independiente de esta notificación interna — ver
+  `docs/usuario/confirmacion-automatica-paciente.md`.
 - **No cambia nada de lo que ve o completa la persona en el sitio**: todo
   este envío de notificación ocurre puertas adentro, después de que el
   contacto ya se guardó; la persona que completó el formulario no ve

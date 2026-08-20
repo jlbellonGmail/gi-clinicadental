@@ -60,6 +60,7 @@ hide:
 - [Arquitectura](arquitectura.md)
 - [Protección antispam y abuso](proteccion-antispam-y-abuso.md)
 - [Notificación de nuevo lead a la clínica](notificacion-clinica-smtp-ferozo.md)
+- [Confirmación automática al paciente](confirmacion-automatica-paciente.md)
 
 <!-- FEATURE_LINKS_END -->
 

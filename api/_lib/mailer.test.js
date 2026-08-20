@@ -221,3 +221,84 @@ test('buildClinicNotificationEmail(): incluye version en texto plano (mailOption
   assert.ok(mail.text.includes('Ana Pérez'));
   assert.equal(mail.text.includes('<'), false);
 });
+
+// ---------------------------------------------------------------------
+// buildPatientConfirmationEmail() — feature 06, criterios 2 a 9
+// Spec: runs/06-confirmacion-automatica-paciente/spec.md
+// ---------------------------------------------------------------------
+
+test('buildPatientConfirmationEmail(): to/from/replyTo correctos (criterios 2, 3, 4)', () => {
+  setFullValidEnv();
+  const { buildPatientConfirmationEmail } = require('./mailer');
+  const mail = buildPatientConfirmationEmail(baseLead());
+  assert.equal(mail.to, 'ana@example.com');
+  assert.equal(mail.from, 'notificaciones@sonriemascorrientes.com');
+  assert.equal(mail.replyTo, 'clinica@sonriemascorrientes.com');
+});
+
+test('buildPatientConfirmationEmail(): subject fijo, no vacio, sin interpolar el nombre del lead (criterio 5)', () => {
+  setFullValidEnv();
+  const { buildPatientConfirmationEmail } = require('./mailer');
+  const mailUno = buildPatientConfirmationEmail(baseLead({ nombre: 'Ana Pérez' }));
+  const mailDos = buildPatientConfirmationEmail(baseLead({ nombre: 'Carlos Gómez' }));
+  assert.equal(typeof mailUno.subject, 'string');
+  assert.ok(mailUno.subject.length > 0);
+  assert.equal(mailUno.subject, mailDos.subject);
+  assert.equal(mailUno.subject.includes('Ana'), false);
+});
+
+test('buildPatientConfirmationEmail(): aclara explicitamente que el turno todavia no esta confirmado (criterio 6)', () => {
+  setFullValidEnv();
+  const { buildPatientConfirmationEmail } = require('./mailer');
+  const mail = buildPatientConfirmationEmail(baseLead());
+  const htmlLower = mail.html.toLowerCase();
+  const textLower = mail.text.toLowerCase();
+  for (const content of [htmlLower, textLower]) {
+    assert.ok(/turno|cita/.test(content), 'debe mencionar "turno" o "cita"');
+    assert.ok(content.includes('no está confirmado') || content.includes('no esta confirmado'));
+    assert.ok(/comunic|contact/.test(content), 'debe mencionar que la clinica se va a poner en contacto');
+  }
+});
+
+test('buildPatientConfirmationEmail(): nombre aparece escapado via escapeHtml() en el HTML (criterio 7)', () => {
+  setFullValidEnv();
+  const { buildPatientConfirmationEmail } = require('./mailer');
+  const mail = buildPatientConfirmationEmail(
+    baseLead({ nombre: `<script>alert(1)</script> & "Ana" 'Pérez'` })
+  );
+  assert.equal(mail.html.includes('<script>alert(1)</script>'), false);
+  assert.ok(mail.html.includes('&lt;script&gt;'));
+  assert.equal(mail.html.includes('& "Ana"'), false);
+});
+
+test('buildPatientConfirmationEmail(): no incluye telefono/servicio/mensaje del lead en html ni text (criterio 8)', () => {
+  setFullValidEnv();
+  const { buildPatientConfirmationEmail } = require('./mailer');
+  const lead = baseLead({
+    telefono: '+54 11 5555-0001-DATO-TELEFONO',
+    servicio: 'Ortodoncia-DATO-SERVICIO',
+    mensaje: 'Me duele una muela-DATO-MENSAJE',
+  });
+  const mail = buildPatientConfirmationEmail(lead);
+  for (const valorDistintivo of ['DATO-TELEFONO', 'DATO-SERVICIO', 'DATO-MENSAJE']) {
+    assert.equal(mail.html.includes(valorDistintivo), false, `html no debe incluir ${valorDistintivo}`);
+    assert.equal(mail.text.includes(valorDistintivo), false, `text no debe incluir ${valorDistintivo}`);
+  }
+});
+
+test('buildPatientConfirmationEmail(): no incluye ningun dato de contacto inventado (ej. el telefono placeholder de index.html)', () => {
+  setFullValidEnv();
+  const { buildPatientConfirmationEmail } = require('./mailer');
+  const mail = buildPatientConfirmationEmail(baseLead());
+  assert.equal(mail.html.includes('+123456789'), false);
+  assert.equal(mail.text.includes('+123456789'), false);
+});
+
+test('buildPatientConfirmationEmail(): incluye version en texto plano equivalente (mailOptions.text)', () => {
+  setFullValidEnv();
+  const { buildPatientConfirmationEmail } = require('./mailer');
+  const mail = buildPatientConfirmationEmail(baseLead());
+  assert.equal(typeof mail.text, 'string');
+  assert.ok(mail.text.includes('Ana Pérez'));
+  assert.equal(mail.text.includes('<'), false);
+});
