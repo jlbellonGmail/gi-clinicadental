@@ -7,3 +7,4 @@ Un archivo por feature: para qué sirve, cómo verla/usarla.
 - [Inicialización del esquema Supabase](inicializacion-supabase-schema.md)
 - [Endpoint de recepción de leads](endpoint-recepcion-leads.md)
 - [Protección antispam y abuso](proteccion-antispam-y-abuso.md)
+- [Notificación de nuevo lead a la clínica](notificacion-clinica-smtp-ferozo.md)

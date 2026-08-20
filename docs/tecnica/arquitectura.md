@@ -95,3 +95,37 @@ estático — HTML/CSS/JS sin build — o declarativo — SQL, `.env.example`).
   features la consuman.
 - No se agrega CORS explícito, validación de origen robusta, ni
   antispam más allá del rate limiting best-effort mínimo (feature `04`).
+
+## Decisión: segunda dependencia npm real (`nodemailer`)
+
+- **Qué se agrega**: `nodemailer` (`^9.x`) como dependencia de
+  producción en `package.json`, con `package-lock.json` actualizado en
+  consecuencia (`npm install nodemailer`, reproducible con `npm ci`).
+  Feature `05-notificacion-clinica-smtp-ferozo`
+  (`runs/05-notificacion-clinica-smtp-ferozo/spec.md`).
+- **Por qué esta librería**: es el cliente de correo saliente Node.js más
+  usado y estable del ecosistema, ya documentado como parte del stack
+  objetivo del proyecto en `AGENTS.md` desde antes de esta feature
+  ("Correo transaccional: Nodemailer conectado al servidor SMTP de
+  Ferozo mediante TLS"). No existía alternativa a evaluar: era la
+  decisión de stack ya tomada, esta feature es la primera en incorporar
+  la dependencia real y usarla.
+- **Alcance del uso**: exclusivamente server-side, dentro de
+  `api/_lib/mailer.js` (ver
+  `docs/tecnica/notificacion-clinica-smtp-ferozo.md`). El transporter se
+  construye únicamente con variables de entorno (`SMTP_HOST`,
+  `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`) ya documentadas en
+  `.env.example` desde la feature `01`; nunca se agrega al bundle de
+  frontend, que sigue sin build.
+- **Sin conexión SMTP real en tests ni en CI**: toda la cobertura
+  automática (`api/_lib/mailer.test.js`, sección "Feature 05" de
+  `api/leads.test.js`) usa un transporter inyectado/simulado vía
+  `mailerFactory` (mismo patrón de inyección de dependencias que
+  `supabaseClientFactory`). `nodemailer.createTransport()` en sí no abre
+  conexión de red — solo arma el objeto transporter — por lo que los
+  tests de `createTransporter()` pueden ejercitar la construcción real
+  del transporter (host/port/secure/auth/timeouts) sin necesitar un
+  servidor SMTP real ni mocks adicionales del módulo.
+- **Superficie agregada**: una sola dependencia directa más; sus
+  transitivas quedan excluidas de Git vía `.gitignore`, igual que
+  `@supabase/supabase-js`.
