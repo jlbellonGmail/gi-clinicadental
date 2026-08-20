@@ -1,4 +1,4 @@
-# Roadmap: gi-clinicadental
+﻿# Roadmap: gi-clinicadental
 
 Cada feature nueva se implementa siguiendo el circuito agéntico de
 [AGENTS.md](AGENTS.md): Analyst → Reviewer → Builder → QA →
@@ -98,7 +98,7 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 - [x] 06-confirmacion-automatica-paciente — Enviar al paciente un correo transaccional confirmando que su solicitud fue recibida. El mensaje deberá aclarar que el turno todavía no está confirmado y que la clínica se comunicará posteriormente. No deberá incluir información clínica sensible. Actualizar `confirmacion_paciente_enviada` cuando el envío sea exitoso y evitar reenvíos duplicados.
 
-- [ ] 07-seguridad-y-politica-privacidad — Incorporar al formulario `#leadForm` un checkbox obligatorio de consentimiento activo antes del botón de envío. Crear una política de privacidad accesible que informe finalidad, datos almacenados, responsable, destinatarios, plazo de conservación y procedimiento para solicitar acceso, rectificación o eliminación. Registrar la versión de la política aceptada y evitar solicitar información clínica sensible que no sea indispensable para el primer contacto.
+- [-] 07-seguridad-y-politica-privacidad — Incorporar al formulario `#leadForm` un checkbox obligatorio de consentimiento activo antes del botón de envío. Crear una política de privacidad accesible que informe finalidad, datos almacenados, responsable, destinatarios, plazo de conservación y procedimiento para solicitar acceso, rectificación o eliminación. Registrar la versión de la política aceptada y evitar solicitar información clínica sensible que no sea indispensable para el primer contacto.
 
 - [ ] 08-conexion-frontend-api — Eliminar de `script.js` la simulación basada en `setTimeout` y el comentario `// Simulate API call`. Implementar una petición asíncrona mediante `fetch()` hacia `/api/leads`. Bloquear el botón durante el envío, evitar solicitudes duplicadas y mostrar los estados “Enviando solicitud...”, “Demasiados intentos, espere unos minutos” y “Error en la conexión, intente más tarde”. Ante un resultado exitoso mostrar: “Solicitud recibida. La clínica se comunicará para confirmar el turno”. Reactivar siempre el botón al finalizar.
 
@@ -119,4 +119,5 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 - [ ] 16-validacion-mvp-produccion — Ejecutar una validación funcional completa en producción utilizando datos de prueba controlados: completar el formulario, aceptar la política, enviar la solicitud, verificar la respuesta de la API, confirmar la creación del lead en Supabase, comprobar la notificación a la clínica y recibir la confirmación como paciente. Verificar además la visualización desde computadora y celular. El MVP solamente podrá cerrarse cuando todo el circuito funcione sin credenciales expuestas, errores críticos ni pasos manuales no documentados.
 
 - [x] 99-personalizacion-wiki — Personalizar la documentación MkDocs y proteger la actualización automática de sus índices.
+
 
