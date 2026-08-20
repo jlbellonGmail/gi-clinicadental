@@ -234,7 +234,8 @@ def test_index_update_rejects_existing_link_outside_managed_zone(tmp_path: Path)
     result = run_file(UPDATE_INDEXES, [slug, title], repo)
 
     assert result.returncode != 0
-    assert "fuera de la zona FEATURE_LINKS" in result.stderr
+    assert "fuera de la zona" in result.stderr
+    assert "FEATURE_LINKS" in result.stderr
     assert index.read_bytes() == before
 
 
