@@ -41,6 +41,15 @@ a {
     transition: var(--transition);
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
 ul {
     list-style: none;
 }
@@ -275,6 +284,39 @@ header {
     font-weight: 500;
 }
 
+/* Consentimiento de privacidad (checkbox obligatorio) */
+.form-group--consent label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-weight: 400;
+    cursor: pointer;
+    margin-bottom: 0;
+}
+
+.form-group--consent input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    flex-shrink: 0;
+    margin: 2px 0 0;
+    padding: 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.form-group--consent span {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+}
+
+.form-group--consent a {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
 input, select, textarea {
     width: 100%;
     padding: 14px;
@@ -288,6 +330,51 @@ input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 4px var(--primary-light);
+}
+
+/* Legal pages (politica-privacidad.html) */
+.legal-content {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.legal-content .legal-version {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 40px;
+}
+
+.legal-content section {
+    margin-bottom: 40px;
+}
+
+.legal-content h2 {
+    font-size: 1.4rem;
+    margin-bottom: 16px;
+}
+
+.legal-content p,
+.legal-content li {
+    color: var(--text);
+    margin-bottom: 12px;
+}
+
+.legal-content ul {
+    list-style: disc;
+    padding-left: 20px;
+}
+
+.legal-content a {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.legal-placeholder {
+    background: var(--primary-light);
+    border-left: 4px solid var(--primary);
+    padding: 12px 16px;
+    border-radius: 4px;
+    font-style: italic;
 }
 
 /* Footer */
