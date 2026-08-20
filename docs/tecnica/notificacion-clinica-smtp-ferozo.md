@@ -180,8 +180,9 @@ que mostrar (no hubo `INSERT`).
 
 - El contrato HTTP de éxito de `POST /api/leads` (`201` + `{ id }`) es
   idéntico al de antes de esta feature en todos los escenarios de email.
-- No se agrega el correo de confirmación al **paciente**
-  (`confirmacion_paciente_enviada`) — feature `06`, fuera de alcance.
+- El correo de confirmación al **paciente**
+  (`confirmacion_paciente_enviada`) se agregó por separado en la feature
+  `06` — ver `docs/tecnica/confirmacion-automatica-paciente.md`.
 - No se modifican `index.html` ni `script.js` (el formulario sigue
   simulado, feature `08`).
 - No se agrega tabla ni columna nueva en Supabase: se reutiliza

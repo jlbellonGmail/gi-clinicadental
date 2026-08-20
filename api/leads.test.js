@@ -207,6 +207,27 @@ function makeFakeMailer({ fail = false } = {}) {
   };
 }
 
+/**
+ * Mailer falso (feature 06): variante de makeFakeMailer() que falla
+ * selectivamente segun el destinatario (`to`) de `mailOptions`, para
+ * verificar la independencia entre el envio a la clinica y el envio al
+ * paciente (criterio 13/f06: un fallo en uno no debe impedir el intento
+ * del otro). `sentMails` registra TODOS los intentos, exitosos o no.
+ */
+function makeSelectiveFailMailer({ failTo = [] } = {}) {
+  const sentMails = [];
+  return {
+    sentMails,
+    async sendMail(mailOptions) {
+      sentMails.push(mailOptions);
+      if (failTo.includes(mailOptions.to)) {
+        throw new Error(`fallo simulado de SMTP para ${mailOptions.to}`);
+      }
+      return { messageId: 'fake-message-id' };
+    },
+  };
+}
+
 function validPayload(overrides = {}) {
   return {
     nombre: 'Ana Pérez',
@@ -1661,7 +1682,11 @@ test('INSERT nuevo exitoso invoca sendMail() con to/from/replyTo correctos y usa
   await handler(req, res);
 
   assert.equal(res.statusCode, 201);
-  assert.equal(mailer.sentMails.length, 1);
+  // A partir de la feature 06, el mismo request tambien dispara la
+  // confirmacion al paciente (mismo transporter, ver criterio 11/f06):
+  // sentMails[0] es la notificacion a la clinica (orden secuencial,
+  // clinica primero), sentMails[1] es la confirmacion al paciente.
+  assert.equal(mailer.sentMails.length, 2);
   const mailOptions = mailer.sentMails[0];
   assert.equal(mailOptions.to, 'clinica@sonriemascorrientes.com');
   assert.equal(mailOptions.from, 'notificaciones@sonriemascorrientes.com');
@@ -1690,7 +1715,11 @@ test('el HTML del correo contiene nombre/email/telefono/servicio/mensaje escapad
   await handler(req, res);
 
   assert.equal(res.statusCode, 201);
-  assert.equal(mailer.sentMails.length, 1);
+  // sentMails[0] = notificacion a la clinica (orden secuencial, ver
+  // criterio 11/f06); sentMails[1] = confirmacion al paciente, que NO
+  // incluye telefono/servicio/mensaje (verificado por separado en
+  // mailer.test.js y en la seccion "Feature 06" de este archivo).
+  assert.equal(mailer.sentMails.length, 2);
   const html = mailer.sentMails[0].html;
 
   // (a) sin caracteres sin escapar: no debe poder inyectarse <script>.
@@ -1727,7 +1756,9 @@ test('header injection: nombre con \\r\\n no deja \\r ni \\n crudos en el subjec
   await handler(maliciousReq, res);
 
   assert.equal(res.statusCode, 201);
-  assert.equal(mailer.sentMails.length, 1);
+  // sentMails[0] = notificacion a la clinica (unica que interpola
+  // `nombre` en el subject, ver criterio 11/f06 para el orden).
+  assert.equal(mailer.sentMails.length, 2);
   const { subject } = mailer.sentMails[0];
   assert.equal(/[\r\n]/.test(subject), false);
 });
@@ -1741,11 +1772,16 @@ test('sendMail() exitoso -> se ejecuta UPDATE notificacion_clinica_enviada = tru
   await handler(req, res);
 
   assert.equal(res.statusCode, 201);
-  assert.equal(mailer.sentMails.length, 1);
-  assert.equal(supabaseClient.updateCalls.length, 1);
-  const updateCall = supabaseClient.updateCalls[0];
+  // Desde la feature 06, ambos envios (clinica + paciente) tienen exito
+  // por defecto en newHandler(), asi que hay dos UPDATE independientes:
+  // este test solo verifica el de notificacion_clinica_enviada.
+  assert.equal(mailer.sentMails.length, 2);
+  assert.equal(supabaseClient.updateCalls.length, 2);
+  const updateCall = supabaseClient.updateCalls.find(
+    (call) => call.values.notificacion_clinica_enviada === true
+  );
+  assert.ok(updateCall, 'debe existir un UPDATE de notificacion_clinica_enviada');
   assert.equal(updateCall.table, 'leads');
-  assert.equal(updateCall.values.notificacion_clinica_enviada, true);
   assert.equal(updateCall.column, 'id');
   assert.equal(updateCall.value, '66666666-6666-6666-6666-666666666666');
 });
@@ -1817,8 +1853,9 @@ test('UPDATE del flag falla -> igual responde 201 con el mismo id, sin reintenta
 
   assert.equal(res.statusCode, 201);
   assert.equal(res.json.id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
-  assert.equal(mailer.sentMails.length, 1, 'el envio de email si se considero exitoso');
-  assert.equal(supabaseClient.updateCalls.length, 1, 'se intento el UPDATE, aunque haya fallado');
+  // Ambos envios (clinica + paciente) se consideraron exitosos.
+  assert.equal(mailer.sentMails.length, 2, 'ambos envios de email se consideraron exitosos');
+  assert.equal(supabaseClient.updateCalls.length, 2, 'se intentaron ambos UPDATE, aunque hayan fallado');
   assert.equal(supabaseClient.calls.length, 1, 'no se reinserta el lead');
 });
 
@@ -1933,7 +1970,280 @@ test('dos leads nuevos e independientes disparan cada uno su propio sendMail()',
   await handler(req2, res2);
   assert.equal(res2.statusCode, 201);
 
+  // 2 envios por request (clinica + paciente, feature 06) x 2 requests.
+  assert.equal(mailer.sentMails.length, 4);
+  const clinicMails = mailer.sentMails.filter((mailOptions) => mailOptions.to === 'clinica@sonriemascorrientes.com');
+  assert.equal(clinicMails.length, 2);
+  assert.equal(clinicMails[0].replyTo, 'juan1@example.com');
+  assert.equal(clinicMails[1].replyTo, 'maria2@example.com');
+});
+
+// =======================================================================
+// Feature 06: confirmacion automatica al paciente por email
+// Spec: runs/06-confirmacion-automatica-paciente/spec.md
+// =======================================================================
+
+// ---------------------------------------------------------------------
+// mailerFactory se invoca una unica vez, compartida por ambos envios
+// (criterio 11)
+// ---------------------------------------------------------------------
+
+test('mailerFactory se invoca exactamente una vez por request (clinica y paciente comparten el mismo transporter)', async () => {
+  let factoryCalls = 0;
+  const mailer = makeFakeMailer();
+  const mailerFactory = () => {
+    factoryCalls += 1;
+    return mailer;
+  };
+  const { handler } = newHandler({ mailer, mailerFactory });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(factoryCalls, 1);
+  assert.equal(mailer.sentMails.length, 2, 'debe intentar sendMail() para la clinica y para el paciente');
+});
+
+// ---------------------------------------------------------------------
+// mailerFactory lanza -> ningun envio se intenta (criterio 12)
+// ---------------------------------------------------------------------
+
+test('mailerFactory lanza (config SMTP faltante/invalida) -> ni la clinica ni el paciente reciben sendMail(), sigue en 201', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: 'b0000000-0000-0000-0000-000000000012' });
+  const mailer = makeFakeMailer();
+  const mailerFactory = () => {
+    throw new Error('Configuracion SMTP incompleta');
+  };
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, 'b0000000-0000-0000-0000-000000000012');
+  assert.equal(mailer.sentMails.length, 0, 'sendMail() no debe invocarse en ningun escenario');
+  assert.equal(supabaseClient.updateCalls.length, 0);
+});
+
+// ---------------------------------------------------------------------
+// Independencia entre ambos envios (criterio 13)
+// ---------------------------------------------------------------------
+
+test('fallo en el envio a la clinica no impide el intento de envio al paciente (independencia)', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: 'b1000000-0000-0000-0000-000000000013' });
+  const mailer = makeSelectiveFailMailer({ failTo: ['clinica@sonriemascorrientes.com'] });
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'paciente-13a@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(mailer.sentMails.length, 2, 'debe haber intentado ambos envios');
+  assert.equal(mailer.sentMails[0].to, 'clinica@sonriemascorrientes.com');
+  assert.equal(mailer.sentMails[1].to, 'paciente-13a@example.com');
+  assert.equal(supabaseClient.updateCalls.length, 1, 'solo el UPDATE del paciente debe ejecutarse');
+  assert.equal(supabaseClient.updateCalls[0].values.confirmacion_paciente_enviada, true);
+});
+
+test('fallo en el envio al paciente no afecta el resultado ya decidido del envio a la clinica (independencia)', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: 'b2000000-0000-0000-0000-000000000013' });
+  const mailer = makeSelectiveFailMailer({ failTo: ['paciente-13b@example.com'] });
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'paciente-13b@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(mailer.sentMails.length, 2, 'debe haber intentado ambos envios');
+  assert.equal(supabaseClient.updateCalls.length, 1, 'solo el UPDATE de la clinica debe ejecutarse');
+  assert.equal(supabaseClient.updateCalls[0].values.notificacion_clinica_enviada, true);
+});
+
+// ---------------------------------------------------------------------
+// UPDATE de confirmacion_paciente_enviada tras envio exitoso (criterio 14)
+// ---------------------------------------------------------------------
+
+test('sendMail() al paciente exitoso -> UPDATE confirmacion_paciente_enviada = true con el id insertado', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: 'c0000000-0000-0000-0000-000000000014' });
+  const { mailer, handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
   assert.equal(mailer.sentMails.length, 2);
-  assert.equal(mailer.sentMails[0].replyTo, 'juan1@example.com');
-  assert.equal(mailer.sentMails[1].replyTo, 'maria2@example.com');
+  assert.equal(supabaseClient.updateCalls.length, 2, 'un UPDATE para la clinica y otro para el paciente');
+  const patientUpdate = supabaseClient.updateCalls.find(
+    (call) => call.values.confirmacion_paciente_enviada === true
+  );
+  assert.ok(patientUpdate, 'debe existir un UPDATE de confirmacion_paciente_enviada');
+  assert.equal(patientUpdate.table, 'leads');
+  assert.equal(patientUpdate.column, 'id');
+  assert.equal(patientUpdate.value, 'c0000000-0000-0000-0000-000000000014');
+});
+
+// ---------------------------------------------------------------------
+// Fallo en el envio al paciente: log seguro, sin UPDATE, sin afectar la
+// respuesta HTTP (criterio 15)
+// ---------------------------------------------------------------------
+
+test('fallo en sendMail() al paciente se loguea con err.message (sin credenciales) y salta el UPDATE del flag', async () => {
+  const errorCalls = [];
+  const originalError = console.error;
+  console.error = (...args) => errorCalls.push(args.map((a) => (a && a.stack) || String(a)).join(' '));
+  try {
+    const secretError = new Error('fallo de conexion SMTP al paciente');
+    secretError.response = '535 Authentication failed: SMTP_PASS=contrasena-secreta-paciente-xyz';
+    const mailer = {
+      sentMails: [],
+      async sendMail(mailOptions) {
+        this.sentMails.push(mailOptions);
+        if (mailOptions.to === 'clinica@sonriemascorrientes.com') {
+          return { messageId: 'fake-message-id' };
+        }
+        throw secretError;
+      },
+    };
+    const supabaseClient = makeFakeSupabaseClient({ id: 'd0000000-0000-0000-0000-000000000015' });
+    const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+    const req = makeReq({ body: validPayload() });
+    const res = makeRes();
+
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.json.id, 'd0000000-0000-0000-0000-000000000015');
+    assert.equal(mailer.sentMails.length, 2, 'ambos envios se intentaron');
+    const patientUpdate = supabaseClient.updateCalls.find(
+      (call) => 'confirmacion_paciente_enviada' in call.values
+    );
+    assert.equal(patientUpdate, undefined, 'no debe existir UPDATE de confirmacion_paciente_enviada');
+    const serialized = errorCalls.join('\n');
+    assert.equal(serialized.includes('contrasena-secreta-paciente-xyz'), false);
+  } finally {
+    console.error = originalError;
+  }
+});
+
+// ---------------------------------------------------------------------
+// Fallo del UPDATE de confirmacion_paciente_enviada no cambia el 201
+// (criterio 16)
+// ---------------------------------------------------------------------
+
+test('UPDATE de confirmacion_paciente_enviada falla -> igual responde 201 con el mismo id', async () => {
+  const supabaseClient = makeFakeSupabaseClient({
+    id: 'e0000000-0000-0000-0000-000000000016',
+    failOnUpdate: true,
+  });
+  const { mailer, handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, 'e0000000-0000-0000-0000-000000000016');
+  assert.equal(mailer.sentMails.length, 2, 'ambos envios se intentaron igual, aunque el UPDATE falle');
+  assert.equal(supabaseClient.updateCalls.length, 2, 'ambos UPDATE se intentaron, aunque fallen');
+});
+
+// ---------------------------------------------------------------------
+// Rama de duplicado detectado: ningun envio se intenta (criterio 17)
+// ---------------------------------------------------------------------
+
+test('rama de duplicado detectado -> NO se invoca sendMail() ni para la clinica ni para el paciente', async () => {
+  const existingId = 'f0000000-0000-0000-0000-000000000017';
+  const supabaseClient = makeFakeSupabaseClient({ existingLeads: [{ id: existingId }] });
+  const { mailer, handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, existingId);
+  assert.equal(mailer.sentMails.length, 0, 'sendMail() no debe invocarse ante un duplicado');
+});
+
+// ---------------------------------------------------------------------
+// Contrato 201 { id } estable en las 5 combinaciones de resultados de
+// email (criterio 18)
+// ---------------------------------------------------------------------
+
+test('el contrato 201 { id } se mantiene en las 5 combinaciones de resultados de email', async () => {
+  const scenarios = [
+    { name: 'exito ambos', mailer: makeFakeMailer({ fail: false }) },
+    {
+      name: 'fallo clinica, exito paciente',
+      mailer: makeSelectiveFailMailer({ failTo: ['clinica@sonriemascorrientes.com'] }),
+    },
+    {
+      name: 'exito clinica, fallo paciente',
+      mailer: makeSelectiveFailMailer({ failTo: ['paciente-18@example.com'] }),
+    },
+    { name: 'fallo ambos', mailer: makeFakeMailer({ fail: true }) },
+  ];
+
+  for (const scenario of scenarios) {
+    const supabaseClient = makeFakeSupabaseClient();
+    const { handler } = newHandler({
+      supabaseClient,
+      mailer: scenario.mailer,
+      mailerFactory: () => scenario.mailer,
+    });
+    const req = makeReq({ body: validPayload({ email: 'paciente-18@example.com' }) });
+    const res = makeRes();
+
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 201, scenario.name);
+    assert.deepEqual(Object.keys(res.json), ['id'], scenario.name);
+    assert.equal(typeof res.json.id, 'string', scenario.name);
+  }
+
+  // Config SMTP faltante: mailerFactory lanza (5to escenario).
+  const supabaseClient = makeFakeSupabaseClient();
+  const { handler } = newHandler({
+    supabaseClient,
+    mailerFactory: () => {
+      throw new Error('config SMTP faltante');
+    },
+  });
+  const req = makeReq({ body: validPayload({ email: 'paciente-18@example.com' }) });
+  const res = makeRes();
+  await handler(req, res);
+  assert.equal(res.statusCode, 201);
+  assert.deepEqual(Object.keys(res.json), ['id']);
+});
+
+// ---------------------------------------------------------------------
+// Leads independientes disparan confirmaciones al paciente
+// independientes, con "to" propio (criterio 19)
+// ---------------------------------------------------------------------
+
+test('dos leads nuevos e independientes disparan cada uno su propia confirmacion al paciente, con "to" propio', async () => {
+  const supabaseClient = makeFakeSupabaseClient();
+  const { mailer, handler } = newHandler({ supabaseClient });
+
+  const req1 = makeReq({ body: validPayload({ nombre: 'Juan Perez', email: 'juan-f06@example.com' }) });
+  const res1 = makeRes();
+  await handler(req1, res1);
+  assert.equal(res1.statusCode, 201);
+
+  const req2 = makeReq({ body: validPayload({ nombre: 'Maria Lopez', email: 'maria-f06@example.com' }) });
+  const res2 = makeRes();
+  await handler(req2, res2);
+  assert.equal(res2.statusCode, 201);
+
+  assert.equal(mailer.sentMails.length, 4, '2 envios por request (clinica + paciente) x 2 requests');
+  const patientMails = mailer.sentMails.filter((mailOptions) => mailOptions.to !== 'clinica@sonriemascorrientes.com');
+  assert.equal(patientMails.length, 2);
+  assert.equal(patientMails[0].to, 'juan-f06@example.com');
+  assert.equal(patientMails[1].to, 'maria-f06@example.com');
 });

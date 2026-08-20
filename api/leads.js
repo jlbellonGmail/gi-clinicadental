@@ -2,14 +2,16 @@
 
 const crypto = require('crypto');
 const { getSupabaseClient } = require('./_lib/supabase-client');
-const { createTransporter, buildClinicNotificationEmail } = require('./_lib/mailer');
+const { createTransporter, buildClinicNotificationEmail, buildPatientConfirmationEmail } = require('./_lib/mailer');
 
 // Contrato completo de la feature 03 en runs/03-endpoint-recepcion-leads/
 // spec.md y en docs/tecnica/endpoint-recepcion-leads.md. El contrato de
 // esta feature (04) en runs/04-proteccion-antispam-y-abuso/spec.md y en
 // docs/tecnica/proteccion-antispam-y-abuso.md. El contrato de esta
 // feature (05) en runs/05-notificacion-clinica-smtp-ferozo/spec.md y en
-// docs/tecnica/notificacion-clinica-smtp-ferozo.md. Los comentarios de
+// docs/tecnica/notificacion-clinica-smtp-ferozo.md. El contrato de esta
+// feature (06) en runs/06-confirmacion-automatica-paciente/spec.md y en
+// docs/tecnica/confirmacion-automatica-paciente.md. Los comentarios de
 // este archivo solo señalan a que paso del "orden de evaluacion
 // extendido" corresponde cada bloque, no repiten el contrato completo.
 
@@ -349,10 +351,13 @@ function normalizeOptionalString(rawValue) {
  *   Si se omite, se resuelve desde `process.env` en cada solicitud
  *   (`SITE_URL`, `ALLOWED_ORIGINS`, `VERCEL_URL`).
  * @param {() => { sendMail: (mailOptions: object) => Promise<unknown> }} [options.mailerFactory]
- *   Factory del transporter de notificacion a la clinica (criterio 5/f05,
- *   analogo a `supabaseClientFactory`). Por defecto, `createTransporter`
- *   de `api/_lib/mailer.js`. Los tests inyectan un objeto con
- *   `sendMail(mailOptions)` que devuelve una Promise, sin conexion real.
+ *   Factory del transporter usado tanto para la notificacion a la
+ *   clinica (criterio 5/f05) como para la confirmacion al paciente
+ *   (criterio 11/f06: una unica llamada a `mailerFactory()` por request,
+ *   nunca duplicada), analogo a `supabaseClientFactory`. Por defecto,
+ *   `createTransporter` de `api/_lib/mailer.js`. Los tests inyectan un
+ *   objeto con `sendMail(mailOptions)` que devuelve una Promise, sin
+ *   conexion real.
  */
 function createHandler(options = {}) {
   const {
@@ -686,20 +691,22 @@ function createHandler(options = {}) {
         return;
       }
 
-      // Notificacion a la clinica por email (feature 05), unicamente tras
-      // un INSERT nuevo exitoso (nunca en la rama de duplicado detectado,
-      // que ya respondio y retorno mas arriba). Secuencia acotada
-      // estrictamente a estos pasos: ningun fallo aca debe alterar la
-      // respuesta 201 ya decidida, ni volver a tocar la logica de
-      // insercion ni el catch generico de nivel superior (regla dura
-      // verificada por test, ver spec).
+      // Notificacion a la clinica y confirmacion al paciente por email
+      // (features 05 y 06), unicamente tras un INSERT nuevo exitoso
+      // (nunca en la rama de duplicado detectado, que ya respondio y
+      // retorno mas arriba). Secuencia acotada estrictamente a estos
+      // pasos: ningun fallo aca debe alterar la respuesta 201 ya
+      // decidida, ni volver a tocar la logica de insercion ni el catch
+      // generico de nivel superior (regla dura verificada por test, ver
+      // spec de la f05 y criterios 15/16/18 de la f06).
       let transporter = null;
       try {
         transporter = mailerFactory();
       } catch (mailerErr) {
-        // Configuracion SMTP faltante/invalida (criterio 8/f05): se trata
-        // como fallo de envio, sin credenciales ni objeto de config en el
-        // log (criterio 10/f05).
+        // Configuracion SMTP faltante/invalida (criterio 8/f05, criterio
+        // 12/f06: si esto lanza, NINGUNO de los dos envios se intenta):
+        // se trata como fallo de envio, sin credenciales ni objeto de
+        // config en el log (criterio 10/f05).
         console.error('[api/leads] Error creando el transporter de email (config SMTP):', mailerErr.message);
       }
 
@@ -713,20 +720,28 @@ function createHandler(options = {}) {
           mensaje,
           fecha_creacion: data.fecha_creacion,
         };
-        const mailOptions = buildClinicNotificationEmail(lead);
 
-        let sendMailSucceeded = false;
+        // Envio a la clinica (feature 05, sin cambios de contenido ni de
+        // destinatario respecto a esa feature). Se ejecuta primero,
+        // secuencialmente (criterio "orden de ejecucion" del spec de la
+        // f06: decision explicita de no paralelizar con
+        // Promise.allSettled, ver docs/tecnica/
+        // confirmacion-automatica-paciente.md).
+        const clinicMailOptions = buildClinicNotificationEmail(lead);
+        let clinicSendSucceeded = false;
         try {
-          await transporter.sendMail(mailOptions);
-          sendMailSucceeded = true;
+          await transporter.sendMail(clinicMailOptions);
+          clinicSendSucceeded = true;
         } catch (sendMailErr) {
           // Rechazo/excepcion de sendMail (criterio 7/f05): loguear sin
           // credenciales ni el detalle interno de Nodemailer (solo
-          // mensaje de alto nivel), saltar el UPDATE del flag.
+          // mensaje de alto nivel), saltar el UPDATE del flag. Un fallo
+          // aca NO impide el intento de envio al paciente que sigue mas
+          // abajo (criterio 13/f06, independencia explicita).
           console.error('[api/leads] Error enviando notificacion de email a la clinica:', sendMailErr.message);
         }
 
-        if (sendMailSucceeded) {
+        if (clinicSendSucceeded) {
           // sendMail exitoso (criterio 6/f05): marcar el flag de
           // tracking. Si este UPDATE falla, se loguea pero NO afecta la
           // respuesta ya decidida (criterio 9/f05): el email si se
@@ -745,6 +760,48 @@ function createHandler(options = {}) {
           } catch (updateErr) {
             console.error(
               '[api/leads] Error no controlado actualizando notificacion_clinica_enviada:',
+              updateErr.message
+            );
+          }
+        }
+
+        // Confirmacion al paciente (feature 06, nuevo): intento
+        // independiente del anterior, con su propio try/catch acotado y
+        // su propio flag/UPDATE. Un fallo en el envio a la clinica NO
+        // impidio llegar hasta aca, y un fallo aca no afecta el
+        // resultado ya decidido del envio a la clinica (criterio 13/f06).
+        const patientMailOptions = buildPatientConfirmationEmail(lead);
+        let patientSendSucceeded = false;
+        try {
+          await transporter.sendMail(patientMailOptions);
+          patientSendSucceeded = true;
+        } catch (sendMailErr) {
+          // Rechazo/excepcion de sendMail (criterio 15/f06): loguear solo
+          // err.message, nunca el objeto completo ni credenciales SMTP,
+          // saltar el UPDATE del flag. El lead insertado y la respuesta
+          // HTTP no se ven afectados.
+          console.error('[api/leads] Error enviando confirmacion de email al paciente:', sendMailErr.message);
+        }
+
+        if (patientSendSucceeded) {
+          // sendMail exitoso (criterio 14/f06): marcar
+          // confirmacion_paciente_enviada. Si este UPDATE falla, se
+          // loguea pero NO cambia la respuesta HTTP ya decidida
+          // (criterio 16/f06).
+          try {
+            const { error: updateError } = await supabase
+              .from('leads')
+              .update({ confirmacion_paciente_enviada: true })
+              .eq('id', data.id);
+            if (updateError) {
+              console.error(
+                '[api/leads] Error actualizando confirmacion_paciente_enviada tras envio exitoso:',
+                updateError.message
+              );
+            }
+          } catch (updateErr) {
+            console.error(
+              '[api/leads] Error no controlado actualizando confirmacion_paciente_enviada:',
               updateErr.message
             );
           }

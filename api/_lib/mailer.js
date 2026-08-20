@@ -179,4 +179,70 @@ function buildClinicNotificationEmail(lead) {
   return { to, from, replyTo, subject, html, text };
 }
 
-module.exports = { createTransporter, buildClinicNotificationEmail };
+/**
+ * Arma el mensaje de confirmacion de recepcion dirigido al propio
+ * paciente (feature 06, contraparte de buildClinicNotificationEmail).
+ * Firma de entrada identica (mismo objeto `lead` que ya arma
+ * api/leads.js tras el INSERT), pero destinatario y contenido son
+ * distintos: confirma al paciente que su solicitud fue recibida y aclara
+ * de forma explicita y prominente que el turno TODAVIA NO esta
+ * confirmado (la clinica se va a comunicar para coordinarlo).
+ *
+ * Deliberadamente NO incluye `telefono`, `servicio` ni `mensaje` del
+ * lead (ver runs/06-confirmacion-automatica-paciente/spec.md, "Riesgos /
+ * supuestos", y docs/tecnica/confirmacion-automatica-paciente.md):
+ * `mensaje`/`servicio` son dato clinico sensible (texto libre que puede
+ * describir sintomas, o intencion de tratamiento); `telefono` es dato de
+ * contacto personal innecesario para esta confirmacion — son dos razones
+ * distintas que llevan al mismo resultado de exclusion, no una sola
+ * categoria fusionada (nota no bloqueante de audit-1.md).
+ *
+ * `subject` es fijo, sin interpolar ningun dato del lead: a diferencia
+ * de `buildClinicNotificationEmail`, no requiere `sanitizeHeaderValue()`
+ * porque no hay nada que sanear (menor superficie de header injection,
+ * ver docs/tecnica/confirmacion-automatica-paciente.md).
+ *
+ * @param {{
+ *   id: string,
+ *   nombre: string,
+ *   email: string,
+ *   telefono: string | null,
+ *   servicio: string | null,
+ *   mensaje: string | null,
+ *   fecha_creacion: string,
+ * }} lead
+ */
+function buildPatientConfirmationEmail(lead) {
+  const to = lead.email;
+  const from = process.env.SMTP_FROM;
+  const replyTo = process.env.LEADS_NOTIFICATION_EMAIL;
+
+  // Subject fijo (criterio 5/f06): no interpola ningun dato del lead.
+  const subject = 'Recibimos tu solicitud — Sonríe más';
+
+  const nombreHtml = escapeHtml(lead.nombre);
+
+  const html = `
+    <div>
+      <p>Hola ${nombreHtml},</p>
+      <p>Recibimos tu solicitud de contacto a través del sitio web de <strong>Sonríe más</strong>. ¡Gracias por escribirnos!</p>
+      <p><strong>Todavía tu turno no está confirmado.</strong> Nuestro equipo se va a comunicar con vos próximamente para coordinar la fecha y el horario.</p>
+      <p>Saludos,<br>El equipo de Sonríe más</p>
+    </div>
+  `.trim();
+
+  const text = [
+    `Hola ${lead.nombre},`,
+    '',
+    'Recibimos tu solicitud de contacto a través del sitio web de Sonríe más. ¡Gracias por escribirnos!',
+    '',
+    'Todavía tu turno no está confirmado. Nuestro equipo se va a comunicar con vos próximamente para coordinar la fecha y el horario.',
+    '',
+    'Saludos,',
+    'El equipo de Sonríe más',
+  ].join('\n');
+
+  return { to, from, replyTo, subject, html, text };
+}
+
+module.exports = { createTransporter, buildClinicNotificationEmail, buildPatientConfirmationEmail };
