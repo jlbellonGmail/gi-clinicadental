@@ -2,14 +2,16 @@
 
 const crypto = require('crypto');
 const { getSupabaseClient } = require('./_lib/supabase-client');
+const { createTransporter, buildClinicNotificationEmail } = require('./_lib/mailer');
 
 // Contrato completo de la feature 03 en runs/03-endpoint-recepcion-leads/
 // spec.md y en docs/tecnica/endpoint-recepcion-leads.md. El contrato de
 // esta feature (04) en runs/04-proteccion-antispam-y-abuso/spec.md y en
-// docs/tecnica/proteccion-antispam-y-abuso.md. Los comentarios de este
-// archivo solo señalan a que paso del "orden de evaluacion extendido"
-// (feature 04, que reemplaza el orden de la feature 03) corresponde cada
-// bloque, no repiten el contrato completo.
+// docs/tecnica/proteccion-antispam-y-abuso.md. El contrato de esta
+// feature (05) en runs/05-notificacion-clinica-smtp-ferozo/spec.md y en
+// docs/tecnica/notificacion-clinica-smtp-ferozo.md. Los comentarios de
+// este archivo solo señalan a que paso del "orden de evaluacion
+// extendido" corresponde cada bloque, no repiten el contrato completo.
 
 const ALLOWED_METHOD = 'POST';
 const MAX_BODY_BYTES = 10 * 1024; // 10 KB (10240 bytes) — criterio 14 (f03)
@@ -346,6 +348,11 @@ function normalizeOptionalString(rawValue) {
  *   Override de la configuracion de origenes permitidos (criterio 4/f04).
  *   Si se omite, se resuelve desde `process.env` en cada solicitud
  *   (`SITE_URL`, `ALLOWED_ORIGINS`, `VERCEL_URL`).
+ * @param {() => { sendMail: (mailOptions: object) => Promise<unknown> }} [options.mailerFactory]
+ *   Factory del transporter de notificacion a la clinica (criterio 5/f05,
+ *   analogo a `supabaseClientFactory`). Por defecto, `createTransporter`
+ *   de `api/_lib/mailer.js`. Los tests inyectan un objeto con
+ *   `sendMail(mailOptions)` que devuelve una Promise, sin conexion real.
  */
 function createHandler(options = {}) {
   const {
@@ -354,6 +361,7 @@ function createHandler(options = {}) {
     now = () => Date.now(),
     maxBodyBytes = MAX_BODY_BYTES,
     originConfig = null,
+    mailerFactory = createTransporter,
   } = options;
 
   return async function leadsHandler(req, res) {
@@ -647,8 +655,13 @@ function createHandler(options = {}) {
         return;
       }
 
-      // Paso 12 (criterios 16, 17 de la f03): insercion normal, sin
-      // cambios en el mapeo campo->columna.
+      // Paso 12 (criterios 16, 17 de la f03; criterio 1/f05 cambia
+      // '.select(\'id\')' a '.select(\'id, fecha_creacion\')' para traer
+      // el valor real de fecha_creacion generado por el default now() de
+      // Postgres, fuente unica de verdad para el correo de notificacion
+      // — ver "Diseño propuesto -> 2" de runs/05-notificacion-clinica-
+      // smtp-ferozo/spec.md). Sin cambios en el mapeo campo->columna del
+      // insert en si.
       const { data, error } = await supabase
         .from('leads')
         .insert([
@@ -662,7 +675,7 @@ function createHandler(options = {}) {
             version_politica_privacidad: versionPoliticaPrivacidad,
           },
         ])
-        .select('id')
+        .select('id, fecha_creacion')
         .single();
 
       if (error || !data || !data.id) {
@@ -671,6 +684,71 @@ function createHandler(options = {}) {
         console.error('[api/leads] Error insertando lead en Supabase:', error);
         respond(500, { error: 'error_interno' });
         return;
+      }
+
+      // Notificacion a la clinica por email (feature 05), unicamente tras
+      // un INSERT nuevo exitoso (nunca en la rama de duplicado detectado,
+      // que ya respondio y retorno mas arriba). Secuencia acotada
+      // estrictamente a estos pasos: ningun fallo aca debe alterar la
+      // respuesta 201 ya decidida, ni volver a tocar la logica de
+      // insercion ni el catch generico de nivel superior (regla dura
+      // verificada por test, ver spec).
+      let transporter = null;
+      try {
+        transporter = mailerFactory();
+      } catch (mailerErr) {
+        // Configuracion SMTP faltante/invalida (criterio 8/f05): se trata
+        // como fallo de envio, sin credenciales ni objeto de config en el
+        // log (criterio 10/f05).
+        console.error('[api/leads] Error creando el transporter de email (config SMTP):', mailerErr.message);
+      }
+
+      if (transporter) {
+        const lead = {
+          id: data.id,
+          nombre,
+          email,
+          telefono,
+          servicio,
+          mensaje,
+          fecha_creacion: data.fecha_creacion,
+        };
+        const mailOptions = buildClinicNotificationEmail(lead);
+
+        let sendMailSucceeded = false;
+        try {
+          await transporter.sendMail(mailOptions);
+          sendMailSucceeded = true;
+        } catch (sendMailErr) {
+          // Rechazo/excepcion de sendMail (criterio 7/f05): loguear sin
+          // credenciales ni el detalle interno de Nodemailer (solo
+          // mensaje de alto nivel), saltar el UPDATE del flag.
+          console.error('[api/leads] Error enviando notificacion de email a la clinica:', sendMailErr.message);
+        }
+
+        if (sendMailSucceeded) {
+          // sendMail exitoso (criterio 6/f05): marcar el flag de
+          // tracking. Si este UPDATE falla, se loguea pero NO afecta la
+          // respuesta ya decidida (criterio 9/f05): el email si se
+          // envio, solo el flag de tracking no se pudo persistir.
+          try {
+            const { error: updateError } = await supabase
+              .from('leads')
+              .update({ notificacion_clinica_enviada: true })
+              .eq('id', data.id);
+            if (updateError) {
+              console.error(
+                '[api/leads] Error actualizando notificacion_clinica_enviada tras envio exitoso:',
+                updateError.message
+              );
+            }
+          } catch (updateErr) {
+            console.error(
+              '[api/leads] Error no controlado actualizando notificacion_clinica_enviada:',
+              updateErr.message
+            );
+          }
+        }
       }
 
       respond(201, { id: data.id });

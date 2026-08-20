@@ -6,6 +6,15 @@ const { Readable } = require('node:stream');
 
 const { createHandler } = require('./leads');
 
+// Valores fijos de referencia para la notificacion de email de la
+// feature 05 (ver runs/05-notificacion-clinica-smtp-ferozo/spec.md):
+// api/leads.js arma buildClinicNotificationEmail() con los valores REALES
+// de process.env.LEADS_NOTIFICATION_EMAIL/SMTP_FROM (no son inyectables
+// por separado del mailerFactory), asi que se fijan una sola vez aca para
+// todo el archivo.
+process.env.LEADS_NOTIFICATION_EMAIL = 'clinica@sonriemascorrientes.com';
+process.env.SMTP_FROM = 'notificaciones@sonriemascorrientes.com';
+
 // ---------------------------------------------------------------------
 // Helpers de test: req/res falsos que hablan el mismo protocolo que un
 // request/response reales de Node (stream + headers + statusCode), sin
@@ -81,10 +90,12 @@ function makeRes() {
 }
 
 /**
- * Cliente Supabase falso. Soporta dos flujos usados por el handler:
+ * Cliente Supabase falso. Soporta tres flujos usados por el handler:
  *
- * - `from('leads').insert(rows).select().single()`: insercion (feature
- *   03). `calls` registra cada invocacion a `insert()` — varios tests
+ * - `from('leads').insert(rows).select('id, fecha_creacion').single()`:
+ *   insercion (feature 03; `.select()` ampliado en la feature 05 para
+ *   traer tambien `fecha_creacion`, ver criterio 1 del spec de la f05).
+ *   `calls` registra cada invocacion a `insert()` — varios tests
  *   (existentes y nuevos) verifican `calls.length` para confirmar que
  *   NO se inserta un lead en escenarios de rechazo o de duplicado.
  * - `from('leads').select('id').ilike(...).eq(...).gte(...).limit(n)`:
@@ -92,30 +103,41 @@ function makeRes() {
  *   cada invocacion. Por defecto no hay duplicados (`existingLeads: []`);
  *   los tests de idempotencia inyectan `existingLeads` para simular un
  *   match.
+ * - `from('leads').update({...}).eq('id', id)`: flag de notificacion
+ *   (feature 05, paso 4 del diseño de esa feature). `updateCalls`
+ *   registra cada invocacion; `failOnUpdate` simula un error de Supabase
+ *   en ese paso.
  */
 function makeFakeSupabaseClient({
   fail = false,
   id = '11111111-1111-1111-1111-111111111111',
+  fechaCreacion = '2026-08-19T12:00:00.000Z',
   existingLeads = [],
   failOnSelect = false,
+  failOnUpdate = false,
 } = {}) {
   const calls = [];
   const selectCalls = [];
+  const updateCalls = [];
+  const insertSelectCalls = [];
   const client = {
     calls,
     selectCalls,
+    updateCalls,
+    insertSelectCalls,
     from(table) {
       return {
         insert(rows) {
           calls.push({ table, rows });
           return {
-            select() {
+            select(columns) {
+              insertSelectCalls.push(columns);
               return {
                 async single() {
                   if (fail) {
                     return { data: null, error: { message: 'fallo simulado de Supabase' } };
                   }
-                  return { data: { id }, error: null };
+                  return { data: { id, fecha_creacion: fechaCreacion }, error: null };
                 },
               };
             },
@@ -146,10 +168,43 @@ function makeFakeSupabaseClient({
           };
           return builder;
         },
+        update(values) {
+          return {
+            async eq(column, value) {
+              updateCalls.push({ table, values, column, value });
+              if (failOnUpdate) {
+                return { data: null, error: { message: 'fallo simulado de Supabase (update)' } };
+              }
+              return { data: null, error: null };
+            },
+          };
+        },
       };
     },
   };
   return client;
+}
+
+/**
+ * Mailer falso (feature 05): simula el transporter de Nodemailer
+ * inyectado via `mailerFactory`. `sentMails` registra cada objeto
+ * `mailOptions` recibido por `sendMail()` — usado por los tests para
+ * inspeccionar `to`/`from`/`replyTo`/`subject`/`html`/`text` sin
+ * conexion real. `fail: true` simula un rechazo de `sendMail()` (fallo
+ * SMTP real).
+ */
+function makeFakeMailer({ fail = false } = {}) {
+  const sentMails = [];
+  return {
+    sentMails,
+    async sendMail(mailOptions) {
+      sentMails.push(mailOptions);
+      if (fail) {
+        throw new Error('fallo simulado de SMTP');
+      }
+      return { messageId: 'fake-message-id' };
+    },
+  };
 }
 
 function validPayload(overrides = {}) {
@@ -164,14 +219,22 @@ function validPayload(overrides = {}) {
 
 function newHandler(opts = {}) {
   const supabaseClient = opts.supabaseClient || makeFakeSupabaseClient();
+  // Por defecto, un mailer falso que "envia" exitosamente (sin red real),
+  // para que los tests preexistentes (que no conocen el concepto de
+  // email) ejerciten tambien el camino feliz de notificacion sin
+  // necesitar inyectar nada explicito. Los tests de la feature 05 pueden
+  // pasar `mailer`/`mailerFactory` explicitos para simular fallos.
+  const mailer = opts.mailer || makeFakeMailer();
+  const mailerFactory = opts.mailerFactory || (() => mailer);
   const handler = createHandler({
     supabaseClientFactory: () => supabaseClient,
     rateLimitStore: opts.rateLimitStore || new Map(),
     now: opts.now || (() => Date.now()),
     maxBodyBytes: opts.maxBodyBytes,
     originConfig: opts.originConfig || { siteUrl: TEST_SITE_URL, allowedOrigins: [], vercelUrl: undefined },
+    mailerFactory,
   });
-  return { handler, supabaseClient };
+  return { handler, supabaseClient, mailer };
 }
 
 // ---------------------------------------------------------------------
@@ -1579,4 +1642,298 @@ test('rechazo por control temporal no loguea PII ni la IP en texto plano', async
   } finally {
     console.warn = originalWarn;
   }
+});
+
+// =======================================================================
+// Feature 05: notificacion a la clinica por email (SMTP Ferozo)
+// Spec: runs/05-notificacion-clinica-smtp-ferozo/spec.md
+// =======================================================================
+
+// ---------------------------------------------------------------------
+// Envio exitoso tras INSERT nuevo (criterios 1, 2/f05, 6)
+// ---------------------------------------------------------------------
+
+test('INSERT nuevo exitoso invoca sendMail() con to/from/replyTo correctos y usa .select("id, fecha_creacion")', async () => {
+  const { supabaseClient, mailer, handler } = newHandler();
+  const req = makeReq({ body: validPayload({ email: 'paciente@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(mailer.sentMails.length, 1);
+  const mailOptions = mailer.sentMails[0];
+  assert.equal(mailOptions.to, 'clinica@sonriemascorrientes.com');
+  assert.equal(mailOptions.from, 'notificaciones@sonriemascorrientes.com');
+  assert.equal(mailOptions.replyTo, 'paciente@example.com');
+
+  assert.equal(supabaseClient.insertSelectCalls.length, 1);
+  assert.equal(supabaseClient.insertSelectCalls[0], 'id, fecha_creacion');
+});
+
+test('el HTML del correo contiene nombre/email/telefono/servicio/mensaje escapados, fecha_creacion e id', async () => {
+  const supabaseClient = makeFakeSupabaseClient({
+    id: '55555555-5555-5555-5555-555555555555',
+    fechaCreacion: '2026-08-19T15:30:00.000Z',
+  });
+  const { mailer, handler } = newHandler({ supabaseClient });
+  const req = makeReq({
+    body: validPayload({
+      nombre: '<b>Ana</b> & "Perez"',
+      telefono: '+54 11 4444-5555',
+      servicio: 'Ortodoncia',
+      mensaje: 'Hola <script>alert(1)</script>',
+    }),
+  });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(mailer.sentMails.length, 1);
+  const html = mailer.sentMails[0].html;
+
+  // (a) sin caracteres sin escapar: no debe poder inyectarse <script>.
+  assert.equal(html.includes('<script>alert(1)</script>'), false);
+  assert.equal(html.includes('<b>Ana</b>'), false);
+  assert.ok(html.includes('&lt;script&gt;'));
+  assert.ok(html.includes('&amp;'));
+
+  // (b) fecha_creacion e id devueltos por el INSERT aparecen en el HTML.
+  assert.ok(html.includes('55555555-5555-5555-5555-555555555555'));
+  assert.ok(html.includes('2026'));
+});
+
+test('telefono/servicio/mensaje ausentes -> placeholders en el HTML, nunca "null"', async () => {
+  const { mailer, handler } = newHandler();
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  const html = mailer.sentMails[0].html;
+  assert.ok(html.includes('No proporcionado'));
+  assert.ok(html.includes('No especificado'));
+  assert.ok(html.includes('Sin mensaje adicional'));
+});
+
+test('header injection: nombre con \\r\\n no deja \\r ni \\n crudos en el subject enviado a sendMail()', async () => {
+  const { mailer, handler } = newHandler();
+  const maliciousPayload = validPayload({ nombre: 'Juan\r\nBcc: attacker@evil.com' });
+  const maliciousReq = makeReq({ body: maliciousPayload });
+  const res = makeRes();
+
+  await handler(maliciousReq, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(mailer.sentMails.length, 1);
+  const { subject } = mailer.sentMails[0];
+  assert.equal(/[\r\n]/.test(subject), false);
+});
+
+test('sendMail() exitoso -> se ejecuta UPDATE notificacion_clinica_enviada = true con el id insertado', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: '66666666-6666-6666-6666-666666666666' });
+  const { mailer, handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(mailer.sentMails.length, 1);
+  assert.equal(supabaseClient.updateCalls.length, 1);
+  const updateCall = supabaseClient.updateCalls[0];
+  assert.equal(updateCall.table, 'leads');
+  assert.equal(updateCall.values.notificacion_clinica_enviada, true);
+  assert.equal(updateCall.column, 'id');
+  assert.equal(updateCall.value, '66666666-6666-6666-6666-666666666666');
+});
+
+// ---------------------------------------------------------------------
+// No se notifica en la rama de duplicado detectado (criterio 5)
+// ---------------------------------------------------------------------
+
+test('rama de duplicado detectado -> NO se invoca sendMail()', async () => {
+  const existingId = '77777777-7777-7777-7777-777777777777';
+  const supabaseClient = makeFakeSupabaseClient({ existingLeads: [{ id: existingId }] });
+  const { mailer, handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, existingId);
+  assert.equal(mailer.sentMails.length, 0, 'sendMail() no debe invocarse ante un duplicado');
+});
+
+// ---------------------------------------------------------------------
+// Fallos de email nunca alteran el contrato 201 (criterios 7, 8, 9, 11)
+// ---------------------------------------------------------------------
+
+test('sendMail() rechaza -> igual responde 201, sin UPDATE, sin insert adicional', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: '88888888-8888-8888-8888-888888888888' });
+  const mailer = makeFakeMailer({ fail: true });
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, '88888888-8888-8888-8888-888888888888');
+  assert.equal(supabaseClient.calls.length, 1, 'insert() debe seguir invocado exactamente una vez');
+  assert.equal(supabaseClient.updateCalls.length, 0, 'no debe ejecutarse el UPDATE del flag');
+});
+
+test('mailerFactory lanza (config SMTP faltante/invalida) -> igual responde 201, sin UPDATE, sin insert adicional', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: '99999999-9999-9999-9999-999999999999' });
+  const mailerFactory = () => {
+    throw new Error('Configuracion SMTP incompleta');
+  };
+  const { handler } = newHandler({ supabaseClient, mailerFactory });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, '99999999-9999-9999-9999-999999999999');
+  assert.equal(supabaseClient.calls.length, 1);
+  assert.equal(supabaseClient.updateCalls.length, 0);
+});
+
+test('UPDATE del flag falla -> igual responde 201 con el mismo id, sin reintentar el insert', async () => {
+  const supabaseClient = makeFakeSupabaseClient({
+    id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    failOnUpdate: true,
+  });
+  const { mailer, handler } = newHandler({ supabaseClient });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+  assert.equal(mailer.sentMails.length, 1, 'el envio de email si se considero exitoso');
+  assert.equal(supabaseClient.updateCalls.length, 1, 'se intento el UPDATE, aunque haya fallado');
+  assert.equal(supabaseClient.calls.length, 1, 'no se reinserta el lead');
+});
+
+test('el contrato de respuesta 201 { id } no cambia entre escenarios de email (exito/fallo/config faltante)', async () => {
+  const scenarios = [
+    { name: 'exito', mailer: makeFakeMailer({ fail: false }) },
+    { name: 'fallo sendMail', mailer: makeFakeMailer({ fail: true }) },
+  ];
+
+  for (const scenario of scenarios) {
+    const supabaseClient = makeFakeSupabaseClient();
+    const { handler } = newHandler({ supabaseClient, mailer: scenario.mailer, mailerFactory: () => scenario.mailer });
+    const req = makeReq({ body: validPayload() });
+    const res = makeRes();
+
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 201, scenario.name);
+    assert.deepEqual(Object.keys(res.json), ['id'], scenario.name);
+    assert.equal(typeof res.json.id, 'string', scenario.name);
+  }
+
+  // Config SMTP faltante: mailerFactory lanza.
+  const supabaseClient = makeFakeSupabaseClient();
+  const { handler } = newHandler({
+    supabaseClient,
+    mailerFactory: () => {
+      throw new Error('config SMTP faltante');
+    },
+  });
+  const req = makeReq({ body: validPayload() });
+  const res = makeRes();
+  await handler(req, res);
+  assert.equal(res.statusCode, 201);
+  assert.deepEqual(Object.keys(res.json), ['id']);
+});
+
+// ---------------------------------------------------------------------
+// No filtrado de credenciales en logs de fallo de email (criterio 10)
+// ---------------------------------------------------------------------
+
+test('fallo de sendMail() no filtra credenciales SMTP en console.error, aunque el error las contenga', async () => {
+  const errorCalls = [];
+  const originalError = console.error;
+  console.error = (...args) => errorCalls.push(args.map((a) => (a && a.stack) || String(a)).join(' '));
+  try {
+    const secretError = new Error('fallo de conexion SMTP');
+    // Simula que el error interno de Nodemailer trae detalles sensibles
+    // en propiedades adicionales (comportamiento real posible): el
+    // codigo de api/leads.js solo debe loguear `.message`.
+    secretError.response = '535 Authentication failed: SMTP_PASS=contrasena-secreta-xyz';
+    secretError.command = 'AUTH PLAIN dXNlcjpjb250cmFzZW5hLXNlY3JldGEteHl6';
+    const mailer = { async sendMail() { throw secretError; } };
+    const { handler, supabaseClient } = newHandler({ mailer, mailerFactory: () => mailer });
+    const req = makeReq({ body: validPayload() });
+    const res = makeRes();
+
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 201);
+    assert.equal(supabaseClient.updateCalls.length, 0);
+    const serialized = errorCalls.join('\n');
+    assert.equal(serialized.includes('contrasena-secreta-xyz'), false);
+    assert.equal(serialized.includes('dXNlcjpjb250cmFzZW5hLXNlY3JldGEteHl6'), false);
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test('config SMTP faltante: el mensaje logueado no incluye SMTP_PASS/SMTP_USER ni el objeto de config completo', async () => {
+  const errorCalls = [];
+  const originalError = console.error;
+  console.error = (...args) => errorCalls.push(args.map((a) => (a && a.stack) || String(a)).join(' '));
+  try {
+    const configError = new Error('Configuracion SMTP incompleta: faltan una o mas variables.');
+    const { handler } = newHandler({
+      mailerFactory: () => {
+        throw configError;
+      },
+    });
+    const req = makeReq({ body: validPayload() });
+    const res = makeRes();
+
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 201);
+    const serialized = errorCalls.join('\n');
+    for (const secretMarker of ['SMTP_PASS', 'SMTP_USER', 'contrasena', 'auth:']) {
+      assert.equal(serialized.toLowerCase().includes(secretMarker.toLowerCase()), false, secretMarker);
+    }
+  } finally {
+    console.error = originalError;
+  }
+});
+
+// ---------------------------------------------------------------------
+// Leads independientes disparan notificaciones independientes (caso
+// borde documentado en el spec, seccion "Casos borde a contemplar")
+// ---------------------------------------------------------------------
+
+test('dos leads nuevos e independientes disparan cada uno su propio sendMail()', async () => {
+  const supabaseClient = makeFakeSupabaseClient();
+  const { mailer, handler } = newHandler({ supabaseClient });
+
+  const req1 = makeReq({ body: validPayload({ nombre: 'Juan Perez', email: 'juan1@example.com' }) });
+  const res1 = makeRes();
+  await handler(req1, res1);
+  assert.equal(res1.statusCode, 201);
+
+  const req2 = makeReq({ body: validPayload({ nombre: 'Maria Lopez', email: 'maria2@example.com' }) });
+  const res2 = makeRes();
+  await handler(req2, res2);
+  assert.equal(res2.statusCode, 201);
+
+  assert.equal(mailer.sentMails.length, 2);
+  assert.equal(mailer.sentMails[0].replyTo, 'juan1@example.com');
+  assert.equal(mailer.sentMails[1].replyTo, 'maria2@example.com');
 });

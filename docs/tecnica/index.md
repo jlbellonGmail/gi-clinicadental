@@ -9,3 +9,4 @@ agentes (`AGENTS.md`): decisiones de diseño/implementación y casos borde.
 - [Endpoint de recepción de leads](endpoint-recepcion-leads.md)
 - [Arquitectura](arquitectura.md)
 - [Protección antispam y abuso](proteccion-antispam-y-abuso.md)
+- [Notificación de nuevo lead a la clínica](notificacion-clinica-smtp-ferozo.md)
