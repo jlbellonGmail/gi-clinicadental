@@ -65,22 +65,68 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             btn.disabled = true;
-            btn.textContent = 'Enviando...';
+            btn.textContent = 'Enviando solicitud...';
             btn.style.opacity = '0.7';
+            btn.style.backgroundColor = 'var(--primary)';
 
-            // Simulate API call
-            setTimeout(() => {
-                btn.textContent = '¡Solicitud Enviada!';
-                btn.style.backgroundColor = '#2ecc71';
-                leadForm.reset();
-                
-                setTimeout(() => {
-                    btn.disabled = false;
-                    btn.textContent = originalText;
-                    btn.style.backgroundColor = 'var(--primary)';
-                    btn.style.opacity = '1';
-                }, 3000);
-            }, 1500);
+            // Evitar solicitudes duplicadas
+            if (btn.dataset.submitting) {
+                btn.disabled = false;
+                btn.textContent = originalText;
+                btn.style.opacity = '1';
+                btn.style.backgroundColor = 'var(--primary)';
+                return;
+            }
+            btn.dataset.submitting = 'true';
+
+            fetch('/api/leads', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(leadPayload)
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        if (response.status === 429) {
+                            btn.textContent = 'Demasiados intentos, espere unos minutos';
+                            throw new Error('rate_limit');
+                        }
+                        throw new Error('connection');
+                    }
+                    return response.json();
+                })
+                .then(() => {
+                    btn.textContent = 'Solicitud recibida. La clínica se comunicará para confirmar el turno';
+                    leadForm.reset();
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                        btn.style.opacity = '1';
+                        btn.style.backgroundColor = 'var(--primary)';
+                        delete btn.dataset.submitting;
+                    }, 3000);
+                })
+                .catch((error) => {
+                    if (error.message === 'rate_limit') {
+                        setTimeout(() => {
+                            btn.disabled = false;
+                            btn.textContent = originalText;
+                            btn.style.opacity = '1';
+                            btn.style.backgroundColor = 'var(--primary)';
+                            delete btn.dataset.submitting;
+                        }, 5000);
+                    } else {
+                        btn.textContent = 'Error en la conexión, intente más tarde';
+                        setTimeout(() => {
+                            btn.disabled = false;
+                            btn.textContent = originalText;
+                            btn.style.opacity = '1';
+                            btn.style.backgroundColor = 'var(--primary)';
+                            delete btn.dataset.submitting;
+                        }, 5000);
+                    }
+                });
         });
     }
 
