@@ -95,7 +95,7 @@ feedback:
   `subject` (único vector real, dado que `mensaje` nunca se usa en
   headers y `email` ya excluye whitespace por `EMAIL_PATTERN`). Correcto
   y suficientemente acotado; no hace falta generalizar a otros
-  caracteres de control (` `, etc.) para esta feature.
+  caracteres de control (``, etc.) para esta feature.
 
 Archivos revisados: `runs/05-notificacion-clinica-smtp-ferozo/spec.md`,
 `runs/05-notificacion-clinica-smtp-ferozo/audit-1.md`, `api/leads.js`,
