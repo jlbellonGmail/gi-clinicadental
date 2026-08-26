@@ -102,7 +102,7 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 - [x] 08-conexion-frontend-api — Eliminar de `script.js` la simulación basada en `setTimeout` y el comentario `// Simulate API call`. Implementar una petición asíncrona mediante `fetch()` hacia `/api/leads`. Bloquear el botón durante el envío, evitar solicitudes duplicadas y mostrar los estados “Enviando solicitud...”, “Demasiados intentos, espere unos minutos” y “Error en la conexión, intente más tarde”. Ante un resultado exitoso mostrar: “Solicitud recibida. La clínica se comunicará para confirmar el turno”. Reactivar siempre el botón al finalizar.
 
-- [-] 09-redisenio-estetico-y-assets — Renovar la landing page aplicando criterios profesionales de UI/UX orientados a odontología moderna. Corregir las imágenes rotas, incorporar recursos visuales con licencia válida, convertirlos a WebP y optimizar peso, dimensiones, textos alternativos y carga diferida. Actualizar colores, tipografías, espaciados y diseño responsive sin alterar el funcionamiento del formulario.
+- [x] 09-redisenio-estetico-y-assets — Renovar la landing page aplicando criterios profesionales de UI/UX orientados a odontología moderna. Corregir las imágenes rotas, incorporar recursos visuales con licencia válida, convertirlos a WebP y optimizar peso, dimensiones, textos alternativos y carga diferida. Actualizar colores, tipografías, espaciados y diseño responsive sin alterar el funcionamiento del formulario.
 
 - [ ] 10-actualizacion-datos-contacto — Reemplazar todos los placeholders por información institucional validada de Sonríe más: denominación, teléfono, WhatsApp, correo, dirección, horarios y redes sociales. Eliminar textos genéricos como `555-XXXX` y comprobar el funcionamiento de enlaces telefónicos, WhatsApp, mapas y redes sociales.
 
@@ -119,6 +119,7 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 - [ ] 16-validacion-mvp-produccion — Ejecutar una validación funcional completa en producción utilizando datos de prueba controlados: completar el formulario, aceptar la política, enviar la solicitud, verificar la respuesta de la API, confirmar la creación del lead en Supabase, comprobar la notificación a la clínica y recibir la confirmación como paciente. Verificar además la visualización desde computadora y celular. El MVP solamente podrá cerrarse cuando todo el circuito funcione sin credenciales expuestas, errores críticos ni pasos manuales no documentados.
 
 - [x] 99-personalizacion-wiki — Personalizar la documentación MkDocs y proteger la actualización automática de sus índices.
+
 
 
 
