@@ -5,14 +5,15 @@
     --primary-dark: #098888;
     --primary-light: #e8f7f7;
     --secondary: #1a1a1a;
-    --text: #333333;
-    --text-muted: #666666;
+    --text: #2d3a3a;
+    --text-muted: #6b7c7c;
     --white: #ffffff;
-    --bg-light: #f8fbfa;
+    --bg-light: #f0f8f7;
     --accent: #ff8c42;
-    --shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-    --radius: 12px;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    --radius: 16px;
     --transition: all 0.3s ease;
+    --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
 }
 
 * {
@@ -156,7 +157,7 @@ header {
     height: 100vh;
     display: flex;
     align-items: center;
-    background: linear-gradient(135deg, var(--primary-light) 0%, #ffffff 100%);
+    background: var(--gradient-primary);
     position: relative;
     padding-top: 80px;
     overflow: hidden;
@@ -215,7 +216,7 @@ header {
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     transition: var(--transition);
-    border: 1px solid #eee;
+    border: 1px solid var(--primary-light);
 }
 
 .service-card:hover {
@@ -240,7 +241,7 @@ header {
 .stats {
     background: var(--secondary);
     color: var(--white);
-    padding: 60px 0;
+    padding: 80px 0;
 }
 
 .stats-grid {
@@ -271,7 +272,7 @@ header {
 .contact-wrapper {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 60px;
+    gap: 80px;
 }
 
 .form-group {
@@ -381,7 +382,7 @@ input:focus, select:focus, textarea:focus {
 footer {
     background: var(--secondary);
     color: var(--white);
-    padding: 80px 0 30px;
+    padding: 80px 0 40px;
 }
 
 .footer-grid {
