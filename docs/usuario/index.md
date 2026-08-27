@@ -60,6 +60,7 @@ hide:
 - [Notificación de nuevo lead a la clínica](notificacion-clinica-smtp-ferozo.md)
 - [Confirmación automática al paciente](confirmacion-automatica-paciente.md)
 - [Seguridad y política de privacidad](seguridad-y-politica-privacidad.md)
+- [Actualización de datos de contacto](10-actualizacion-datos-contacto.md)
 
 <!-- FEATURE_LINKS_END -->
 
