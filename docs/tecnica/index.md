@@ -63,6 +63,7 @@ hide:
 - [Confirmación automática al paciente](confirmacion-automatica-paciente.md)
 - [Seguridad y política de privacidad](seguridad-y-politica-privacidad.md)
 - [Actualización de datos de contacto](10-actualizacion-datos-contacto.md)
+- [11-seo-accesibilidad-y-navegacion](seo-accesibilidad-y-navegacion.md)
 
 <!-- FEATURE_LINKS_END -->
 
