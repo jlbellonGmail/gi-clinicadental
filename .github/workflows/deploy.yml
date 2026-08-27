@@ -1,0 +1,63 @@
+name: Vercel Deployment Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [develop]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  preview-deployment:
+    name: Preview Deployment
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Trigger Vercel Preview
+        run: |
+          vercel preview --token=${{ secrets.VERCEL_TOKEN }} \
+            --project=${{ secrets.VERCEL_PROJECT_ID }} \
+            --git-commit-sha=${{ github.sha }} \
+            --git-branch=${{ github.head_ref }}
+
+  production-deployment:
+    name: Production Deployment
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://gi-clinicadental.vercel.app
+      implicit: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Deploy to Production (pending approval)
+        run: |
+          vercel prod --token=${{ secrets.VERCEL_TOKEN }} \
+            --project=${{ secrets.VERCEL_PROJECT_ID }} \
+            --confirm
+
+  approval-gate:
+    name: HITL Approval Gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    needs: preview-deployment
+    steps:
+      - name: Wait for HITL Approval
+        uses: peter-evans/review-wait@v2
+        with:
+          number: ${{ github.event.pull_request.number }}
+          wait-for: 'approved'
+          directions: ['LGTM', 'Looks good', 'approved', 'APPROVED']
+          cancel-token: ${{ github.run_id }}
