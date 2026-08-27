@@ -104,7 +104,7 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 - [x] 09-redisenio-estetico-y-assets — Renovar la landing page aplicando criterios profesionales de UI/UX orientados a odontología moderna. Corregir las imágenes rotas, incorporar recursos visuales con licencia válida, convertirlos a WebP y optimizar peso, dimensiones, textos alternativos y carga diferida. Actualizar colores, tipografías, espaciados y diseño responsive sin alterar el funcionamiento del formulario.
 
-[-] 10-actualizacion-datos-contacto — Reemplazar todos los placeholders por información institucional validada de Sonríe más: denominación, teléfono, WhatsApp, correo, dirección, horarios y redes sociales. Eliminar textos genéricos como `555-XXXX` y comprobar el funcionamiento de enlaces telefónicos, WhatsApp, mapas y redes sociales.
+[x] 10-actualizacion-datos-contacto — Reemplazar todos los placeholders por información institucional validada de Sonríe más: denominación, teléfono, WhatsApp, correo, dirección, horarios y redes sociales. Eliminar textos genéricos como `555-XXXX` y comprobar el funcionamiento de enlaces telefónicos, WhatsApp, mapas y redes sociales.
 
 - [ ] 11-seo-accesibilidad-y-navegacion — Incorporar título, descripción, favicon, etiquetas Open Graph, URL canónica y metadatos básicos para buscadores y redes sociales. Verificar navegación mediante teclado, contraste, etiquetas asociadas a campos, mensajes accesibles, foco después de errores, textos alternativos y comportamiento responsive. Incorporar una página 404 coherente con el diseño del sitio.
 
