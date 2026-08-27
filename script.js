@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     return response.json();
                 })
-                .then(() => {
+                .then((data) => {
                     btn.textContent = 'Solicitud recibida. La clínica se comunicará para confirmar el turno';
                     leadForm.reset();
                     setTimeout(() => {
@@ -108,7 +108,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, 3000);
                 })
                 .catch((error) => {
+                    // Mover foco al botón para que el usuario pueda volver a intentar
+                    btn.focus();
+
                     if (error.message === 'rate_limit') {
+                        btn.textContent = 'Demasiados intentos, espere unos minutos';
                         setTimeout(() => {
                             btn.disabled = false;
                             btn.textContent = originalText;

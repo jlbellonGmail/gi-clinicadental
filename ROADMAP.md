@@ -1,4 +1,4 @@
-# Roadmap: gi-clinicadental
+﻿# Roadmap: gi-clinicadental
 
 Cada feature nueva se implementa siguiendo el circuito agéntico de
 [AGENTS.md](AGENTS.md): Analyst → Reviewer → Builder → QA →
@@ -106,7 +106,7 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 [x] 10-actualizacion-datos-contacto — Reemplazar todos los placeholders por información institucional validada de Sonríe más: denominación, teléfono, WhatsApp, correo, dirección, horarios y redes sociales. Eliminar textos genéricos como `555-XXXX` y comprobar el funcionamiento de enlaces telefónicos, WhatsApp, mapas y redes sociales.
 
-- [ ] 11-seo-accesibilidad-y-navegacion — Incorporar título, descripción, favicon, etiquetas Open Graph, URL canónica y metadatos básicos para buscadores y redes sociales. Verificar navegación mediante teclado, contraste, etiquetas asociadas a campos, mensajes accesibles, foco después de errores, textos alternativos y comportamiento responsive. Incorporar una página 404 coherente con el diseño del sitio.
+- [-] 11-seo-accesibilidad-y-navegacion — Incorporar título, descripción, favicon, etiquetas Open Graph, URL canónica y metadatos básicos para buscadores y redes sociales. Verificar navegación mediante teclado, contraste, etiquetas asociadas a campos, mensajes accesibles, foco después de errores, textos alternativos y comportamiento responsive. Incorporar una página 404 coherente con el diseño del sitio.
 
 - [ ] 12-entregabilidad-correo-dominio — Verificar la configuración SPF, DKIM y DMARC del dominio remitente. Confirmar que Ferozo permita conexiones SMTP seguras desde funciones Serverless de Vercel. Realizar pruebas de recepción en diferentes proveedores de correo y comprobar que las notificaciones no sean rechazadas ni clasificadas sistemáticamente como spam.
 
@@ -119,6 +119,7 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 - [ ] 16-validacion-mvp-produccion — Ejecutar una validación funcional completa en producción utilizando datos de prueba controlados: completar el formulario, aceptar la política, enviar la solicitud, verificar la respuesta de la API, confirmar la creación del lead en Supabase, comprobar la notificación a la clínica y recibir la confirmación como paciente. Verificar además la visualización desde computadora y celular. El MVP solamente podrá cerrarse cuando todo el circuito funcione sin credenciales expuestas, errores críticos ni pasos manuales no documentados.
 
 - [x] 99-personalizacion-wiki — Personalizar la documentación MkDocs y proteger la actualización automática de sus índices.
+
 
 
 
