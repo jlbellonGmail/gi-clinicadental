@@ -61,6 +61,7 @@ hide:
 - [Confirmación automática al paciente](confirmacion-automatica-paciente.md)
 - [Seguridad y política de privacidad](seguridad-y-politica-privacidad.md)
 - [Actualización de datos de contacto](10-actualizacion-datos-contacto.md)
+- [13-pruebas-integrales-y-seguridad](13-pruebas-integrales-y-seguridad.md)
 - [seo-accesibilidad-y-navegacion](seo-accesibilidad-y-navegacion.md)
 - [Entregabilidad correo dominio](entregabilidad-correo-dominio.md)
 
