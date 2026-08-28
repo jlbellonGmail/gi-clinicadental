@@ -64,7 +64,7 @@ hide:
 - [13-pruebas-integrales-y-seguridad](13-pruebas-integrales-y-seguridad.md)
 - [seo-accesibilidad-y-navegacion](seo-accesibilidad-y-navegacion.md)
 - [Entregabilidad correo dominio](entregabilidad-correo-dominio.md)
-- [Pipeline de despliegue Vercel](pipeline-despliegue-vercel.md)
+- [pipeline-despliegue-vercel](pipeline-despliegue-vercel.md)
 
 <!-- FEATURE_LINKS_END -->
 
