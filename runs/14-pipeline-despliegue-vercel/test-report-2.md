@@ -83,6 +83,16 @@ Defectos del archivo original, verificados contra el repo:
 Regla derivada, ahora documentada en la doc técnica: `vercel.json` sólo declara
 lo que la detección zero-config no puede inferir.
 
+**Límite honesto de este diagnóstico**: la causa exacta del fallo de `583677e`
+—la reescritura intermedia— **no se llegó a determinar**. El status de GitHub
+no traía descripción y `npx vercel inspect <dpl> --logs` exige login
+interactivo, que no está disponible en esta sesión. La sospecha razonable es
+`functions.api/leads.js.runtime`, pero **no está verificada**. Se resolvió por
+bisección empírica contra el CI, no por lectura del log de build: el estado
+`success` del deployment mínimo es la evidencia, no una hipótesis sobre la
+clave culpable. Si en el futuro hiciera falta agregar alguna de esas claves a
+`vercel.json`, conviene hacerlo de a una y mirando el deployment de la PR.
+
 `vercel.json` validado como JSON: `python -c "json.load(open('vercel.json'))"` → OK.
 
 ### 2.3 `api/leads.test.js` se habría publicado como endpoint
