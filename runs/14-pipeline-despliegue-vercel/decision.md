@@ -37,19 +37,29 @@ el estado `[-]` en `ROADMAP.md`. Consecuencias verificadas:
   criterio explícito del spec. Su eliminación alinea el repo con la decisión
   que este mismo documento ya declaraba.
 
-- **`vercel.json` reescrito**: la versión mergeada declaraba `"framework":
-  "vite"` (el repo no tiene Vite ni bundler alguno), inyectaba
-  `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` —variables que ningún archivo
-  del proyecto lee; `api/` usa `NEXT_PUBLIC_SUPABASE_URL` y
-  `SUPABASE_SERVICE_ROLE_KEY`, según `.env.example`—, fijaba el runtime
-  inválido `nodejs20` (debe ser `nodejs20.x`) y definía un rewrite
-  `/api/:path*` → `/api/$1` con sintaxis de destino incorrecta y redundante
-  frente al ruteo nativo de Vercel.
+- **`vercel.json` reducido a sólo `headers`**: éste fue el hallazgo más grave.
+  El `vercel.json` mergeado **rompió todos los deployments de Vercel**: desde
+  `888d972` cada deployment falla con `Environment Variable
+  "VITE_SUPABASE_URL" references Secret "supabase_url", which does not exist`,
+  incluido el de `develop` tras el merge (`887e0c0`). El deployment anterior al
+  archivo (`f606c75`) figura como `success`: **la detección zero-config de
+  Vercel ya funcionaba y el archivo la rompió.**
 
-- **`installCommand` queda en el default (`null`), no deshabilitado**: la
-  documentación previa indicaba `echo 'No install required'`. Eso habría roto
-  las funciones de `api/`, que dependen de `@supabase/supabase-js` y
-  `nodemailer` declaradas en `package.json`. No hay build, pero sí install.
+  El archivo además declaraba `"framework": "vite"` (el repo no tiene Vite ni
+  bundler alguno; `package.json` no define script `build`), el runtime inválido
+  `nodejs20` (debe ser `nodejs20.x`) y un rewrite `/api/:path*` → `/api/$1` con
+  sintaxis de destino incorrecta y redundante frente al ruteo nativo.
+
+  La corrección se hizo en dos pasos, guiada por el CI real: una reescritura
+  completa dejó el deployment igualmente fallido (`583677e`), así que el
+  archivo se redujo a **sólo `headers`** (`f203fbf`), que es lo único que
+  zero-config no aporta. Deployment `success`. **Regla adoptada: `vercel.json`
+  sólo declara lo que zero-config no puede inferir.**
+
+- **`installCommand` queda en el default, no deshabilitado**: la documentación
+  previa indicaba `echo 'No install required'`. Eso habría roto las funciones
+  de `api/`, que dependen de `@supabase/supabase-js` y `nodemailer` declaradas
+  en `package.json`. No hay build, pero sí install.
 
 - **`.vercelignore` agregado**: Vercel publica como Serverless Function todo
   `.js` bajo `api/`, así que `api/leads.test.js` habría quedado expuesto como

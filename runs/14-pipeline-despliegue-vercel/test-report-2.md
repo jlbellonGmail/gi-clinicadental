@@ -4,7 +4,8 @@ attempt: 2
 feedback:
   - "Intento 1 se dio por cerrado sin que la implementacion estuviera realmente verificada: deploy.yml fallo en las 3 corridas registradas y ningun test lo cubria."
   - "vercel.json describia un stack (Vite) que no existe en el repo; ningun test comparaba la configuracion de despliegue contra el codigo real."
-  - "Corregido en este intento: deploy.yml eliminado, vercel.json reescrito, .vercelignore agregado, ready-for-pr.ps1 arreglado y cubierto por test."
+  - "El defecto mas grave fue no verificar ningun deployment: vercel.json rompio TODOS los deployments de Vercel desde el merge de la PR #18."
+  - "Corregido en este intento: deploy.yml eliminado, vercel.json reducido al minimo (deployment success), .vercelignore agregado, ready-for-pr.ps1 arreglado y cubierto por test."
 ```
 
 # Test report 2 — 14-pipeline-despliegue-vercel
@@ -41,15 +42,46 @@ integración Git nativa, contra el criterio del spec.
 
 **Corrección**: archivo eliminado. Ver `decision.md`.
 
-### 2.2 `vercel.json` — describía un stack inexistente
+### 2.2 `vercel.json` — rompía **todos** los deployments de Vercel
 
-| Defecto | Verificación | Corrección |
+Éste resultó ser el defecto más grave, y no lo detectó el intento 1. Estado de
+los deployments según la API de GitHub:
+
+| Commit | Deployment | Detalle |
 |---|---|---|
-| `"framework": "vite"` | `grep -rn "vite\|VITE_"` sobre el repo: **0 coincidencias** fuera del propio `vercel.json`; `package.json` no tiene script `build` | `framework: null`, `buildCommand: null` |
-| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | `api/` lee `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`; `.env.example` no documenta ninguna `VITE_*` | bloque `build.env` eliminado |
-| `"runtime": "nodejs20"` | Vercel exige el sufijo `.x` | `nodejs20.x` sobre `api/leads.js` |
-| rewrite `/api/:path*` → `/api/$1` | Destino con sintaxis incorrecta (`$1` en lugar de `:path*`) y redundante frente al ruteo nativo | `rewrites` eliminado |
-| Install deshabilitado en la doc (`echo 'No install required'`) | `package.json` declara `@supabase/supabase-js` y `nodemailer`, requeridos por `api/leads.js` | `installCommand: null` (default `npm install`) |
+| `f606c75` (previo a `vercel.json`) | ✅ `success` | Zero-config de Vercel ya funcionaba |
+| `888d972` (introduce `vercel.json`) | ❌ `failure` | `Environment Variable "VITE_SUPABASE_URL" references Secret "supabase_url", which does not exist` |
+| `887e0c0` (merge de #18 a `develop`) | ❌ `failure` | Mismo error |
+| `1939ea1` (head previo de la rama) | ❌ `failure` | Mismo error |
+
+Es decir: **desde que la PR #18 se mergeó, `develop` no desplegaba.** La feature
+cuyo objetivo era montar el pipeline de despliegue lo dejó roto, y el
+`test-report-1.md` la aprobó sin comprobar ni un solo deployment.
+
+Defectos del archivo original, verificados contra el repo:
+
+| Defecto | Verificación |
+|---|---|
+| `build.env` con `@supabase_url` / `@supabase_anon_key` | Sintaxis de secretos de Vercel; esos secretos no existen → **causa del fallo** |
+| `"framework": "vite"` | `grep -rn "vite\|VITE_"` sobre el repo: 0 coincidencias fuera del propio `vercel.json`; `package.json` no tiene script `build` |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | `api/` lee `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`; `.env.example` no documenta ninguna `VITE_*` |
+| `"runtime": "nodejs20"` | Falta el sufijo `.x`; además la versión de Node se controla con `engines.node` |
+| rewrite `/api/:path*` → `/api/$1` | Destino con sintaxis incorrecta y redundante frente al ruteo nativo |
+| Doc: `installCommand` = `echo 'No install required'` | Habría roto `api/`, que depende de `@supabase/supabase-js` y `nodemailer` |
+
+**Corrección aplicada en dos pasos, guiada por el resultado real del CI:**
+
+1. Primer intento: `vercel.json` reescrito con `framework: null`,
+   `buildCommand: null`, `installCommand: null`, `outputDirectory: "."`,
+   `functions.api/leads.js.runtime = nodejs20.x` y `headers`. El error de
+   secretos desapareció, **pero el deployment siguió fallando** (commit
+   `583677e`).
+2. Corrección definitiva (commit `f203fbf`): dado que sin `vercel.json` el
+   deployment era exitoso, el archivo se redujo a **sólo `headers`**, que es lo
+   único que zero-config no aporta. **Deployment `success`.**
+
+Regla derivada, ahora documentada en la doc técnica: `vercel.json` sólo declara
+lo que la detección zero-config no puede inferir.
 
 `vercel.json` validado como JSON: `python -c "json.load(open('vercel.json'))"` → OK.
 
@@ -93,12 +125,38 @@ permisos sobre el directorio temporal base de pytest. Con `--basetemp` apuntando
 a un directorio escribible la suite corre completa. El CI de GitHub Actions
 corre sobre Linux y no está afectado.
 
+## 3.1 Verificación del pipeline real (PR #19)
+
+A diferencia del intento 1, esta vez el pipeline se verificó ejecutándolo:
+
+| Check | Commit `583677e` | Commit `f203fbf` |
+|---|---|---|
+| `test` (GitHub Actions) | ✅ pass | ✅ pass |
+| `Vercel` (deployment Preview) | ❌ fail | ✅ **pass — "Deployment has completed"** |
+
+El primer commit corrigió el error de secretos pero el deployment seguía
+fallando; eso fue lo que motivó reducir `vercel.json` al mínimo. El resultado
+es el **primer deployment exitoso desde que se mergeó la PR #18**.
+
+Preview generada: `https://gi-clinicadental-r6c8iedyx-gi26.vercel.app`
+
+Verificación por HTTP sobre esa URL: todas las rutas responden `302` hacia
+`https://vercel.com/sso-api?...`. Es la **Deployment Protection (SSO) de
+Vercel**, activa para Preview a nivel de proyecto — no un defecto del sitio.
+La cabecera `X-Frame-Options: DENY` sí viaja en esa respuesta, lo que confirma
+que el bloque `headers` de `vercel.json` está aplicándose.
+
+**Límite de esta verificación**: por la protección SSO no se pudo ejercitar
+anónimamente `GET /api/leads` (esperado `405`) ni comprobar que
+`/api/leads.test` no exista. Quien apruebe la PR, con sesión de Vercel, debería
+abrir la Preview y probar el formulario end-to-end antes de decidir `MERGE`.
+
 ## 4. Criterios de aceptación del spec
 
 | Criterio | Estado | Evidencia |
 |---|---|---|
-| `develop` → Preview, `main` → Production | ✅ | Integración Git nativa; `docs/tecnica/pipeline-despliegue-vercel.md` |
-| Cada PR genera URL Preview para HITL | ✅ | Integración nativa, comentario automático en la PR |
+| `develop` → Preview, `main` → Production | ✅ | Integración Git nativa; deployment Preview de la PR #19 en `success` |
+| Cada PR genera URL Preview para HITL | ✅ | `https://gi-clinicadental-r6c8iedyx-gi26.vercel.app`, comentario automático en la PR #19 |
 | Production sólo tras aprobación humana y merge a `main` | ✅ | `AGENTS.md` paso 8 + `main` como única rama de Production |
 | Integración nativa priorizada; `deploy.yml` sólo si hay necesidad no cubierta | ✅ | Workflow eliminado; justificación en `decision.md` y doc técnica |
 | `docs/tecnica/<slug>.md` y `docs/usuario/<slug>.md` | ✅ | Ambos presentes y actualizados |
