@@ -41,20 +41,33 @@
 
 ### Configuración versionada: `vercel.json`
 
-La configuración del proyecto vive en `vercel.json`, en la raíz del repo,
-para que sea revisable en la PR y no dependa de ajustes manuales en la UI:
+**Regla de esta feature: `vercel.json` sólo declara lo que la detección
+zero-config de Vercel no puede inferir.** Está verificado que sin
+`vercel.json` el proyecto desplegaba correctamente (deployment del commit
+`f606c75`, estado `success`), y que la primera versión del archivo rompió
+todos los deployments posteriores. Cada clave agregada es una oportunidad de
+contradecir al repo, así que el archivo se mantiene mínimo:
 
-| Clave | Valor | Motivo |
-|-------|-------|--------|
-| `framework` | `null` | El sitio es HTML/CSS/JS plano, sin framework ni bundler (ver `AGENTS.md`). |
-| `buildCommand` | `null` | No hay paso de build: `package.json` no define script `build`. |
-| `installCommand` | `null` | Deja el `npm install` por defecto. **Es obligatorio**: las funciones de `api/` dependen de `@supabase/supabase-js` y `nodemailer`. |
-| `outputDirectory` | `.` | Los estáticos (`index.html`, `style.css`, `script.js`, `404.html`, `politica-privacidad.html`) se sirven desde la raíz. |
-| `functions` | `api/leads.js` → `nodejs20.x` | Fija el runtime del único endpoint real. |
-| `headers` | `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` | Cabeceras de seguridad para todas las rutas. |
+| Clave | Motivo |
+|-------|--------|
+| `headers` | Cabeceras de seguridad (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) para todas las rutas. Es lo único que zero-config no aporta. |
 
-No se declaran `rewrites`: Vercel enruta `api/leads.js` a `/api/leads` de
-forma nativa, sin reescritura intermedia.
+Lo que **no** se declara, y por qué:
+
+- **`framework` / `buildCommand` / `outputDirectory`**: Vercel ya detecta un
+  sitio estático sin build (`package.json` no define script `build`) y sirve
+  la raíz del repo.
+- **`installCommand`**: debe quedar en el default. Las funciones de `api/`
+  dependen de `@supabase/supabase-js` y `nodemailer`; deshabilitar el install
+  las rompería. No hay build, pero sí install.
+- **`functions` / `runtime`**: la versión de Node se controla con
+  `engines.node` en `package.json`, no con `functions.runtime`.
+- **`rewrites`**: Vercel enruta `api/leads.js` a `/api/leads` de forma nativa.
+- **Variables de entorno**: viven en Vercel (Settings → Environment
+  Variables), nunca en `vercel.json`. La primera versión del archivo las
+  declaraba con la sintaxis de secretos `@supabase_url`, lo que hizo fallar
+  todos los deployments con `Environment Variable "VITE_SUPABASE_URL"
+  references Secret "supabase_url", which does not exist`.
 
 ### Qué se excluye del deployment: `.vercelignore`
 
