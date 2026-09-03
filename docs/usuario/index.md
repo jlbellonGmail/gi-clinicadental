@@ -65,6 +65,7 @@ hide:
 - [seo-accesibilidad-y-navegacion](seo-accesibilidad-y-navegacion.md)
 - [Entregabilidad correo dominio](entregabilidad-correo-dominio.md)
 - [Pipeline de despliegue Vercel](pipeline-despliegue-vercel.md)
+- [Observabilidad y operacion](observabilidad-y-operacion.md)
 
 <!-- FEATURE_LINKS_END -->
 
