@@ -1,8 +1,8 @@
 'use strict';
 
-const crypto = require('crypto');
 const { getSupabaseClient } = require('./_lib/supabase-client');
 const { createTransporter, buildClinicNotificationEmail, buildPatientConfirmationEmail } = require('./_lib/mailer');
+const { crearLogger, crearRequestId, hashOpaco, metadatosDeError } = require('./_lib/logger');
 
 // Contrato completo de la feature 03 en runs/03-endpoint-recepcion-leads/
 // spec.md y en docs/tecnica/endpoint-recepcion-leads.md. El contrato de
@@ -107,7 +107,7 @@ function getClientIp(req) {
  * docs/tecnica/proteccion-antispam-y-abuso.md.
  */
 function hashIp(ip) {
-  return crypto.createHash('sha256').update(String(ip)).digest('hex').slice(0, 16);
+  return hashOpaco(ip);
 }
 
 /**
@@ -116,15 +116,8 @@ function hashIp(ip) {
  * solo `motivo` (uno de 'rate_limit' | 'origen_no_permitido' |
  * 'antispam') y el hash truncado de la IP.
  */
-function logRejection(motivo, ip) {
-  console.warn(
-    JSON.stringify({
-      evento: 'lead_rechazado',
-      motivo,
-      ip_hash: hashIp(ip),
-      timestamp: new Date().toISOString(),
-    })
-  );
+function logRejection(log, motivo, ip) {
+  log.warn('lead_rechazado', { motivo, ip_hash: hashIp(ip) });
 }
 
 function checkRateLimit(store, ip, now) {
@@ -370,21 +363,58 @@ function createHandler(options = {}) {
   } = options;
 
   return async function leadsHandler(req, res) {
+    // Observabilidad (f15): identificador de correlacion de esta
+    // invocacion. Acompaña a TODOS los eventos de esta request y NO se
+    // expone en la respuesta HTTP — decision explicita: no se altera la
+    // superficie HTTP sin una necesidad operativa demostrable. La
+    // correlacion externa se hace por `lead_id` contra la fila de
+    // Supabase. Ver docs/tecnica/observabilidad-y-operacion.md.
+    const log = crearLogger(crearRequestId());
+    const inicioRequest = now();
+    let leadId = null;
+
+    function duracionDesde(inicio) {
+      return Math.max(0, Math.round(now() - inicio));
+    }
+
     let responded = false;
     function respond(statusCode, body, extraHeaders) {
       if (responded) return;
       responded = true;
+
+      // Unico choke point de todas las respuestas: cubre "validacion
+      // rechazada" y "solicitud finalizada" sin instrumentar los ~25
+      // call sites de respond() uno por uno. Solo se loguea el CODIGO de
+      // error y el NOMBRE del campo, nunca su valor.
+      if (statusCode >= 400 && statusCode < 500) {
+        log.warn('validacion_rechazada', {
+          error: body && body.error,
+          campo: body && body.campo,
+          http_status: statusCode,
+        });
+      }
+
+      log.info('solicitud_finalizada', {
+        http_status: statusCode,
+        lead_id: leadId,
+        duracion_ms: duracionDesde(inicioRequest),
+      });
+
       sendJson(res, statusCode, body, extraHeaders);
     }
 
     try {
+      // `getClientIp` solo lee headers/socket, sin efectos: se adelanta
+      // al chequeo de metodo para que incluso un 405 quede registrado
+      // con su `ip_hash`.
+      const ip = getClientIp(req);
+      log.info('solicitud_recibida', { metodo: req.method, ip_hash: hashIp(ip) });
+
       // Paso 1 (criterio 2/f03, orden extendido paso 1/f04): metodo HTTP.
       if (req.method !== ALLOWED_METHOD) {
         respond(405, { error: 'metodo_no_permitido' }, { Allow: ALLOWED_METHOD });
         return;
       }
-
-      const ip = getClientIp(req);
 
       // Paso 2 (nuevo, criterios 2/3/4 de la f04): validacion de origen.
       // Se evalua ANTES del rate limiting (orden de evaluacion extendido
@@ -393,7 +423,7 @@ function createHandler(options = {}) {
       const effectiveOriginConfig = originConfig || resolveOriginConfigFromEnv();
       const requestOrigin = getEffectiveOrigin(req);
       if (!isOriginAllowed(requestOrigin, effectiveOriginConfig)) {
-        logRejection('origen_no_permitido', ip);
+        logRejection(log, 'origen_no_permitido', ip);
         respond(403, { error: 'origen_no_permitido' });
         return;
       }
@@ -408,7 +438,7 @@ function createHandler(options = {}) {
       // cuente contra el limite.
       const rateLimitResult = checkRateLimit(rateLimitStore, ip, now());
       if (rateLimitResult.limited) {
-        logRejection('rate_limit', ip);
+        logRejection(log, 'rate_limit', ip);
         respond(
           429,
           { error: 'demasiadas_solicitudes' },
@@ -477,7 +507,7 @@ function createHandler(options = {}) {
       if (sitioWeb !== undefined) {
         const esHoneypotDisparado = typeof sitioWeb !== 'string' || sitioWeb.trim().length > 0;
         if (esHoneypotDisparado) {
-          logRejection('antispam', ip);
+          logRejection(log, 'antispam', ip);
           respond(400, { error: 'solicitud_rechazada' });
           return;
         }
@@ -496,7 +526,7 @@ function createHandler(options = {}) {
         if (!Number.isNaN(parsedTimestamp)) {
           const deltaMs = now() - parsedTimestamp;
           if (deltaMs < MIN_FORM_FILL_MS) {
-            logRejection('antispam', ip);
+            logRejection(log, 'antispam', ip);
             respond(400, { error: 'solicitud_rechazada' });
             return;
           }
@@ -608,6 +638,10 @@ function createHandler(options = {}) {
         return;
       }
 
+      // Observabilidad (f15): todas las validaciones quedaron atras; a
+      // partir de aca la solicitud toca sistemas externos.
+      log.info('validacion_aceptada');
+
       // Cliente Supabase (criterios 16, 17, 23 de la f03): se obtiene
       // recien aca (nunca antes de pasar todas las validaciones) para no
       // inicializar una conexion real en solicitudes que de todas formas
@@ -617,7 +651,7 @@ function createHandler(options = {}) {
       try {
         supabase = supabaseClientFactory();
       } catch (err) {
-        console.error('[api/leads] Error inicializando el cliente Supabase:', err);
+        log.error('supabase_cliente_error', metadatosDeError('supabase_cliente_error', err));
         respond(500, { error: 'error_interno' });
         return;
       }
@@ -644,18 +678,26 @@ function createHandler(options = {}) {
           .limit(1);
 
         if (dupError) {
-          console.error('[api/leads] Error consultando duplicados en Supabase:', dupError);
+          log.error(
+            'supabase_duplicados_error',
+            metadatosDeError('supabase_duplicados_error', dupError)
+          );
           respond(500, { error: 'error_interno' });
           return;
         }
         existingLeads = dupData;
       } catch (err) {
-        console.error('[api/leads] Error no controlado consultando duplicados en Supabase:', err);
+        log.error(
+          'supabase_duplicados_error',
+          metadatosDeError('supabase_duplicados_error', err)
+        );
         respond(500, { error: 'error_interno' });
         return;
       }
 
       if (Array.isArray(existingLeads) && existingLeads.length > 0 && existingLeads[0] && existingLeads[0].id) {
+        leadId = existingLeads[0].id;
+        log.info('duplicado_detectado', { lead_id: leadId });
         respond(201, { id: existingLeads[0].id });
         return;
       }
@@ -667,6 +709,7 @@ function createHandler(options = {}) {
       // — ver "Diseño propuesto -> 2" de runs/05-notificacion-clinica-
       // smtp-ferozo/spec.md). Sin cambios en el mapeo campo->columna del
       // insert en si.
+      const inicioInsercion = now();
       const { data, error } = await supabase
         .from('leads')
         .insert([
@@ -683,13 +726,26 @@ function createHandler(options = {}) {
         .select('id, fecha_creacion')
         .single();
 
+      const duracionInsercion = duracionDesde(inicioInsercion);
+
       if (error || !data || !data.id) {
-        // El detalle real (mensaje de Postgres/Supabase) se loguea solo
-        // server-side (criterio 19/f03): nunca en la respuesta HTTP.
-        console.error('[api/leads] Error insertando lead en Supabase:', error);
+        // Observabilidad (f15): del error de Postgres/Supabase se
+        // registran UNICAMENTE metadatos estructurados (SQLSTATE, clase
+        // del error y huella de agrupacion). Nunca `message`, `details`
+        // ni `hint`: un error de INSERT puede incluir los valores de la
+        // fila (ej. "Key (email)=(...)"), es decir PII del paciente.
+        log.error(
+          'supabase_insercion_error',
+          Object.assign(metadatosDeError('supabase_insercion_error', error), {
+            duracion_ms: duracionInsercion,
+          })
+        );
         respond(500, { error: 'error_interno' });
         return;
       }
+
+      leadId = data.id;
+      log.info('supabase_insercion_ok', { lead_id: leadId, duracion_ms: duracionInsercion });
 
       // Notificacion a la clinica y confirmacion al paciente por email
       // (features 05 y 06), unicamente tras un INSERT nuevo exitoso
@@ -707,7 +763,10 @@ function createHandler(options = {}) {
         // 12/f06: si esto lanza, NINGUNO de los dos envios se intenta):
         // se trata como fallo de envio, sin credenciales ni objeto de
         // config en el log (criterio 10/f05).
-        console.error('[api/leads] Error creando el transporter de email (config SMTP):', mailerErr.message);
+        log.error(
+          'smtp_configuracion_error',
+          metadatosDeError('smtp_configuracion_error', mailerErr)
+        );
       }
 
       if (transporter) {
@@ -729,16 +788,28 @@ function createHandler(options = {}) {
         // confirmacion-automatica-paciente.md).
         const clinicMailOptions = buildClinicNotificationEmail(lead);
         let clinicSendSucceeded = false;
+        const inicioEnvioClinic = now();
         try {
           await transporter.sendMail(clinicMailOptions);
           clinicSendSucceeded = true;
+          log.info('smtp_clinica_ok', {
+            lead_id: leadId,
+            duracion_ms: duracionDesde(inicioEnvioClinic),
+          });
         } catch (sendMailErr) {
-          // Rechazo/excepcion de sendMail (criterio 7/f05): loguear sin
-          // credenciales ni el detalle interno de Nodemailer (solo
-          // mensaje de alto nivel), saltar el UPDATE del flag. Un fallo
-          // aca NO impide el intento de envio al paciente que sigue mas
-          // abajo (criterio 13/f06, independencia explicita).
-          console.error('[api/leads] Error enviando notificacion de email a la clinica:', sendMailErr.message);
+          // Rechazo/excepcion de sendMail (criterio 7/f05): saltar el
+          // UPDATE del flag. Desde la f15 NO se loguea `err.message` ni
+          // `err.response`: solo metadatos estructurados (`codigo`,
+          // `smtp_response_code`, huella de agrupacion). Un fallo aca NO
+          // impide el intento de envio al paciente que sigue mas abajo
+          // (criterio 13/f06, independencia explicita).
+          log.error(
+            'smtp_clinica_error',
+            Object.assign(metadatosDeError('smtp_clinica_error', sendMailErr), {
+              lead_id: leadId,
+              duracion_ms: duracionDesde(inicioEnvioClinic),
+            })
+          );
         }
 
         if (clinicSendSucceeded) {
@@ -752,15 +823,21 @@ function createHandler(options = {}) {
               .update({ notificacion_clinica_enviada: true })
               .eq('id', data.id);
             if (updateError) {
-              console.error(
-                '[api/leads] Error actualizando notificacion_clinica_enviada tras envio exitoso:',
-                updateError.message
+              log.error(
+                'flag_actualizacion_error',
+                Object.assign(metadatosDeError('flag_actualizacion_error', updateError), {
+                  lead_id: leadId,
+                  flag: 'notificacion_clinica_enviada',
+                })
               );
             }
           } catch (updateErr) {
-            console.error(
-              '[api/leads] Error no controlado actualizando notificacion_clinica_enviada:',
-              updateErr.message
+            log.error(
+              'flag_actualizacion_error',
+              Object.assign(metadatosDeError('flag_actualizacion_error', updateErr), {
+                lead_id: leadId,
+                flag: 'notificacion_clinica_enviada',
+              })
             );
           }
         }
@@ -772,15 +849,27 @@ function createHandler(options = {}) {
         // resultado ya decidido del envio a la clinica (criterio 13/f06).
         const patientMailOptions = buildPatientConfirmationEmail(lead);
         let patientSendSucceeded = false;
+        const inicioEnvioPatient = now();
         try {
           await transporter.sendMail(patientMailOptions);
           patientSendSucceeded = true;
+          log.info('smtp_paciente_ok', {
+            lead_id: leadId,
+            duracion_ms: duracionDesde(inicioEnvioPatient),
+          });
         } catch (sendMailErr) {
-          // Rechazo/excepcion de sendMail (criterio 15/f06): loguear solo
-          // err.message, nunca el objeto completo ni credenciales SMTP,
-          // saltar el UPDATE del flag. El lead insertado y la respuesta
-          // HTTP no se ven afectados.
-          console.error('[api/leads] Error enviando confirmacion de email al paciente:', sendMailErr.message);
+          // Rechazo/excepcion de sendMail (criterio 15/f06): saltar el
+          // UPDATE del flag. Desde la f15 solo se registran metadatos
+          // estructurados, nunca `err.message`, `err.response` ni el
+          // objeto completo. El lead insertado y la respuesta HTTP no se
+          // ven afectados.
+          log.error(
+            'smtp_paciente_error',
+            Object.assign(metadatosDeError('smtp_paciente_error', sendMailErr), {
+              lead_id: leadId,
+              duracion_ms: duracionDesde(inicioEnvioPatient),
+            })
+          );
         }
 
         if (patientSendSucceeded) {
@@ -794,15 +883,21 @@ function createHandler(options = {}) {
               .update({ confirmacion_paciente_enviada: true })
               .eq('id', data.id);
             if (updateError) {
-              console.error(
-                '[api/leads] Error actualizando confirmacion_paciente_enviada tras envio exitoso:',
-                updateError.message
+              log.error(
+                'flag_actualizacion_error',
+                Object.assign(metadatosDeError('flag_actualizacion_error', updateError), {
+                  lead_id: leadId,
+                  flag: 'confirmacion_paciente_enviada',
+                })
               );
             }
           } catch (updateErr) {
-            console.error(
-              '[api/leads] Error no controlado actualizando confirmacion_paciente_enviada:',
-              updateErr.message
+            log.error(
+              'flag_actualizacion_error',
+              Object.assign(metadatosDeError('flag_actualizacion_error', updateErr), {
+                lead_id: leadId,
+                flag: 'confirmacion_paciente_enviada',
+              })
             );
           }
         }
@@ -812,7 +907,7 @@ function createHandler(options = {}) {
     } catch (err) {
       // Cualquier error no controlado (criterio 19/f03): 500 generico,
       // sin stack trace ni mensaje interno en la respuesta.
-      console.error('[api/leads] Error no controlado:', err);
+      log.error('error_no_controlado', metadatosDeError('error_no_controlado', err));
       respond(500, { error: 'error_interno' });
     }
   };

@@ -2247,3 +2247,514 @@ test('dos leads nuevos e independientes disparan cada uno su propia confirmacion
   assert.equal(patientMails[0].to, 'juan-f06@example.com');
   assert.equal(patientMails[1].to, 'maria-f06@example.com');
 });
+
+// ---------------------------------------------------------------------
+// Observabilidad y operacion (feature 15)
+//
+// Contrato en runs/15-observabilidad-y-operacion/spec.md y en
+// docs/tecnica/observabilidad-y-operacion.md. Regla verificada aca: los
+// logs solo llevan campos estructurados de dominio acotado; ni PII ni
+// secretos ni texto libre de error pueden aparecer en ningun canal.
+// ---------------------------------------------------------------------
+
+/**
+ * Captura los tres canales de consola durante una operacion asincronica
+ * y devuelve las lineas crudas, las parseadas y el texto completo.
+ */
+async function capturarConsola(fn) {
+  const canales = { log: [], warn: [], error: [] };
+  const originales = { log: console.log, warn: console.warn, error: console.error };
+
+  // `crudas` conserva el orden CRONOLOGICO real de emision; `canales`
+  // separa por canal. Concatenar los canales perderia la cronologia y
+  // haria pasar por bueno un orden de eventos equivocado.
+  const crudas = [];
+  const registrar = (canal) => (...args) => {
+    const linea = args.join(' ');
+    canales[canal].push(linea);
+    crudas.push(linea);
+  };
+
+  console.log = registrar('log');
+  console.warn = registrar('warn');
+  console.error = registrar('error');
+
+  try {
+    await fn();
+  } finally {
+    console.log = originales.log;
+    console.warn = originales.warn;
+    console.error = originales.error;
+  }
+  return {
+    canales,
+    crudas,
+    eventos: crudas.map((linea) => JSON.parse(linea)),
+    texto: crudas.join('\n'),
+  };
+}
+
+const nombresDeEventos = (eventos) => eventos.map((e) => e.evento);
+
+// PII de referencia: ningun test de esta seccion debe encontrarla en los
+// logs, en ninguna forma, ni siquiera truncada.
+const PII = {
+  nombre: 'Fulano Secreto De Prueba',
+  email: 'fulano.secreto@example.com',
+  telefono: '+54 379 4123456',
+  mensaje: 'Me duele la muela desde hace tres semanas y quiero un presupuesto',
+  ip: '203.0.113.77',
+};
+
+const payloadConPii = () =>
+  validPayload({
+    nombre: PII.nombre,
+    email: PII.email,
+    telefono: PII.telefono,
+    mensaje: PII.mensaje,
+  });
+
+function assertSinPiiNiSecretos(texto, mensajeExtra = '') {
+  const prohibidos = [
+    PII.nombre,
+    PII.email,
+    PII.telefono,
+    PII.mensaje,
+    PII.ip,
+    'SMTP_PASS',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'service_role',
+    'contrasena-secreta',
+  ];
+  for (const prohibido of prohibidos) {
+    assert.equal(
+      texto.includes(prohibido),
+      false,
+      'no debe aparecer en los logs: ' + prohibido + ' ' + mensajeExtra
+    );
+  }
+}
+
+// --- Correlacion -----------------------------------------------------
+
+test('f15: todos los eventos de una request comparten un unico request_id', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const { handler } = newHandler();
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  assert.ok(eventos.length >= 4, 'la request debe emitir varios eventos');
+  const ids = new Set(eventos.map((e) => e.request_id));
+  assert.equal(ids.size, 1, 'se esperaba un unico request_id, hubo ' + ids.size);
+  assert.match([...ids][0], /^[0-9a-fA-F-]{36}$/);
+});
+
+test('f15: dos requests distintas no comparten request_id', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const { handler } = newHandler();
+    await handler(makeReq({ body: validPayload() }), makeRes());
+    await handler(makeReq({ body: validPayload({ email: 'otra@example.com' }) }), makeRes());
+  });
+
+  const ids = new Set(eventos.map((e) => e.request_id));
+  assert.equal(ids.size, 2);
+});
+
+test('f15: lead_id correlaciona los eventos posteriores a la insercion', async () => {
+  const idEsperado = 'f1500000-0000-0000-0000-000000000001';
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({ id: idEsperado });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const conLeadId = ['supabase_insercion_ok', 'smtp_clinica_ok', 'smtp_paciente_ok', 'solicitud_finalizada'];
+  for (const nombre of conLeadId) {
+    const evento = eventos.find((e) => e.evento === nombre);
+    assert.ok(evento, 'falta el evento ' + nombre);
+    assert.equal(evento.lead_id, idEsperado, nombre + ' debe llevar lead_id');
+  }
+});
+
+// --- Eventos de exito ------------------------------------------------
+
+test('f15: el flujo 201 completo emite la secuencia de eventos esperada', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const { handler } = newHandler();
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  assert.deepEqual(nombresDeEventos(eventos), [
+    'solicitud_recibida',
+    'validacion_aceptada',
+    'supabase_insercion_ok',
+    'smtp_clinica_ok',
+    'smtp_paciente_ok',
+    'solicitud_finalizada',
+  ]);
+
+  const finalizada = eventos.find((e) => e.evento === 'solicitud_finalizada');
+  assert.equal(finalizada.http_status, 201);
+  assert.equal(typeof finalizada.duracion_ms, 'number');
+  assert.ok(finalizada.duracion_ms >= 0);
+});
+
+test('f15: solicitud_recibida registra metodo e ip_hash, nunca la IP en claro', async () => {
+  const { eventos, texto } = await capturarConsola(async () => {
+    const { handler } = newHandler();
+    await handler(makeReq({ body: validPayload(), ip: PII.ip }), makeRes());
+  });
+
+  const recibida = eventos[0];
+  assert.equal(recibida.evento, 'solicitud_recibida');
+  assert.equal(recibida.metodo, 'POST');
+  assert.match(recibida.ip_hash, /^[0-9a-f]{16}$/);
+  assert.equal(texto.includes(PII.ip), false);
+});
+
+test('f15: incluso un 405 queda registrado de punta a punta', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const { handler } = newHandler();
+    await handler(makeReq({ method: 'GET' }), makeRes());
+  });
+
+  assert.deepEqual(nombresDeEventos(eventos), [
+    'solicitud_recibida',
+    'validacion_rechazada',
+    'solicitud_finalizada',
+  ]);
+  assert.equal(eventos[0].metodo, 'GET');
+  assert.equal(eventos[1].error, 'metodo_no_permitido');
+  assert.equal(eventos[2].http_status, 405);
+});
+
+test('f15: la rama de duplicado emite duplicado_detectado y no eventos de email', async () => {
+  const idExistente = 'f1500000-0000-0000-0000-0000000000d1';
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({ existingLeads: [{ id: idExistente }] });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const nombres = nombresDeEventos(eventos);
+  assert.ok(nombres.includes('duplicado_detectado'));
+  assert.equal(nombres.includes('smtp_clinica_ok'), false);
+  assert.equal(eventos.find((e) => e.evento === 'duplicado_detectado').lead_id, idExistente);
+});
+
+// --- Validacion rechazada --------------------------------------------
+
+test('f15: cada familia de rechazo emite validacion_rechazada con su codigo', async () => {
+  const escenarios = [
+    { nombre: 'json invalido', body: '{no es json', error: 'json_invalido', status: 400 },
+    {
+      nombre: 'campo faltante',
+      body: validPayload({ nombre: undefined }),
+      error: 'campo_requerido_faltante',
+      status: 400,
+      campo: 'nombre',
+    },
+    {
+      nombre: 'email invalido',
+      body: validPayload({ email: 'no-es-email' }),
+      error: 'formato_email_invalido',
+      status: 400,
+    },
+    {
+      nombre: 'sin consentimiento',
+      body: validPayload({ consentimiento_privacidad: false }),
+      error: 'consentimiento_requerido',
+      status: 400,
+    },
+    {
+      nombre: 'longitud excedida',
+      body: validPayload({ mensaje: 'x'.repeat(2001) }),
+      error: 'longitud_excedida',
+      status: 400,
+      campo: 'mensaje',
+    },
+  ];
+
+  for (const escenario of escenarios) {
+    const { eventos } = await capturarConsola(async () => {
+      const { handler } = newHandler();
+      await handler(makeReq({ body: escenario.body }), makeRes());
+    });
+
+    const rechazo = eventos.find((e) => e.evento === 'validacion_rechazada');
+    assert.ok(rechazo, escenario.nombre + ': falta validacion_rechazada');
+    assert.equal(rechazo.error, escenario.error, escenario.nombre);
+    assert.equal(rechazo.http_status, escenario.status, escenario.nombre);
+    if (escenario.campo) {
+      assert.equal(rechazo.campo, escenario.campo, escenario.nombre);
+    }
+    assert.equal(
+      nombresDeEventos(eventos).includes('validacion_aceptada'),
+      false,
+      escenario.nombre + ': no debe marcarse como aceptada'
+    );
+  }
+});
+
+test('f15: una clave desconocida hostil no llega al log (log injection)', async () => {
+  const claveHostil = 'x", "evento": "falsificado", "pii": "fulano.secreto@example.com';
+  const { eventos, texto } = await capturarConsola(async () => {
+    const { handler } = newHandler();
+    const body = validPayload();
+    body[claveHostil] = 'valor';
+    await handler(makeReq({ body }), makeRes());
+  });
+
+  const rechazo = eventos.find((e) => e.evento === 'validacion_rechazada');
+  assert.equal(rechazo.error, 'propiedad_desconocida');
+  assert.equal(rechazo.campo, 'no_permitido', 'la clave arbitraria no debe loguearse');
+  assert.equal(texto.includes('falsificado'), false);
+  assert.equal(texto.includes(PII.email), false);
+  assert.equal(eventos.length, 3);
+});
+
+test('f15: los rechazos antispam mantienen lead_rechazado como primer warn', async () => {
+  const { canales, eventos } = await capturarConsola(async () => {
+    const { handler } = newHandler();
+    await handler(
+      makeReq({ body: validPayload(), headers: { origin: 'https://sitio-malicioso.example' } }),
+      makeRes()
+    );
+  });
+
+  // Contrato preexistente de la feature 04: el primer warn debe seguir
+  // siendo lead_rechazado (varios tests lo leen como warnCalls[0]).
+  assert.equal(JSON.parse(canales.warn[0]).evento, 'lead_rechazado');
+  assert.equal(JSON.parse(canales.warn[0]).motivo, 'origen_no_permitido');
+  assert.ok(nombresDeEventos(eventos).includes('validacion_rechazada'));
+});
+
+// --- Fallos de Supabase ----------------------------------------------
+
+test('f15: un error de INSERT con PII en details/hint solo loguea metadatos', async () => {
+  // Caso real: un error de Postgres puede incluir los valores de la fila
+  // (ej. "Key (email)=(...) already exists") en message/detail.
+  const errorConPii = {
+    message: 'Key (email)=(' + PII.email + ') already exists',
+    details: 'Failing row contains (' + PII.nombre + ', ' + PII.email + ', ' + PII.telefono + ')',
+    hint: 'Revisar el lead de ' + PII.nombre,
+    code: '23505',
+  };
+  const supabaseClient = makeFakeSupabaseClient();
+  supabaseClient.from = () => ({
+    insert() {
+      return {
+        select() {
+          return {
+            async single() {
+              return { data: null, error: errorConPii };
+            },
+          };
+        },
+      };
+    },
+    select() {
+      return {
+        ilike() {
+          return {
+            eq() {
+              return {
+                gte() {
+                  return {
+                    async limit() {
+                      return { data: [], error: null };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  });
+
+  const { eventos, texto } = await capturarConsola(async () => {
+    const { handler } = newHandler({ supabaseClient });
+    const res = makeRes();
+    await handler(makeReq({ body: payloadConPii() }), res);
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(res.json, { error: 'error_interno' });
+  });
+
+  const fallo = eventos.find((e) => e.evento === 'supabase_insercion_error');
+  assert.ok(fallo, 'debe emitirse supabase_insercion_error');
+  assert.equal(fallo.codigo, '23505', 'el SQLSTATE si es informacion util y segura');
+  assert.match(fallo.huella, /^[0-9a-f]{16}$/);
+  assert.equal('message' in fallo, false);
+  assert.equal('details' in fallo, false);
+  assert.equal('hint' in fallo, false);
+
+  assertSinPiiNiSecretos(texto, '(error de INSERT)');
+  assert.equal(texto.includes('already exists'), false);
+  assert.equal(texto.includes('Failing row'), false);
+});
+
+test('f15: un fallo al inicializar el cliente Supabase se registra sin detalle', async () => {
+  const { eventos, texto } = await capturarConsola(async () => {
+    const handler = createHandler({
+      supabaseClientFactory: () => {
+        throw new Error('No se pudo conectar con SUPABASE_SERVICE_ROLE_KEY=clave-secreta-real');
+      },
+      rateLimitStore: new Map(),
+      originConfig: { siteUrl: TEST_SITE_URL, allowedOrigins: [], vercelUrl: undefined },
+      mailerFactory: () => makeFakeMailer(),
+    });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  assert.ok(nombresDeEventos(eventos).includes('supabase_cliente_error'));
+  assert.equal(texto.includes('clave-secreta-real'), false);
+  assert.equal(texto.includes('SUPABASE_SERVICE_ROLE_KEY'), false);
+});
+
+// --- Fallos de SMTP ---------------------------------------------------
+
+test('f15: un fallo SMTP registra codigo y smtp_response_code, nunca la respuesta del servidor', async () => {
+  const errorSmtp = new Error('Invalid login: 535 auth failed for ' + PII.email);
+  errorSmtp.code = 'EAUTH';
+  errorSmtp.responseCode = 535;
+  errorSmtp.response = '535 5.7.8 Authentication failed: SMTP_PASS=contrasena-secreta-xyz';
+
+  const { eventos, texto } = await capturarConsola(async () => {
+    const mailer = {
+      async sendMail() {
+        throw errorSmtp;
+      },
+    };
+    const { handler } = newHandler({ mailer, mailerFactory: () => mailer });
+    const res = makeRes();
+    await handler(makeReq({ body: payloadConPii() }), res);
+    assert.equal(res.statusCode, 201, 'un fallo SMTP no cambia la respuesta ya decidida');
+  });
+
+  const nombres = nombresDeEventos(eventos);
+  assert.ok(nombres.includes('smtp_clinica_error'));
+  assert.ok(nombres.includes('smtp_paciente_error'), 'los dos envios son independientes');
+
+  const falloClinica = eventos.find((e) => e.evento === 'smtp_clinica_error');
+  assert.equal(falloClinica.codigo, 'EAUTH');
+  assert.equal(falloClinica.smtp_response_code, 535);
+  assert.match(falloClinica.huella, /^[0-9a-f]{16}$/);
+
+  assertSinPiiNiSecretos(texto, '(fallo SMTP)');
+  assert.equal(texto.includes('Authentication failed'), false);
+  assert.equal(texto.includes('Invalid login'), false);
+});
+
+test('f15: config SMTP ausente emite smtp_configuracion_error sin variables de entorno', async () => {
+  const { eventos, texto } = await capturarConsola(async () => {
+    const { handler } = newHandler({
+      mailerFactory: () => {
+        throw new Error('Configuracion SMTP incompleta: SMTP_PASS=clave-real, SMTP_USER=user-real');
+      },
+    });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  assert.ok(nombresDeEventos(eventos).includes('smtp_configuracion_error'));
+  assert.equal(texto.includes('clave-real'), false);
+  assert.equal(texto.includes('user-real'), false);
+  assert.equal(texto.toLowerCase().includes('smtp_pass'), false);
+});
+
+test('f15: un fallo del UPDATE del flag se registra con lead_id y nombre del flag', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({
+      id: 'f1500000-0000-0000-0000-0000000000f1',
+      failOnUpdate: true,
+    });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const fallos = eventos.filter((e) => e.evento === 'flag_actualizacion_error');
+  assert.ok(fallos.length >= 1, 'debe registrarse el fallo del UPDATE');
+  assert.equal(fallos[0].lead_id, 'f1500000-0000-0000-0000-0000000000f1');
+  assert.ok(
+    ['notificacion_clinica_enviada', 'confirmacion_paciente_enviada'].includes(fallos[0].flag)
+  );
+});
+
+// --- Ausencia de secretos y PII, y superficie HTTP --------------------
+
+test('f15: ningun canal filtra PII ni secretos en un flujo 201 completo', async () => {
+  const { texto, eventos } = await capturarConsola(async () => {
+    const { handler } = newHandler();
+    await handler(makeReq({ body: payloadConPii(), ip: PII.ip }), makeRes());
+  });
+
+  assertSinPiiNiSecretos(texto, '(flujo 201)');
+
+  // Ademas: ningun evento debe traer una clave fuera del esquema.
+  const permitidas = new Set([
+    'timestamp',
+    'nivel',
+    'evento',
+    'request_id',
+    'lead_id',
+    'ip_hash',
+    'metodo',
+    'http_status',
+    'error',
+    'campo',
+    'motivo',
+    'flag',
+    'tipo',
+    'codigo',
+    'smtp_response_code',
+    'huella',
+    'duracion_ms',
+  ]);
+  for (const evento of eventos) {
+    for (const clave of Object.keys(evento)) {
+      assert.ok(permitidas.has(clave), 'clave fuera del esquema: ' + clave + ' en ' + evento.evento);
+    }
+  }
+});
+
+test('f15: cada linea de log es JSON valido de una sola linea', async () => {
+  const { crudas } = await capturarConsola(async () => {
+    const { handler } = newHandler();
+    await handler(makeReq({ body: payloadConPii() }), makeRes());
+  });
+
+  for (const linea of crudas) {
+    assert.equal(linea.includes('\n'), false, 'un evento no debe ocupar mas de una linea');
+    assert.doesNotThrow(() => JSON.parse(linea));
+  }
+});
+
+test('f15: la superficie HTTP no cambia (sin request id en la respuesta)', async () => {
+  const res = makeRes();
+  await capturarConsola(async () => {
+    const { handler } = newHandler();
+    await handler(makeReq({ body: validPayload() }), res);
+  });
+
+  assert.equal(res.statusCode, 201);
+  assert.deepEqual(Object.keys(res.json), ['id']);
+  assert.deepEqual(Object.keys(res.headers), ['content-type']);
+  const serializado = JSON.stringify(res.json) + JSON.stringify(res.headers);
+  assert.equal(serializado.toLowerCase().includes('request'), false);
+});
+
+test('f15: la funcionalidad preexistente se preserva bajo instrumentacion', async () => {
+  await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({ id: 'f1500000-0000-0000-0000-00000000aaaa' });
+    const { handler, mailer } = newHandler({ supabaseClient });
+    const res = makeRes();
+    await handler(makeReq({ body: validPayload() }), res);
+
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.json.id, 'f1500000-0000-0000-0000-00000000aaaa');
+    assert.equal(supabaseClient.calls.length, 1, 'un unico insert');
+    assert.equal(mailer.sentMails.length, 2, 'clinica y paciente');
+    assert.equal(supabaseClient.updateCalls.length, 2, 'ambos flags actualizados');
+  });
+});
