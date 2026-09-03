@@ -1,4 +1,4 @@
-# Roadmap: gi-clinicadental
+﻿# Roadmap: gi-clinicadental
 
 Cada feature nueva se implementa siguiendo el circuito agéntico de
 [AGENTS.md](AGENTS.md): Analyst → Reviewer → Builder → QA →
@@ -112,13 +112,14 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 - [x] 13-pruebas-integrales-y-seguridad — Crear pruebas automatizadas para migraciones, validaciones, consentimiento obligatorio, sanitización, límites de longitud, solicitudes malformadas, rate limiting, duplicados, inserción en Supabase y fallos SMTP. Ejecutar una prueba end-to-end desde el formulario hasta la persistencia y los dos correos. Verificar que ninguna credencial aparezca en el frontend, respuestas HTTP, logs, historial Git o artefactos de compilación.
 
-- [ ] 14-pipeline-despliegue-vercel — Configurar `develop` como rama de integración con despliegues Preview y `main` como rama estable con despliegue Production. Cada Pull Request deberá generar una URL Preview para auditoría técnica y aprobación HITL. Solamente después de la aprobación humana y del merge autorizado hacia `main` deberá actualizarse el sitio público. Priorizar la integración Git nativa de Vercel y crear `.github/workflows/deploy.yml` únicamente si existe una necesidad no cubierta por ella.
+- [-] 14-pipeline-despliegue-vercel — Configurar `develop` como rama de integración con despliegues Preview y `main` como rama estable con despliegue Production. Cada Pull Request deberá generar una URL Preview para auditoría técnica y aprobación HITL. Solamente después de la aprobación humana y del merge autorizado hacia `main` deberá actualizarse el sitio público. Priorizar la integración Git nativa de Vercel y crear `.github/workflows/deploy.yml` únicamente si existe una necesidad no cubierta por ella.
 
 - [ ] 15-observabilidad-y-operacion — Incorporar logs estructurados y seguros para solicitudes, validaciones, inserciones y errores de Supabase o SMTP. No registrar contraseñas, claves ni mensajes sensibles completos. Definir un procedimiento para diagnóstico, recuperación, rotación de credenciales, revisión de leads pendientes y detección de notificaciones fallidas. Utilizar inicialmente el panel protegido de Supabase para administrar los estados `nuevo`, `contactado`, `confirmado` y `descartado`, sin construir todavía un panel administrativo propio.
 
 - [ ] 16-validacion-mvp-produccion — Ejecutar una validación funcional completa en producción utilizando datos de prueba controlados: completar el formulario, aceptar la política, enviar la solicitud, verificar la respuesta de la API, confirmar la creación del lead en Supabase, comprobar la notificación a la clínica y recibir la confirmación como paciente. Verificar además la visualización desde computadora y celular. El MVP solamente podrá cerrarse cuando todo el circuito funcione sin credenciales expuestas, errores críticos ni pasos manuales no documentados.
 
 - [x] 99-personalizacion-wiki — Personalizar la documentación MkDocs y proteger la actualización automática de sus índices.
+
 
 
 

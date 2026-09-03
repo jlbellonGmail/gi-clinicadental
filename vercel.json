@@ -1,16 +1,5 @@
 {
-  "framework": "vite",
-  "build": {
-    "env": {
-      "VITE_SUPABASE_URL": "@supabase_url",
-      "VITE_SUPABASE_ANON_KEY": "@supabase_anon_key"
-    }
-  },
-  "functions": {
-    "api/*.js": {
-      "runtime": "nodejs20"
-    }
-  },
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "headers": [
     {
       "source": "/(.*)",
@@ -28,12 +17,6 @@
           "value": "strict-origin-when-cross-origin"
         }
       ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/$1"
     }
   ]
 }

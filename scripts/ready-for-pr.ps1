@@ -185,6 +185,16 @@ Invoke-Checked "git" @("push", "-u", "origin", $currentBranch)
 $ghPath = Get-GitHubCliPath
 $powerShellPath = Get-PowerShellPath
 $existingPr = Get-ExistingPr -GitHubCliPath $ghPath -Branch $currentBranch
+if ($null -ne $existingPr -and $existingPr.state -ne "OPEN") {
+    # 'gh pr view <rama>' tambien devuelve PRs ya MERGED o CLOSED de esa
+    # misma rama. Reutilizarlas dejaria los commits nuevos sin PR abierta
+    # (caso real: 14-pipeline-despliegue-vercel, mergeada como #18 antes de
+    # que se commitearan docs, decision y ROADMAP). Solo una PR OPEN cuenta
+    # como existente; con cualquier otro estado se crea una PR nueva.
+    Write-Host "==> PR #$($existingPr.number) esta en estado '$($existingPr.state)'. Se creara una PR nueva."
+    $existingPr = $null
+}
+
 if ($null -ne $existingPr) {
     if ($existingPr.baseRefName -ne $baseBranch) {
         throw "La PR existente #$($existingPr.number) apunta a '$($existingPr.baseRefName)', no a '$baseBranch'."
