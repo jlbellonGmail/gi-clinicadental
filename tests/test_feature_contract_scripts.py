@@ -313,6 +313,17 @@ def make_fake_tools(bin_dir: Path, mode: str):
                 "echo {\"number\":45,\"url\":\"https://example.test/pull/45\",\"baseRefName\":\"develop\",\"state\":\"OPEN\"}\n",
                 encoding="utf-8",
             )
+        elif mode == "merged_then_create":
+            # 'pr view' devuelve la PR ya mergeada de la misma rama; la PR
+            # nueva debe crearse igual para los commits posteriores al merge.
+            gh.write_text(
+                "@echo off\n"
+                "echo %* | findstr /C:\"pr view\" >nul && ("
+                "echo {\"number\":18,\"url\":\"https://example.test/pull/18\",\"baseRefName\":\"develop\",\"state\":\"MERGED\"}"
+                " & exit /b 0)\n"
+                "echo https://example.test/pull/123\n",
+                encoding="utf-8",
+            )
         else:
             gh.write_text("@echo off\necho auth failed 1>&2\nexit /b 2\n", encoding="utf-8")
         pwsh = bin_dir / "pwsh.cmd"
@@ -333,6 +344,17 @@ def make_fake_tools(bin_dir: Path, mode: str):
             gh.write_text(
                 "#!/bin/sh\n"
                 "echo '{\"number\":45,\"url\":\"https://example.test/pull/45\",\"baseRefName\":\"develop\",\"state\":\"OPEN\"}'\n",
+                encoding="utf-8",
+            )
+        elif mode == "merged_then_create":
+            # 'pr view' devuelve la PR ya mergeada de la misma rama; la PR
+            # nueva debe crearse igual para los commits posteriores al merge.
+            gh.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in *'pr view'*)"
+                " echo '{\"number\":18,\"url\":\"https://example.test/pull/18\","
+                "\"baseRefName\":\"develop\",\"state\":\"MERGED\"}'; exit 0;; esac\n"
+                "echo 'https://example.test/pull/123'\n",
                 encoding="utf-8",
             )
         else:
@@ -380,6 +402,16 @@ def test_ready_for_pr_reuses_existing_pr_without_duplicate(tmp_path: Path):
 
     assert result.returncode == 0, result.stderr
     assert "PR existente: #45" in result.stdout
+
+
+def test_ready_for_pr_creates_new_pr_when_previous_pr_is_merged(tmp_path: Path):
+    repo, slug, title, env = prepare_ready_repo(tmp_path, "merged_then_create")
+
+    result = run_file(READY_FOR_PR, [slug, title], repo, env)
+
+    assert result.returncode == 0, result.stderr
+    assert "estado 'MERGED'" in result.stdout
+    assert "PR creada: #123" in result.stdout
 
 
 def test_ready_for_pr_blocks_real_gh_error(tmp_path: Path):

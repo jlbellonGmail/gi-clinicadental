@@ -39,16 +39,43 @@
 - **Preview Deployments**: Cada PR hacia `develop` genera un deployment Preview con URL única y comentario automático en la PR.
 - **Production Deployment**: Solo merges a `main` disparan deployment Production.
 
-### Configuración de Vercel Project Settings
+### Configuración versionada: `vercel.json`
 
-| Setting | Valor |
-|---------|-------|
-| Framework Preset | Other (sitio estático + API serverless) |
-| Build Command | `echo 'No build step required'` |
-| Output Directory | `.` (raíz del repo) |
-| Install Command | `echo 'No install required'` |
-| Node.js Version | 20.x (para API serverless) |
-| Root Directory | `.` |
+La configuración del proyecto vive en `vercel.json`, en la raíz del repo,
+para que sea revisable en la PR y no dependa de ajustes manuales en la UI:
+
+| Clave | Valor | Motivo |
+|-------|-------|--------|
+| `framework` | `null` | El sitio es HTML/CSS/JS plano, sin framework ni bundler (ver `AGENTS.md`). |
+| `buildCommand` | `null` | No hay paso de build: `package.json` no define script `build`. |
+| `installCommand` | `null` | Deja el `npm install` por defecto. **Es obligatorio**: las funciones de `api/` dependen de `@supabase/supabase-js` y `nodemailer`. |
+| `outputDirectory` | `.` | Los estáticos (`index.html`, `style.css`, `script.js`, `404.html`, `politica-privacidad.html`) se sirven desde la raíz. |
+| `functions` | `api/leads.js` → `nodejs20.x` | Fija el runtime del único endpoint real. |
+| `headers` | `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` | Cabeceras de seguridad para todas las rutas. |
+
+No se declaran `rewrites`: Vercel enruta `api/leads.js` a `/api/leads` de
+forma nativa, sin reescritura intermedia.
+
+### Qué se excluye del deployment: `.vercelignore`
+
+Vercel convierte en Serverless Function **todo** archivo `.js` dentro de
+`api/`. Sin exclusión explícita, `api/leads.test.js` quedaría publicado
+como el endpoint `/api/leads.test`. `.vercelignore` excluye `*.test.js` y,
+además, el material del circuito agéntico (`runs/`, `scripts/`, `tests/`,
+`docs/`, `ROADMAP.md`, `AGENTS.md`), que no forma parte del sitio público.
+
+### Por qué no hay `.github/workflows/deploy.yml`
+
+La integración Git nativa cubre los tres requisitos del spec (Preview por
+PR, Production sólo desde `main`, URL de Preview para la auditoría HITL),
+así que la condición del spec para crear un workflow propio —"solo si hay
+una necesidad no cubierta"— no se cumple. Un `deploy.yml` que invocara la
+CLI de Vercel además duplicaría cada deployment: uno disparado por la
+integración nativa y otro por el workflow.
+
+La aprobación HITL no se implementa como job de CI: es la revisión humana
+de la PR descrita en `AGENTS.md` (paso 8), y el gate de Production es que
+sólo `main` despliega a producción.
 
 ## Variables de Entorno por Ambiente
 

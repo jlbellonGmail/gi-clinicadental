@@ -1,0 +1,19 @@
+# Archivos que no deben subirse al deployment de Vercel.
+# Todo `.js` dentro de `api/` se convierte en una Serverless Function
+# publica, asi que los tests deben quedar fuera del bundle: sin esto,
+# `api/leads.test.js` quedaria expuesto como el endpoint `/api/leads.test`.
+*.test.js
+
+# Circuito agentico y documentacion: no forman parte del sitio publico.
+.codex/
+.claude/
+.opencode/
+docs/
+runs/
+scripts/
+tests/
+mkdocs.yml
+requirements-dev.txt
+AGENTS.md
+CLAUDE.md
+ROADMAP.md
