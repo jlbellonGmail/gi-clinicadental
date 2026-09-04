@@ -1,18 +1,65 @@
 name: Docs
+
+# Publica la documentacion MkDocs en GitHub Pages usando el flujo oficial
+# de Pages (configure-pages -> upload-pages-artifact -> deploy-pages).
+#
+# Por que no `mkdocs gh-deploy`: ese comando publica empujando la rama
+# `gh-pages`, lo que exige Settings -> Pages -> Source = "Deploy from a
+# branch". AGENTS.md (Setup manual) prescribe Source = "GitHub Actions",
+# asi que el workflow anterior contradecia el contrato del propio repo.
+# Ver docs/tecnica/validacion-mvp-produccion.md y
+# runs/16-validacion-mvp-produccion/decision.md.
+#
+# Requisito humano, una sola vez: Settings -> Pages -> Build and
+# deployment -> Source = "GitHub Actions". Sin eso, `deploy-pages` falla.
+
 on:
   push:
     branches: [main]
     paths: ["docs/**", "mkdocs.yml"]
+
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+# Un solo despliegue de Pages a la vez. No se cancela el que esta en
+# curso: interrumpir un deploy a mitad puede dejar el sitio inconsistente.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install mkdocs-material
-      - run: mkdocs build --strict
-      - run: mkdocs gh-deploy --force
+
+      - name: Instalar MkDocs Material
+        run: pip install mkdocs-material
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Construir sitio (strict)
+        run: mkdocs build --strict --site-dir ./site
+
+      - name: Subir artefacto de Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Desplegar a GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
