@@ -23,7 +23,7 @@ leads todavía no existe (ver "Estado actual" en `ROADMAP.md`).
 
 - CI/CD: GitHub Actions ejecutará las verificaciones del circuito y los tests del producto. La integración Git nativa de Vercel generará despliegues Preview para las Pull Requests y desplegará a Production después del merge autorizado hacia `main`.
 
-- Documentación: MkDocs Material, publicada mediante GitHub Pages. La documentación técnica y de usuario permanecerá separada del sitio público desplegado en Vercel.
+- Documentación: MkDocs Material. La documentación técnica y de usuario permanecerá separada del sitio público desplegado en Vercel. **Publicación en GitHub Pages: no disponible en este entorno** (repositorio privado con el plan actual — ver "Setup manual"). `docs.yml` construye la documentación en modo estricto y deja el sitio como artefacto descargable de la corrida; el deploy se omite solo y se reactiva sin tocar el workflow el día que Pages esté disponible.
 
 - Testing: pytest continuará validando los scripts del circuito agéntico. A medida que se incorporen el backend y las integraciones se agregarán pruebas de producto para la API, validaciones, Supabase, SMTP, seguridad y flujo end-to-end.
 
@@ -208,9 +208,15 @@ merge solo puede quedar pendiente `[ ]` o `READY_FOR_PR` `[-]`.
   amplía a tests de producto (frontend/backend) cuando exista algo real
   que testear.
 - **Docs** (`.github/workflows/docs.yml`): se dispara al pushear a `main`
-  con cambios en `docs/` o `mkdocs.yml`. Publica el sitio MkDocs a GitHub
-  Pages (la documentación del circuito, no la landing page en sí, que se
-  sirve por separado). Público, sin gate por ahora.
+  con cambios en `docs/` o `mkdocs.yml`, y a demanda con
+  `workflow_dispatch`. Construye el sitio MkDocs con `mkdocs build
+  --strict` (la documentación del circuito, no la landing page en sí, que
+  se sirve por separado). **El build es obligatorio y falla la corrida si
+  la documentación no compila; el deploy a GitHub Pages es opcional y hoy
+  se omite**, porque Pages no está disponible en este repositorio (ver
+  "Setup manual"). El sitio queda como artefacto `mkdocs-site` de la
+  corrida. El job de deploy se salta —`skipped`, no rojo— mientras la API
+  de Pages no responda que está habilitada.
 - **Post-merge close** (`.github/workflows/post-merge-close-feature.yml`):
   ver paso 9 del circuito.
 - **Release**: pendiente (ver sección Versionado). No hay `Dockerfile` ni
@@ -312,8 +318,27 @@ reglas desde `.codex/prompts/*.md`.
 
 ## Setup manual (una sola vez, no automatizable)
 
-- **GitHub Pages** (Settings → Pages → Source): elegir "GitHub Actions".
-  Necesario para que `docs.yml` pueda publicar el sitio MkDocs.
+- **GitHub Pages**: **no disponible en este repositorio, y es una decisión
+  del proyecto, no un pendiente.** Verificado el 2026-09-04: el repo es
+  privado y el plan actual no incluye Pages — Settings → Pages muestra
+  *"Upgrade or make this repository public to enable Pages"* y
+  `GET /repos/<owner>/<repo>/pages` devuelve 404. **No se cambia la
+  visibilidad del repositorio ni el plan.**
+
+  Por eso `docs.yml` está diseñado para funcionar sin Pages: construye con
+  `mkdocs build --strict` (gate obligatorio) y publica el sitio como
+  artefacto `mkdocs-site` de la corrida, que es de donde se descarga la
+  documentación mientras la limitación siga vigente. El job de deploy
+  consulta la API de Pages y se salta solo si no está disponible, de modo
+  que `main` nunca queda en rojo por este motivo.
+
+  **Si algún día Pages se habilita** (repo público o plan que lo incluya),
+  no hay que tocar el workflow: basta con
+  Settings → Pages → Build and deployment → Source = "GitHub Actions", y
+  el job de deploy empieza a ejecutarse en la siguiente corrida.
+
+  Contexto completo en `docs/tecnica/validacion-mvp-produccion.md` y
+  `runs/16-validacion-mvp-produccion/decision.md`.
 - **Rama `develop`**: se crea en esta misma migración a partir de `main`
   (que contiene el baseline de la landing page existente). Quedan
   sincronizadas hasta la primera feature nueva.

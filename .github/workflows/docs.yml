@@ -1,22 +1,41 @@
 name: Docs
 
-# Publica la documentacion MkDocs en GitHub Pages usando el flujo oficial
-# de Pages (configure-pages -> upload-pages-artifact -> deploy-pages).
+# Construye la documentacion MkDocs y, SOLO si GitHub Pages esta
+# realmente disponible en este repositorio, la publica.
 #
-# Por que no `mkdocs gh-deploy`: ese comando publica empujando la rama
-# `gh-pages`, lo que exige Settings -> Pages -> Source = "Deploy from a
-# branch". AGENTS.md (Setup manual) prescribe Source = "GitHub Actions",
-# asi que el workflow anterior contradecia el contrato del propio repo.
+# LIMITACION DE ENTORNO VERIFICADA (2026-09-04): GitHub Pages NO esta
+# disponible aca. El repositorio es privado y el plan actual no lo
+# habilita; Settings -> Pages muestra "Upgrade or make this repository
+# public to enable Pages", y `GET /repos/<owner>/<repo>/pages` devuelve
+# 404. La decision del proyecto es NO cambiar la visibilidad del
+# repositorio ni el plan.
+#
+# Consecuencia de diseno: el deploy es OPCIONAL y se omite solo; el build
+# es OBLIGATORIO. `mkdocs build --strict` sigue siendo el gate real de la
+# documentacion: si un enlace queda roto o falta una pagina, este workflow
+# falla igual, este Pages disponible o no. Lo que no puede pasar es que
+# `main` quede en rojo por intentar publicar en una plataforma que este
+# repositorio no tiene contratada.
+#
+# Cuando Pages este disponible (repo publico o plan que lo incluya), el
+# paso "Detectar disponibilidad" lo nota solo y el job `deploy` empieza a
+# ejecutarse sin tocar este archivo. Requisito humano en ese momento, una
+# sola vez: Settings -> Pages -> Build and deployment -> Source = "GitHub
+# Actions".
+#
+# Por que no `mkdocs gh-deploy`: publica empujando la rama `gh-pages`, lo
+# que exige Source = "Deploy from a branch" y ademas requiere Pages igual.
 # Ver docs/tecnica/validacion-mvp-produccion.md y
 # runs/16-validacion-mvp-produccion/decision.md.
-#
-# Requisito humano, una sola vez: Settings -> Pages -> Build and
-# deployment -> Source = "GitHub Actions". Sin eso, `deploy-pages` falla.
 
 on:
   push:
     branches: [main]
     paths: ["docs/**", "mkdocs.yml"]
+  # Permite construir la documentacion a demanda desde cualquier rama sin
+  # esperar a un push a `main`. No publica nada por si solo: el deploy
+  # sigue condicionado a que Pages exista.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -32,6 +51,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_disponible: ${{ steps.pages.outputs.disponible }}
     steps:
       - uses: actions/checkout@v4
 
@@ -42,24 +63,64 @@ jobs:
       - name: Instalar MkDocs Material
         run: pip install mkdocs-material
 
-      - name: Configurar Pages
-        uses: actions/configure-pages@v5
-
+      # GATE OBLIGATORIO. No depende de Pages ni de ninguna condicion:
+      # si la documentacion no compila en modo estricto, el workflow falla.
       - name: Construir sitio (strict)
         run: mkdocs build --strict --site-dir ./site
 
-      - name: Subir artefacto de Pages
-        uses: actions/upload-pages-artifact@v3
+      # El sitio queda descargable desde la pestana de la corrida aunque
+      # no haya Pages. Es el reemplazo practico de la publicacion mientras
+      # la limitacion de entorno siga vigente.
+      - name: Publicar sitio como artefacto de la corrida
+        uses: actions/upload-artifact@v4
         with:
+          name: mkdocs-site
           path: ./site
+          retention-days: 14
 
+      # Cualquier resultado que no sea un 200 de la API de Pages se trata
+      # como "no disponible": 404 (no habilitado), 403 (plan que no lo
+      # incluye) o un fallo de red. El paso nunca hace fallar al job, y si
+      # no llega a escribir su salida, el valor vacio tambien omite el
+      # deploy. El default seguro es NO publicar.
+      - name: Detectar disponibilidad de GitHub Pages
+        id: pages
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/pages" > /dev/null 2>&1; then
+            echo "disponible=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages disponible: se publicara el sitio."
+          else
+            echo "disponible=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages no esta disponible en este repositorio (privado, plan actual). El sitio se construyo en modo estricto y quedo como artefacto 'mkdocs-site'; se omite el deploy a proposito. Ver docs/tecnica/validacion-mvp-produccion.md."
+          fi
+
+  # Job opcional. Con Pages no disponible queda `skipped`, y un job
+  # omitido NO pone la corrida en rojo.
   deploy:
     needs: build
+    if: needs.build.outputs.pages_disponible == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Recuperar el sitio construido
+        uses: actions/download-artifact@v4
+        with:
+          name: mkdocs-site
+          path: ./site
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Empaquetar artefacto de Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site
+
       - name: Desplegar a GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
