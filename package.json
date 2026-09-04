@@ -1,6 +1,6 @@
 {
   "name": "gi-clinicadental",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Backend Serverless (Vercel + Supabase) para el sitio de captacion de leads de gi-clinicadental.",
   "scripts": {
