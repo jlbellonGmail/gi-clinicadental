@@ -61,7 +61,7 @@ validación se hace contra Production.
  1  feature/16 (worktree A): spec + docs + decision parcial
  2  release/v1.0.0-preparacion (worktree B): correcciones pre-release
  3  Pruebas locales de las correcciones
- 4  Humano: Settings -> Pages -> Source = GitHub Actions
+ 4  (sin accion humana: Pages no esta disponible; docs.yml ya lo contempla)
  5  PR release/... -> develop · CI verde · merge   => <SHA_CANDIDATO>
  6  Sincronizar develop dentro de feature/16
  7  Preflight P1-P8 -> test-report-1.md
@@ -141,29 +141,62 @@ evidencia pasada la falsearía.
 El diagnóstico tiene **dos causas distintas**, y conviene no
 confundirlas:
 
-- **Configuración externa**: GitHub Pages estaba **deshabilitado**
-  (`GET /repos/.../pages` → 404) y no existía rama `gh-pages`. Ningún
-  workflow podía publicar.
+- **Limitación de entorno, no configuración pendiente**: **GitHub Pages no
+  está disponible en este repositorio.** Es privado y el plan actual no lo
+  incluye. Settings → Pages muestra *"Upgrade or make this repository
+  public to enable Pages"*, y `GET /repos/<owner>/<repo>/pages` devuelve
+  404. No hay casilla que marcar. **Decisión del proyecto: no se cambia la
+  visibilidad del repositorio ni el plan**, y en consecuencia **Pages no
+  bloquea el MVP**: dónde se publica la documentación no puede detener un
+  producto funcional.
 - **Defecto del workflow versionado**: `docs.yml` usaba
   `mkdocs gh-deploy --force`, que publica empujando la rama `gh-pages` y
-  por lo tanto exige *Source = "Deploy from a branch"*. Pero `AGENTS.md`
-  (Setup manual) prescribe *Source = "GitHub Actions"*. **El workflow
-  contradecía el contrato del repo.**
+  por lo tanto exige *Source = "Deploy from a branch"* — y que además
+  necesita Pages igual.
 
-Corrección: se reescribe al flujo oficial de Pages
-(`actions/configure-pages` → `mkdocs build --strict` →
-`actions/upload-pages-artifact` → `actions/deploy-pages`), con
-`permissions: pages: write, id-token: write, contents: read` y
-`concurrency: pages`. Desaparecen `gh-deploy` y la rama `gh-pages`.
+El problema operativo era el mismo en cualquier variante: `docs.yml` se
+dispara con `push` a `main` filtrando por `docs/**` y `mkdocs.yml`, y el
+release lleva `docs/` a `main` **por primera vez**, así que el workflow
+**corre sí o sí** en ese merge. Cualquier versión que intentara publicar
+habría dejado `main` en rojo el día del primer release estable.
 
-**Ajuste humano necesario**: *Settings → Pages → Build and deployment →
-Source = GitHub Actions*. Es prerequisito del release: sin él,
-`deploy-pages` falla.
+#### El diseño: separar lo obligatorio de lo opcional
 
-`docs.yml` se dispara con `push` a `main` filtrando por `docs/**` y
-`mkdocs.yml`. Como el release lleva `docs/` a `main` por primera vez, el
-workflow **corre sí o sí** en ese merge. Por eso tenía que quedar correcto
-antes, no después.
+| | |
+|---|---|
+| **`mkdocs build --strict`** | **Obligatorio.** Sin condición, en el job `build`. Si un enlace queda roto o falta una página, la corrida falla, haya Pages o no. Sigue siendo el gate real de la documentación. |
+| **Deploy a Pages** | **Opcional.** `configure-pages`, `upload-pages-artifact` y `deploy-pages` viven sólo en el job `deploy`, condicionado. |
+
+- El job `build` **no contiene ningún paso de Pages**, así que no puede
+  fallar por ese motivo.
+- El sitio se sube como artefacto **`mkdocs-site`** (14 días de
+  retención). Mientras la limitación siga vigente, ahí se descarga la
+  documentación construida.
+- Un paso consulta la API de Pages y expone la salida `pages_disponible`.
+  El job `deploy` corre únicamente cuando vale `true`.
+- **El default seguro es NO publicar**: 404 (no habilitado), 403 (plan que
+  no lo incluye), un fallo de red o incluso que el propio paso de
+  detección falle sin escribir salida, todos omiten el deploy. Un job
+  `skipped` **no** pone la corrida en rojo.
+- `workflow_dispatch` permite construir la documentación a demanda desde
+  cualquier rama, sin esperar a un push a `main`.
+
+**Verificación empírica**, no una promesa: la corrida `33826977524`,
+disparada con `workflow_dispatch` sobre `develop`, terminó
+`completed/success` con `build: success`, `deploy: skipped` y el artefacto
+`mkdocs-site` de 5.379.313 bytes.
+
+**Sin ajuste humano pendiente y sin deuda de mantenimiento.** Si algún día
+Pages se habilita —repo público o plan que lo incluya— no hay que tocar el
+workflow: basta con *Settings → Pages → Build and deployment → Source =
+"GitHub Actions"* y el job `deploy` empieza a ejecutarse en la siguiente
+corrida.
+
+`AGENTS.md` afirmaba en tres lugares (Stack, CI/CD y Setup manual) que la
+documentación se publica en Pages, y pedía un ajuste imposible de cumplir
+acá. Las tres afirmaciones quedan corregidas: dejar una instrucción
+irrealizable en el contrato que los agentes leen al arrancar es peor que
+corregirla.
 
 ### Versionado npm
 

@@ -73,8 +73,13 @@ Verificado por inspección directa, no asumido:
 - Los deployments Preview están tras **Vercel Authentication**
   (`302 → vercel.com/sso-api`): **el único origen público validable es
   Production**.
-- **GitHub Pages no está habilitado** (`GET /repos/.../pages` → 404), no
-  existe rama `gh-pages`, y `docs.yml` nunca corrió.
+- **GitHub Pages no está disponible** en este repositorio: es privado y
+  el plan actual no lo incluye. Settings → Pages muestra *"Upgrade or make
+  this repository public to enable Pages"* y
+  `GET /repos/<owner>/<repo>/pages` devuelve 404. No existe rama
+  `gh-pages` y `docs.yml` nunca había corrido. **No se cambia la
+  visibilidad del repositorio ni el plan**, así que Pages **no bloquea el
+  MVP**: `docs.yml` construye y omite el deploy (ver correcciones).
 
 **Conclusión dura:** Production no tiene MVP. El punto 16 es imposible sin
 un release `develop → main` previo. De ahí la secuencia de esta spec.
@@ -134,27 +139,54 @@ artefactos de otro agente, y reescribir evidencia pasada la falsearía.
 - No existe `<link rel="canonical">`: se registra como observación en
   `decision.md`, no se agrega en este release.
 
-### 3. `docs.yml` — bloqueante
+### 3. `docs.yml` — que no pueda dejar `main` en rojo
 
 Dos causas distintas, separadas a propósito:
 
-- **Configuración externa**: GitHub Pages está deshabilitado. Ningún
-  workflow puede publicar hasta que un humano lo habilite.
-- **Defecto del workflow versionado**: `docs.yml` usa
-  `mkdocs gh-deploy --force`, que exige *Source = "Deploy from a branch"*,
-  mientras `AGENTS.md` (Setup manual) prescribe *Source = "GitHub
-  Actions"*. El workflow contradice el contrato del repo.
+- **Limitación de entorno, no configuración pendiente**: **GitHub Pages no
+  está disponible en este repositorio.** Es privado y el plan actual no lo
+  incluye — Settings → Pages muestra *"Upgrade or make this repository
+  public to enable Pages"* y `GET /repos/<owner>/<repo>/pages` devuelve
+  404. **Decisión del proyecto: no se cambia la visibilidad del
+  repositorio ni el plan.** Por lo tanto **Pages no bloquea el MVP**.
+- **Defecto del workflow versionado**: `docs.yml` usaba
+  `mkdocs gh-deploy --force`, que exige *Source = "Deploy from a branch"*
+  y que además requiere Pages igual. Como `docs.yml` se dispara con `push`
+  a `main` filtrando por `docs/**`, y el release lleva `docs/` a `main`
+  por primera vez, el workflow corre sí o sí en ese merge: cualquier
+  variante que intente publicar deja `main` en rojo el día del primer
+  release estable.
 
-Corrección adoptada: reescribir `docs.yml` al flujo oficial de Pages
-(`actions/configure-pages`, `mkdocs build --strict`,
-`actions/upload-pages-artifact`, `actions/deploy-pages`), con
-`permissions: pages: write, id-token: write, contents: read` y
-`concurrency: pages`. Se elimina `gh-deploy` y la necesidad de rama
-`gh-pages`.
+Corrección adoptada, separando lo obligatorio de lo opcional:
 
-Ajuste humano necesario, exacto: **Settings → Pages → Build and deployment
-→ Source = GitHub Actions**. Sin él, `deploy-pages` falla y el release
-quedaría con un workflow rojo.
+| | |
+|---|---|
+| **`mkdocs build --strict`** | **Obligatorio.** Sin condición, en el job `build`. Sigue siendo el gate real de la documentación: si un enlace queda roto o falta una página, la corrida falla, haya Pages o no. |
+| **Deploy a Pages** | **Opcional.** `configure-pages`, `upload-pages-artifact` y `deploy-pages` viven sólo en el job `deploy`, condicionado. |
+
+- El job `build` **no contiene ningún paso de Pages**, así que no puede
+  fallar por ese motivo.
+- El sitio se sube como artefacto **`mkdocs-site`** (14 días), que es de
+  donde se descarga la documentación mientras la limitación siga vigente.
+- Un paso consulta la API de Pages y expone `pages_disponible`; el job
+  `deploy` corre únicamente con `== 'true'`. **El default seguro es NO
+  publicar**: 404, 403, fallo de red o salida vacía omiten el deploy. Un
+  job `skipped` no pone la corrida en rojo.
+- Se agrega `workflow_dispatch` para construir la documentación a demanda
+  sin esperar a un push a `main`.
+
+**Sin ajuste humano pendiente.** Si algún día Pages se habilita, no hay
+que tocar el workflow: basta con *Settings → Pages → Source = "GitHub
+Actions"* y el job `deploy` empieza a ejecutarse en la siguiente corrida.
+
+`AGENTS.md` se corrige en sus tres afirmaciones sobre Pages (Stack, CI/CD
+y Setup manual), que describían una publicación que no ocurre y pedían un
+ajuste imposible de cumplir en este repositorio.
+
+**Verificación empírica realizada** (no sólo declarada): corrida
+`33826977524` disparada con `workflow_dispatch` sobre `develop` →
+`completed/success`, con `build: success`, `deploy: skipped` y artefacto
+`mkdocs-site` de 5.379.313 bytes.
 
 ### 4. Versionado npm
 
@@ -185,7 +217,7 @@ HITL 1 (aprobado)
  1  feature/16-validacion-mvp-produccion (worktree A): spec + docs + decision parcial
  2  release/v1.0.0-preparacion (worktree B): marca + og + docs.yml + npm 1.0.0
  3  Pruebas: npm ci · npm test · pytest · mkdocs --strict · grep "Savia"=0 · lock 1.0.0 x2
- 4  Humano: Settings -> Pages -> Source = GitHub Actions
+ 4  (sin accion humana: Pages no esta disponible y docs.yml ya lo contempla)
  5  PR release/v1.0.0-preparacion -> develop · CI verde · merge
        => origin/develop @ <SHA_CANDIDATO> ES el candidato de release
  6  Sincronizar develop dentro de feature/16
@@ -271,8 +303,13 @@ artefactos se registra únicamente *recibido: sí/no*.
    bloqueado para escritura.
 7. Alias Production confirmado, y Production **sin** deployment
    protection.
-8. Pages con *Source = GitHub Actions* y `docs.yml` corregido; marca:
-   `grep "Savia"` = 0; versión `1.0.0` en ambos archivos npm.
+8. **Documentación y release candidate**, reformulado tras verificar que
+   Pages no está disponible (ver correcciones): **Pages ya no es
+   bloqueante**. Sigue siendo obligatorio que `mkdocs build --strict` pase
+   y que `docs.yml` no pueda dejar `main` en rojo — verificado con una
+   corrida real de `workflow_dispatch` que termina en `success` con
+   `deploy: skipped`. Además: marca `grep "Savia"` = 0 en los tres HTML;
+   versión `1.0.0` en `package.json` y en `package-lock.json`.
 
 ### Validación en Production (V1-V12)
 
@@ -461,9 +498,14 @@ Los extractos de logs incluidos como evidencia llevan `request_id` y
   `SITE_URL` no es exactamente el origen público, todo envío desde la UI
   devuelve **403** y el frontend mostrará *"Error en la conexión"*.
   Bloqueante en P4.
-- **R2 — Pages.** Sin *Source = GitHub Actions*, `deploy-pages` falla y el
-  release queda con un workflow rojo. Bloqueante en P8; es el único paso
-  del release que depende de una acción humana en la UI de GitHub.
+- **R2 — Pages: mitigado, ya no es riesgo abierto.** Pages no está
+  disponible en este repositorio (privado, plan actual) y no se va a
+  habilitar. El riesgo era que `docs.yml` dejara `main` en rojo al
+  intentar publicar; se elimina separando el build obligatorio del deploy
+  opcional, con el deploy condicionado a que la API de Pages responda que
+  está habilitada. Verificado empíricamente en la corrida `33826977524`:
+  `success` con `deploy: skipped`. **Ninguna acción humana pendiente en
+  la UI de GitHub.**
 - **R3 — Production nunca ejerció sus variables.** El único deployment
   Production es previo a la existencia de `api/`: esas credenciales nunca
   se usaron. Errores de credencial o de host SMTP pueden aparecer recién

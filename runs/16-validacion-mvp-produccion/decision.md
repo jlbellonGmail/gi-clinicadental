@@ -2,19 +2,29 @@
 
 ## Estado
 
-**Fase 2 en curso — pasos 1 a 3 completos.** Artefactos preparados
-(`feature/16-validacion-mvp-produccion` @ `28e51ae`) y correcciones
-pre-release construidas y probadas
-(`release/v1.0.0-preparacion` @ `e1a4b3c`).
+**Fase 2 en curso — pasos 1 a 6 completos.** Artefactos preparados en
+`feature/16-validacion-mvp-produccion`, y las dos tandas de correcciones
+pre-release construidas, probadas y ya integradas a `develop`:
 
-Falta: el ajuste humano de GitHub Pages, la PR de correcciones a
-`develop`, el preflight, `audit-1` de OpenCode sobre el candidato, el
-release a `main`, la validación real en Production, `audit-2`, HITL 2,
-tag y cierre.
+| PR | Rama | Contenido | Estado |
+|---|---|---|---|
+| #21 | `release/v1.0.0-preparacion` | marca, Open Graph, `docs.yml` v1, versión 1.0.0 | mergeada, CI verde |
+| #22 | `fix/docs-pages-no-disponible` | `docs.yml` sin dependencia de Pages, `AGENTS.md` | mergeada, CI verde |
 
-Sin PR, sin merge, sin tag, sin `[-]` ni `[x]` en `ROADMAP.md`. Este
-archivo se completa a medida que la secuencia avanza; hoy no afirma
-ningún resultado que no esté verificado.
+**Candidato de release: `origin/develop` @ `74297a7`.**
+
+Falta: completar el preflight (P3, P4 y P6 dependen de los paneles de
+Vercel y Supabase), `audit-1` de OpenCode sobre el candidato, el release a
+`main`, la validación real en Production, `audit-2`, HITL 2, tag y cierre.
+
+`main` sigue intacto en `a034703`, sin tags, y `ROADMAP.md` en
+`[ ] 16-validacion-mvp-produccion`.
+
+Las dos PRs mergeadas son de **preparación del release** hacia `develop`,
+no de esta feature: `feature/16` sigue sin PR y sin mergear, no hay tag, y
+`ROADMAP.md` no tiene `[-]` ni `[x]`. Este archivo se completa a medida
+que la secuencia avanza; no afirma ningún resultado que no esté
+verificado.
 
 ## Evidencias
 
@@ -166,24 +176,69 @@ citan "Savia" describiendo el estado de entonces **se dejan intactos**:
 evidencia pasada la falsearía. Un historial que se corrige a sí mismo deja
 de ser historial.
 
-### `docs.yml`: dos causas distintas, no una
+### `docs.yml`: Pages no es un pendiente, es una limitación de entorno
 
-Se separan a propósito porque la acción es diferente:
+Mi primera lectura fue que GitHub Pages "estaba deshabilitado" y que
+bastaba con que un humano lo habilitara. **Era incorrecto, y lo corrijo
+acá en vez de dejar la versión vieja en pie.** Pages **no está disponible**
+en este repositorio: es privado y el plan actual no lo incluye. Settings →
+Pages muestra *"Upgrade or make this repository public to enable Pages"*, y
+`GET /repos/<owner>/<repo>/pages` devuelve 404. No es una casilla sin
+marcar: es una restricción del entorno.
 
-- **Configuración externa**: GitHub Pages estaba **deshabilitado**
-  (`GET /repos/.../pages` → 404) y no existía rama `gh-pages`. Ningún
-  workflow podía publicar. Requiere una acción humana en la UI.
-- **Defecto del workflow versionado**: `docs.yml` usaba
-  `mkdocs gh-deploy --force`, que exige *Source = "Deploy from a branch"*,
-  mientras `AGENTS.md` (Setup manual) prescribe *Source = "GitHub
-  Actions"*. El workflow **contradecía el contrato del propio repo**.
+**Decisión del proyecto: no se cambia la visibilidad del repositorio ni el
+plan.** Y decisión derivada: **Pages no bloquea el MVP.** Un MVP funcional
+no puede quedar detenido por dónde se publica su documentación.
 
-Se corrige el workflow al flujo oficial de Pages y se declara el ajuste
-humano exacto. El motivo de hacerlo antes del release y no después:
-`docs.yml` se dispara con `push` a `main` filtrando por `docs/**`, y el
-release lleva `docs/` a `main` **por primera vez** — el workflow corre sí
-o sí en ese merge. Publicar sabiendo que un workflow va a fallar no es
-aceptable para un primer release estable.
+Lo que sí seguía siendo un problema real es que `docs.yml` se dispara con
+`push` a `main` filtrando por `docs/**`, y el release lleva `docs/` a
+`main` **por primera vez**: el workflow corre sí o sí en ese merge.
+Cualquier variante que intentara publicar —`gh-deploy` o el flujo oficial
+de Pages, da igual— habría dejado `main` en rojo el día del primer release
+estable.
+
+**Diseño adoptado: separar lo obligatorio de lo opcional.**
+
+- `mkdocs build --strict` queda en el job `build`, **sin condición**.
+  Sigue siendo el gate real de la documentación: si un enlace queda roto o
+  falta una página, la corrida falla, haya Pages o no. Eso era innegociable.
+- El job `build` **ya no contiene ningún paso de Pages**, así que no puede
+  fallar por ese motivo. `configure-pages`, `upload-pages-artifact` y
+  `deploy-pages` viven ahora sólo en el job `deploy`.
+- El sitio se sube como artefacto **`mkdocs-site`** (14 días). Es el
+  reemplazo práctico de la publicación mientras la limitación siga
+  vigente: la documentación se descarga desde la corrida.
+- Un paso consulta la API de Pages y expone `pages_disponible`; `deploy`
+  corre sólo cuando vale `true`.
+
+**El default seguro es NO publicar.** 404 (no habilitado), 403 (plan que
+no lo incluye), un fallo de red, o incluso que el propio paso de detección
+falle y no escriba salida: todos esos casos omiten el deploy. Un job
+`skipped` no pone la corrida en rojo. Preferí un falso negativo —no
+publicar pudiendo hacerlo— antes que un falso positivo que rompa `main`.
+
+**Verificado empíricamente, no sólo afirmado**: corrida `33826977524`,
+disparada con `workflow_dispatch` sobre `develop`, terminó
+`completed/success` con `build: success`, `deploy: skipped` y el artefacto
+`mkdocs-site` de 5.379.313 bytes. Es la prueba de que el release no va a
+dejar `main` en rojo por este motivo.
+
+**Sin deuda de mantenimiento**: si algún día Pages se habilita, no hay que
+tocar el workflow. Basta con *Settings → Pages → Source = "GitHub
+Actions"* y el job `deploy` empieza a correr en la siguiente corrida.
+
+### `AGENTS.md` decía tres cosas que no eran ciertas
+
+El contrato del circuito afirmaba, en tres lugares, que la documentación
+se publica en GitHub Pages: en **Stack**, en **CI/CD** y en **Setup
+manual**, este último pidiendo explícitamente *Settings → Pages → Source =
+"GitHub Actions"*.
+
+Ninguna de las tres se puede cumplir en este repositorio. **Dejar una
+instrucción imposible en el contrato que todos los agentes leen al
+arrancar es peor que corregirla**: el próximo agente la intentaría, o
+peor, la daría por hecha. Las tres quedan reemplazadas por la descripción
+real, con la condición exacta de reactivación.
 
 ### `og:url` apuntaba a un dominio que no resuelve (y no era una errata)
 
@@ -277,16 +332,19 @@ Registrados acá porque condicionan pasos concretos y no deben perderse:
 
 1. **Resuelto.** URL canónica: `https://gi-clinicadental.vercel.app`,
    confirmada por el humano. Aplicada en `og:url`, `og:image` y
-   `twitter:image` (`release/v1.0.0-preparacion` @ `e1a4b3c`).
-2. **Resuelto.** Opción de Pages: flujo oficial de GitHub Actions.
-   `docs.yml` ya reescrito (`2cf1697`); falta sólo la acción en la UI
-   (punto 4 de esta lista).
+   `twitter:image` (PR #21).
+2. **Resuelto, y cerrado como limitación de entorno.** GitHub Pages no
+   está disponible y no se va a habilitar. **Ya no hay ninguna acción
+   humana pendiente en la UI de GitHub**: `docs.yml` construye siempre y
+   omite el deploy solo (PR #22, verificado en la corrida `33826977524`).
 3. **Pendiente** — `<EMAIL_CONTROLADO_DESKTOP>` y
    `<EMAIL_CONTROLADO_MOVIL>`, más la confirmación de acceso a la casilla
    `LEADS_NOTIFICATION_EMAIL`. Bloquean P5 y V3-V7.
-4. **Pendiente** — *Settings → Pages → Build and deployment → Source =
-   GitHub Actions*. Acción humana en la UI de GitHub; bloquea P8 y, por
-   tanto, el merge del release a `main`.
+4. **Pendiente** — verificación en los paneles: variables de Production en
+   Vercel (P3), y sobre todo que **`SITE_URL` o `ALLOWED_ORIGINS` contenga
+   exactamente `https://gi-clinicadental.vercel.app`** (P4, riesgo R1);
+   más la tabla `leads` con RLS y `anon` bloqueado en el proyecto Supabase
+   de Production (P6). Se registra presente/ausente, **nunca el valor**.
 
 ## Resultado
 

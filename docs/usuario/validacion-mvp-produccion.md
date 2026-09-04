@@ -49,22 +49,19 @@ puntos de decisión.
 
 ## Tareas concretas de la persona
 
-Además de las dos decisiones, hay cuatro cosas que sólo puede hacer
+Además de las dos decisiones, hay tres cosas que sólo puede hacer
 alguien con acceso a los paneles:
 
-1. **Antes de publicar** — en GitHub: *Settings → Pages → Build and
-   deployment → Source = **GitHub Actions***. Sin esto, la publicación de
-   la documentación falla.
-2. **Antes de publicar** — en Vercel y Supabase: confirmar que las
+1. **Antes de publicar** — en Vercel y Supabase: confirmar que las
    variables del entorno de producción están cargadas, que la tabla de
    leads existe con sus protecciones, y que la dirección pública del sitio
    está correctamente declarada. Se anota **si están o no**, nunca su
    contenido.
-3. **Aportar las casillas de correo de prueba**: dos direcciones
+2. **Aportar las casillas de correo de prueba**: dos direcciones
    controladas (una para la prueba de escritorio y otra para la de
    celular) y confirmar que se puede abrir el buzón donde la clínica
    recibe los avisos.
-4. **Después de la validación**: marcar los leads de prueba como
+3. **Después de la validación**: marcar los leads de prueba como
    `descartado` en el panel de Supabase.
 
 ## Los datos de prueba
@@ -109,9 +106,15 @@ sitio estable no salga con errores visibles:
   nombre de plantilla, en lugar de **"Sonríe más"**. Se corrigió en las 17
   ocurrencias de las tres páginas públicas.
 - **La publicación de la documentación**. El proceso automático que
-  publica este manual estaba configurado de una forma incompatible con lo
-  que el proyecto tiene documentado, y habría fallado al primer intento.
-  Se corrigió antes de publicar, en vez de dejarlo fallar.
+  construye este manual habría fallado al primer intento, porque intentaba
+  publicarlo en GitHub Pages y **Pages no está disponible en este
+  repositorio**: es privado y el plan actual no lo incluye. Como no se va a
+  cambiar la visibilidad del repositorio ni el plan, se ajustó el proceso
+  para que **siempre construya la documentación y verifique que no haya
+  enlaces rotos** —eso sigue siendo obligatorio— y **omita la publicación
+  sin dar error**. El manual queda descargable desde cada ejecución, como
+  archivo adjunto. Si algún día Pages se habilita, la publicación se
+  reactiva sola.
 
 También se marcó la versión del proyecto como **1.0.0**, que es la que
 corresponde al primer MVP estable en producción.
