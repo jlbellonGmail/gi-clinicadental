@@ -113,11 +113,24 @@ artefactos de otro agente, y reescribir evidencia pasada la falsearía.
 
 ### 2. Open Graph adyacente
 
-- `og:url` declara `https://sonrimas.com`, que no resuelve al Production
-  real y tiene aspecto de errata. Se corrige **a la URL canónica que
-  indique el humano**; no se inventa dominio.
+- `og:url` declaraba `https://sonrimas.com`. **No es una errata**: es el
+  dominio institucional declarado en la feature 10, coherente con
+  `contacto@sonrimas.com` y con los perfiles sociales del footer. El
+  motivo real del cambio, verificado, es que **el dominio no resuelve**
+  (sin registro A; `curl` devuelve `000`), de modo que `og:url` apuntaba
+  a un destino que hoy no sirve el sitio.
+  Se corrige a la URL canónica indicada por el humano:
+  **`https://gi-clinicadental.vercel.app`**, el único origen público del
+  proyecto — y el mismo valor que debe coincidir exactamente con
+  `SITE_URL` / `ALLOWED_ORIGINS` en P4, de modo que la corrección alinea
+  las dos cosas. No se inventa dominio.
+  Cuando `sonrimas.com` se conecte a Vercel habrá que actualizar juntos
+  `og:url`, `og:image`, `twitter:image` y `SITE_URL`, o el formulario
+  empezará a devolver `403 origen_no_permitido`.
 - `og:image` / `twitter:image` son rutas relativas; Open Graph requiere
   URL absoluta. Se corrigen junto con `og:url`.
+- `contacto@sonrimas.com` y los perfiles sociales **no se tocan**: son
+  datos institucionales de la feature 10, fuera del alcance del release.
 - No existe `<link rel="canonical">`: se registra como observación en
   `decision.md`, no se agrega en este release.
 

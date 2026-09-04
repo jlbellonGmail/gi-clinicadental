@@ -2,10 +2,15 @@
 
 ## Estado
 
-**Fase 2 en curso — paso 1 de la secuencia.** Preparación de artefactos
-terminada. Falta: correcciones pre-release, preflight, `audit-1` de
-OpenCode, release a `main`, validación real en Production, `audit-2`,
-HITL 2, tag y cierre.
+**Fase 2 en curso — pasos 1 a 3 completos.** Artefactos preparados
+(`feature/16-validacion-mvp-produccion` @ `28e51ae`) y correcciones
+pre-release construidas y probadas
+(`release/v1.0.0-preparacion` @ `e1a4b3c`).
+
+Falta: el ajuste humano de GitHub Pages, la PR de correcciones a
+`develop`, el preflight, `audit-1` de OpenCode sobre el candidato, el
+release a `main`, la validación real en Production, `audit-2`, HITL 2,
+tag y cierre.
 
 Sin PR, sin merge, sin tag, sin `[-]` ni `[x]` en `ROADMAP.md`. Este
 archivo se completa a medida que la secuencia avanza; hoy no afirma
@@ -180,13 +185,39 @@ release lleva `docs/` a `main` **por primera vez** — el workflow corre sí
 o sí en ese merge. Publicar sabiendo que un workflow va a fallar no es
 aceptable para un primer release estable.
 
-### Observación registrada, no corregida: `og:url` y `canonical`
+### `og:url` apuntaba a un dominio que no resuelve (y no era una errata)
 
-`og:url` declara `https://sonrimas.com`, que no resuelve al Production
-real y tiene aspecto de errata (`sonrimas` / `sonriemas`). Se corrige a la
-URL canónica **que indique el humano**; no se inventa dominio. Junto con
-ella se corrigen `og:image` y `twitter:image`, hoy rutas relativas cuando
-Open Graph exige URL absoluta.
+Corrección de una afirmación previa de este mismo documento. Al inspeccionar
+`index.html` leí `og:url = https://sonrimas.com` como una errata de
+`sonriemas`. **Es incorrecto**: `sonrimas.com` es el dominio institucional
+declarado en la feature 10, coherente con `contacto@sonrimas.com` y con los
+perfiles sociales del footer (`facebook.com/sonrimas`, etc.). Dato del
+negocio, no tipeo.
+
+El motivo real del cambio es otro, y está verificado: **el dominio no
+resuelve** — no tiene registro A, y `curl https://sonrimas.com` devuelve
+`000`. `og:url` apuntaba a un destino que hoy no sirve el sitio, de modo que
+las tarjetas de redes sociales del primer release estable habrían enlazado a
+la nada.
+
+Se corrige a la URL canónica indicada por el humano,
+**`https://gi-clinicadental.vercel.app`**, que es el único origen público del
+proyecto. Beneficio lateral verificable: es el mismo valor que debe coincidir
+exactamente con `SITE_URL` o `ALLOWED_ORIGINS` para que `isOriginAllowed()` no
+rechace los envíos (preflight P4), así que la corrección alinea el metadato
+público con la configuración del backend en vez de dejarlos divergentes.
+
+Junto con `og:url` se corrigen `og:image` y `twitter:image`, hoy rutas
+relativas cuando Open Graph exige URL absoluta.
+
+**Deuda registrada**: cuando `sonrimas.com` se conecte a Vercel habrá que
+actualizar juntos `og:url`, `og:image`, `twitter:image` y `SITE_URL`. Si se
+cambia el dominio sin actualizar `SITE_URL`, el formulario empieza a devolver
+`403 origen_no_permitido` y el frontend sólo muestra *"Error en la conexión"*,
+que no distingue esa causa de una caída de red.
+
+`contacto@sonrimas.com` y los perfiles sociales **no se tocan**: son datos
+institucionales de la feature 10, fuera del alcance de este release.
 
 Además **no existe `<link rel="canonical">`** en el sitio, pese a que el
 ítem 11 del roadmap lo mencionaba. Queda registrado como observación y
@@ -244,15 +275,18 @@ humano, y se declara acá en vez de aplicarse en silencio:
 
 Registrados acá porque condicionan pasos concretos y no deben perderse:
 
-1. `<EMAIL_CONTROLADO_DESKTOP>` y `<EMAIL_CONTROLADO_MOVIL>` — bloquean
-   V3-V7.
-2. Confirmación de acceso a la casilla `LEADS_NOTIFICATION_EMAIL` —
-   bloquea V6.
-3. URL canónica del sitio — bloquea la corrección de `og:url`,
-   `og:image` y `twitter:image`.
-4. Confirmación de la opción de Pages (flujo oficial de GitHub Actions,
-   recomendado, o rama `gh-pages` con corrección de `AGENTS.md`) — bloquea
-   P8 y, por tanto, el release.
+1. **Resuelto.** URL canónica: `https://gi-clinicadental.vercel.app`,
+   confirmada por el humano. Aplicada en `og:url`, `og:image` y
+   `twitter:image` (`release/v1.0.0-preparacion` @ `e1a4b3c`).
+2. **Resuelto.** Opción de Pages: flujo oficial de GitHub Actions.
+   `docs.yml` ya reescrito (`2cf1697`); falta sólo la acción en la UI
+   (punto 4 de esta lista).
+3. **Pendiente** — `<EMAIL_CONTROLADO_DESKTOP>` y
+   `<EMAIL_CONTROLADO_MOVIL>`, más la confirmación de acceso a la casilla
+   `LEADS_NOTIFICATION_EMAIL`. Bloquean P5 y V3-V7.
+4. **Pendiente** — *Settings → Pages → Build and deployment → Source =
+   GitHub Actions*. Acción humana en la UI de GitHub; bloquea P8 y, por
+   tanto, el merge del release a `main`.
 
 ## Resultado
 
