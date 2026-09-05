@@ -666,3 +666,121 @@ inmediatamente a un proyecto pausado o inalcanzable.
 acordada para clase A es no tocar código, y porque cambiar el código
 alteraría otra vez el SHA candidato. Queda como candidata a feature
 posterior, con la evidencia de por qué hace falta.
+
+---
+
+# Anexo B — Segunda ronda de diagnóstico
+
+**Fecha**: 2026-09-05.
+**Insumo humano**: las tres variables de Supabase están definidas y
+habilitadas para Production y Preview; `public.leads` existe, RLS
+habilitado, `COUNT(*) = 0`.
+
+Este anexo no repite el Anexo A: añade lo que se pudo descartar en una
+segunda pasada y aísla la única pregunta que queda abierta.
+
+## B.1 — Lo que el nuevo insumo humano descarta por sí solo
+
+**El proyecto Supabase no está pausado.** Era la hipótesis principal del
+Anexo A. Queda descartada por una razón simple: el humano ejecutó
+`COUNT(*)` sobre `public.leads` y obtuvo respuesta. **Un proyecto pausado
+no responde consultas**, ni siquiera desde el editor SQL del panel. Si la
+consulta corrió, el proyecto está activo.
+
+Eso deja una sola familia de causas en pie: **el deployment de Production
+está contactando un endpoint que no es el PostgREST de ese proyecto**, o
+lo contacta en una ruta que no existe.
+
+## B.2 — Variantes de forma de `NEXT_PUBLIC_SUPABASE_URL`
+
+Que una variable esté *definida* no dice nada sobre su *forma*. Se probó
+localmente cómo construye la URL `@supabase/supabase-js@2.112.3` para
+cada error de tipeo plausible:
+
+| Valor de la variable | Ruta resultante | ¿Explica el síntoma? |
+|---|---|---|
+| `https://<ref>.supabase.co` | `/rest/v1/leads` | correcta |
+| `https://<ref>.supabase.co/` | `/rest/v1/leads` | **no** — la barra final se normaliza |
+| `https://<ref>.supabase.co//` | `//rest/v1/leads` | **posible** |
+| `https://<ref>.supabase.co/rest/v1` | `/rest/v1/rest/v1/leads` | **posible** |
+| `https://<ref>.supabase.co/rest/v1/` | `/rest/v1/rest/v1/leads` | **posible** |
+| `https://<ref>.supabase.co ` (espacio) | `/rest/v1/leads` | **no** — se normaliza |
+| `<ref>.supabase.co` (sin protocolo) | — | **no** — lanza en `createClient()`, daría `supabase_cliente_error` |
+| `http://…` en vez de `https://` | `/rest/v1/leads` | improbable |
+
+**Hallazgos que importan:**
+
+- Una **barra final simple se normaliza**: era una hipótesis razonable y
+  queda descartada.
+- **Un valor sin protocolo lanza dentro de `createClient()`**, lo que
+  habría producido `supabase_cliente_error` y no
+  `supabase_duplicados_error`. Descartado por el propio log.
+- Siguen en pie las variantes que **añaden una ruta**: doble barra, o
+  `/rest/v1` incluido en la variable. Ambas producen una URL que el
+  gateway de Supabase no reconoce y puede contestar con HTML.
+
+## B.3 — La hipótesis que mejor encaja ahora
+
+**`NEXT_PUBLIC_SUPABASE_URL` no apunta al PostgREST del proyecto
+verificado.** Las dos formas concretas:
+
+1. **La variable incluye una ruta** (`/rest/v1`, barra doble). El cliente
+   la concatena y pide algo que no existe; la respuesta es una página de
+   error, no JSON.
+2. **La variable apunta a otro host.** El caso más fácil de cometer y el
+   más difícil de ver: si apuntara al propio sitio
+   (`https://gi-clinicadental.vercel.app`), la petición iría a
+   `https://gi-clinicadental.vercel.app/rest/v1/leads?...`, y **Vercel
+   responde a las rutas inexistentes con `The page could not be
+   found` — texto, no JSON**. Eso produce exactamente
+   `{ message: body }`, es decir `sin_tipo` + `sin_codigo`.
+
+   Esta respuesta concreta está verificada en este mismo proyecto: es la
+   que devolvía `GET /api/leads` antes del release.
+
+Nótese que la variable puede estar "configurada originalmente para este
+proyecto Supabase" y aun así tener una de estas dos formas: lo que el
+panel muestra como *definida* no valida su contenido.
+
+## B.4 — Lo que sigue sin poder verificarse desde acá
+
+El valor de `NEXT_PUBLIC_SUPABASE_URL` **no es observable desde fuera**:
+
+- El frontend no usa Supabase, así que la URL no llega al navegador pese
+  al prefijo `NEXT_PUBLIC_`.
+- No hay CLI de Vercel ni token en este entorno, y no se solicitó ninguno.
+- El logger, por diseño, no registra ni la URL ni el cuerpo del error.
+
+Por eso este diagnóstico se detiene acá y pide **una verificación
+puntual**, en vez de seguir especulando o de cambiar código a ciegas.
+
+## B.5 — Sobre el punto 10: por qué el log no ayudó
+
+Ya respondido en el Anexo A, pero conviene subrayar la consecuencia
+operativa: **el diagnóstico exigió leer el código fuente de
+`postgrest-js` en `node_modules`.** Un operador de guardia no puede hacer
+eso.
+
+`metadatosDeError()` se diseñó contra la forma de `PostgrestError`, que
+`extends Error` y trae `name` y `code`. Pero `postgrest-js` tiene una
+rama documentada que devuelve un **objeto plano `{ message: body }`**
+cuando la respuesta no es JSON, y contra esa forma el logger no tiene nada
+que leer.
+
+No es un fallo de la política de redacción —no registrar texto libre
+sigue siendo correcto— sino un **hueco en el esquema**: falta un campo
+estructurado que distinga "la base rechazó la consulta" de "el endpoint
+ni siquiera habló PostgREST".
+
+**Corrección mínima propuesta, no aplicada**: agregar `http_status` al
+esquema del logger para los errores de Supabase, tomándolo de
+`status`/`statusCode` de la respuesta. Es un entero, valida con
+`validarEntero`, **no puede transportar PII**, y habría reducido toda esta
+investigación a un vistazo:
+
+- `404` → la ruta no existe: la URL trae una ruta de más.
+- `200` con cuerpo no-JSON → el host no es Supabase.
+- `502`/`503` → proyecto caído o inalcanzable.
+
+Queda pendiente de decisión, junto con el redeploy que hará falta de
+todos modos.
