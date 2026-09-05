@@ -10,7 +10,10 @@ attempt: 1
 resultado: BLOQUEADO — la validacion funcional no puede completarse
 bloqueantes:
   - "POST /api/leads devuelve HTTP 500 error_interno en Production: ningun lead se crea y no se envia ningun correo"
-  - "La marca Savia Dental sigue publicamente visible, incrustada en los pixeles de 2 de las 3 imagenes principales"
+  - "La marca de plantilla anterior sigue publicamente visible, incrustada en los pixeles de 2 de las 3 imagenes principales"
+estado_bloqueantes:
+  bloqueante_1: "diagnosticado (ver Anexo A) - clase A, entorno/configuracion - pendiente de accion humana"
+  bloqueante_2: "CORREGIDO - PR #25, imagenes regeneradas y test de regresion agregado"
 ```
 
 **El MVP no se cierra.** No se ejecuta `audit-2`, no se crea el tag y
@@ -353,3 +356,313 @@ validación pase:
 | `ROADMAP.md` ítem 16 | `- [ ]` |
 | `feature/16` | sin PR, sin mergear |
 | `audit-2` | **no ejecutada** |
+
+---
+
+# Anexo A — Diagnóstico de causa raíz del 500
+
+**Fecha**: 2026-09-05.
+**Insumo humano**: log real de Production, aportado por el humano.
+
+```
+validacion_aceptada        OK
+supabase_duplicados_error  tipo=sin_tipo  codigo=sin_codigo  huella=ba074af0b5975e81
+solicitud_finalizada       http_status=500
+```
+
+Confirmado también por el humano: `public.leads` existe y está **vacía**
+(`COUNT(*) = 0`). `supabase_duplicados_error` **no** significa que exista
+un duplicado: significa que falló técnicamente el bloque que consulta
+duplicados.
+
+## A.0 — Corrección de una inferencia previa mía
+
+En el cuerpo de este reporte escribí, a partir de una medición de
+tiempos, que *"el fallo ocurre antes de cualquier llamada de red"* y que
+apuntaba a `getSupabaseClient()` lanzando por variables ausentes.
+
+**Era una inferencia demasiado fuerte y es incorrecta.** Dos motivos:
+
+1. El evento registrado es `supabase_duplicados_error`, no
+   `supabase_cliente_error`. **El cliente Supabase se creó
+   correctamente**, luego `NEXT_PUBLIC_SUPABASE_URL` y
+   `SUPABASE_SERVICE_ROLE_KEY` **están presentes y no vacías**.
+2. La diferencia de tiempos que medí (0.430-0.464s en el 500 frente a
+   0.436-0.455s en el 400) está **dentro del ruido de medición**. La
+   función se ejecutó en `iad1`; si Supabase está en la misma región, el
+   viaje de red cabe holgadamente en ese margen. La medición no
+   demostraba lo que le hice decir.
+
+Queda corregido acá en vez de dejarlo en pie.
+
+## A.1 — Verificación de la huella
+
+Antes de analizar nada se comprobó que los metadatos reportados son
+exactamente los que dice el log, recalculando la huella con la función
+real del repositorio:
+
+```
+calcularHuella({evento:'supabase_duplicados_error', tipo:'sin_tipo', codigo:'sin_codigo'})
+  → ba074af0b5975e81   ← coincide con el log
+```
+
+Combinaciones alternativas descartadas por no coincidir:
+
+| tipo | codigo | huella |
+|---|---|---|
+| `sin_tipo` | `no_valido` | `4ee7bfe80bff4fbe` |
+| `TypeError` | `sin_codigo` | `f8c505a8028a2015` |
+| `no_valido` | `no_valido` | `244ffc2236d3d20c` |
+| `Error` | `sin_codigo` | `da76ef2255630556` |
+
+**Conclusión**: el objeto de error no tenía `name` ni `code` como
+strings. En `api/_lib/logger.js`, `sin_tipo` y `sin_codigo` sólo se
+producen cuando `typeof err.name !== 'string'` y
+`typeof err.code !== 'string'`.
+
+## A.2 — Respuestas a los diez puntos verificados
+
+### 1. Qué consulta construye el código
+
+`api/leads.js`, bloque de detección de duplicados:
+
+```js
+await supabase
+  .from('leads')
+  .select('id')
+  .ilike('email', escapeIlikeValue(email))
+  .eq('nombre', nombre)
+  .gte('fecha_creacion', duplicateWindowStartIso)
+  .limit(1);
+```
+
+URL real generada, reconstruida localmente con el mismo cliente y los
+mismos datos de la prueba:
+
+```
+/rest/v1/leads?select=id&email=ilike.jlbellon%2Bdesktop%40gmail.com&nombre=eq.PRUEBA+MVP16+DESKTOP&fecha_creacion=gte.2026-09-05T23%3A15%3A24.961Z&limit=1
+```
+
+### 2. Qué tabla consulta
+
+`leads`, sin esquema explícito, que resuelve a **`public.leads`** — la
+misma que el humano verificó por SQL.
+
+### 3. Qué columnas utiliza
+
+`id` (select), `email`, `nombre`, `fecha_creacion` (filtros).
+
+### 4. Qué filtros utiliza
+
+`email=ilike.<valor escapado>`, `nombre=eq.<valor>`,
+`fecha_creacion=gte.<ISO>`, `limit=1`.
+
+### 5. ¿Alguna columna no existe en el esquema real?
+
+**No.** Contrastado contra
+`supabase/migrations/20260819210130_create_leads_table.sql`:
+
+| Columna usada | Definida en la migración |
+|---|---|
+| `id` | `uuid primary key default gen_random_uuid()` |
+| `nombre` | `text not null` |
+| `email` | `text not null` |
+| `fecha_creacion` | `timestamptz not null default now()` |
+
+Las cuatro existen.
+
+**Y hay una prueba más fuerte que la comparación**: si una columna no
+existiera, PostgREST devolvería un JSON de error con
+`code: "42703"`. El log habría registrado `codigo=42703`, no
+`sin_codigo`. **Una columna faltante queda descartada por el propio
+log.**
+
+### 6. ¿Hay un problema en `.or()`, `.eq()`, `.gte()` u otro filtro?
+
+**No.** El código no usa `.or()` en ningún punto. Los filtros empleados
+son sintaxis PostgREST válida.
+
+Se investigó y **descartó** una hipótesis concreta: los cuatro emails de
+prueba contenían `+` (`jlbellon+desktop@`, `+diag@`, `+diag2@`,
+`+timing@`), y un `+` sin codificar en un query string se decodifica como
+espacio. Reconstruyendo la URL localmente se comprobó que **`postgrest-js`
+lo codifica correctamente como `%2B`**. La hipótesis del `+` queda
+descartada con evidencia, no por suposición.
+
+`escapeIlikeValue()` escapa `\`, `%` y `_`; ninguno aparece en los datos
+usados.
+
+### 7. ¿El cliente Supabase se crea correctamente en Production?
+
+**Sí.** Es la conclusión más sólida del log: si `getSupabaseClient()`
+hubiera lanzado, el evento habría sido `supabase_cliente_error`, que es un
+bloque `try/catch` distinto. Se registró `supabase_duplicados_error`, así
+que la ejecución pasó de largo la creación del cliente.
+
+Corolario: `NEXT_PUBLIC_SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`
+**existen y no están vacías** en el deployment servido.
+
+### 8. ¿La consulta usa correctamente `SUPABASE_SERVICE_ROLE_KEY`?
+
+`api/_lib/supabase-client.js` la pasa como clave a `createClient()`, que
+la envía en las cabeceras `apikey` y `Authorization` de cada petición.
+
+**Si la clave fuera inválida o insuficiente**, PostgREST respondería
+`401`/`403` con un **cuerpo JSON** (`{"message":"Invalid API key",...}` o
+un error de RLS con `code: "42501"` / `"PGRST301"`). El log habría
+registrado ese `codigo`. **Una clave incorrecta o RLS bloqueando también
+quedan descartadas por el `sin_codigo`.**
+
+### 9. ¿El error ocurre antes o después de llegar a Supabase?
+
+**Después de recibir una respuesta HTTP.** No es una suposición: es la
+única rama del código de `postgrest-js` que puede producir ese objeto de
+error (ver punto 10), y esa rama sólo se ejecuta tras leer el cuerpo de
+una respuesta con `res.text()`.
+
+Un fallo de red puro (DNS, conexión rechazada, timeout) toma otra rama,
+la del `catch(fetchError)`, que construye `code: ""` — un string vacío que
+el logger habría registrado como `no_valido`, no `sin_codigo`.
+
+### 10. Por qué el logger recibe un error sin `tipo` ni `codigo`
+
+**Ésta es la clave del diagnóstico.** En `@supabase/postgrest-js@2.112.3`,
+`processResponse()` construye el error así cuando el cuerpo de la
+respuesta **no es JSON parseable**:
+
+```js
+} catch (_unused2) {
+    if (res.status === 404 && body === "") { ... }
+    else error = { message: body };     // ← objeto plano: sin name, sin code
+}
+```
+
+Ese objeto tiene **únicamente `message`**. No es una instancia de `Error`
+(no tiene `name`) y no tiene `code`.
+
+`metadatosDeError()` en `api/_lib/logger.js` lee exactamente tres
+propiedades —`name`, `code`, `responseCode`— y cae a `sin_tipo` /
+`sin_codigo` cuando no son strings. De ahí el par observado.
+
+Para contraste, un `PostgrestError` normal **sí** habría dado metadatos
+útiles: la clase `extends Error` y fija `this.name = "PostgrestError"`
+más `this.code` con el SQLSTATE.
+
+## A.3 — Causa raíz
+
+> **El endpoint contactado devolvió una respuesta HTTP cuyo cuerpo no es
+> JSON.**
+
+Todas las causas "de base de datos" quedan descartadas por el propio log,
+porque **todas ellas devuelven JSON con un `code`**:
+
+| Hipótesis | Qué habría registrado el log | Descartada |
+|---|---|---|
+| Columna inexistente | `codigo=42703` | ✅ |
+| Tabla inexistente | `codigo=42P01` | ✅ |
+| RLS bloqueando | `codigo=42501` / `PGRST301` | ✅ |
+| Clave inválida | JSON con mensaje de API key | ✅ |
+| Fallo de red puro | `codigo=no_valido` (string vacío) | ✅ |
+| Cliente mal creado | evento `supabase_cliente_error` | ✅ |
+| Duplicado real | no es un error; y la tabla está vacía | ✅ |
+| **Respuesta no-JSON** | **`sin_tipo` + `sin_codigo`** | **← es ésta** |
+
+Lo que devuelve un cuerpo no-JSON desde una URL de Supabase es,
+típicamente:
+
+1. **El proyecto Supabase está pausado.** Los proyectos gratuitos se
+   pausan por inactividad y su endpoint REST responde con una página
+   HTML/texto, no con JSON. **Es la hipótesis más probable**, y encaja con
+   que el proyecto estuviera sin uso: la tabla está vacía y ésta fue la
+   primera petición real de su historia.
+2. **`NEXT_PUBLIC_SUPABASE_URL` apunta a otro sitio**: un typo, una barra
+   final o una ruta de más, un dominio distinto. La petición llega a algo
+   que responde HTML (un 404 de plataforma, una página de login, un
+   proxy).
+
+En ambos casos es **clase A — entorno / configuración**. Según la
+estrategia acordada: **no se toca código.**
+
+## A.4 — Comprobaciones para el humano
+
+### Primero, la que más probablemente cierra el caso
+
+Abrir el panel de **Supabase** y mirar si el proyecto está **activo o
+pausado**. Si está pausado, reanudarlo y ya está: no hay nada que
+corregir en el repositorio.
+
+### SQL de confirmación del esquema
+
+Aunque el esquema ya quedó descartado como causa, esta consulta lo
+confirma de forma independiente y es barata. Ejecutar en el **SQL Editor
+del proyecto de Production**:
+
+```sql
+-- 1. La tabla existe y tiene las 4 columnas que usa la consulta de duplicados
+select column_name, data_type
+from information_schema.columns
+where table_schema = 'public'
+  and table_name   = 'leads'
+  and column_name in ('id', 'nombre', 'email', 'fecha_creacion')
+order by column_name;
+-- Esperado: 4 filas -> email/text, fecha_creacion/timestamp with time zone,
+--           id/uuid, nombre/text
+
+-- 2. La consulta de duplicados corre sin error contra el esquema real
+select id
+from public.leads
+where email ilike 'jlbellon+desktop@gmail.com'
+  and nombre = 'PRUEBA MVP16 DESKTOP'
+  and fecha_creacion >= now() - interval '5 minutes'
+limit 1;
+-- Esperado: 0 filas, SIN error. Si devuelve error, ahi esta la causa.
+
+-- 3. Estado de RLS (informativo, no se modifica nada)
+select relrowsecurity as rls_habilitada
+from pg_class
+where oid = 'public.leads'::regclass;
+-- Esperado: true
+```
+
+**Ninguna de las tres modifica nada**: son consultas de sólo lectura. No
+desactivan RLS, no otorgan permisos a `anon` y no insertan registros.
+
+### Verificación de la URL
+
+En **Vercel → Settings → Environment Variables → Production**, comprobar
+que `NEXT_PUBLIC_SUPABASE_URL`:
+
+- tiene la forma `https://<ref>.supabase.co`,
+- **sin barra final**,
+- sin `/rest/v1` ni ninguna ruta añadida,
+- y que `<ref>` es el del proyecto donde se verificó `public.leads`.
+
+Contraste rápido desde una terminal, con la URL real: debe devolver
+**JSON**, no HTML.
+
+```bash
+curl -i "https://<ref>.supabase.co/rest/v1/" -H "apikey: <anon key>"
+```
+
+## A.5 — Hallazgo de observabilidad (no corregido)
+
+Este diagnóstico requirió leer el código de `postgrest-js` para averiguar
+qué había fallado. Eso no debería hacer falta.
+
+La feature 15 fijó que `metadatosDeError()` lee sólo `name`, `code` y
+`responseCode`. Es una decisión correcta para no filtrar PII, pero **deja
+ciego al operador justo en este caso**: cuando la respuesta no es JSON, no
+hay `name` ni `code`, y el log dice `sin_tipo` / `sin_codigo`, que es
+tanto como no decir nada.
+
+**Propuesta, no aplicada**: agregar al esquema del logger el campo
+`http_status` en los eventos de error de Supabase, tomándolo de
+`status`/`statusCode` de la respuesta. Es un entero, valida con
+`validarEntero`, **no puede transportar PII**, y habría reducido este
+diagnóstico a un vistazo: un `502` o un `503` habrían señalado
+inmediatamente a un proyecto pausado o inalcanzable.
+
+**No se aplica ahora** porque la causa raíz es de entorno y la regla
+acordada para clase A es no tocar código, y porque cambiar el código
+alteraría otra vez el SHA candidato. Queda como candidata a feature
+posterior, con la evidencia de por qué hace falta.
