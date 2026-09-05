@@ -669,7 +669,11 @@ function createHandler(options = {}) {
 
       let existingLeads;
       try {
-        const { data: dupData, error: dupError } = await supabase
+        const {
+          data: dupData,
+          error: dupError,
+          status: dupStatus,
+        } = await supabase
           .from('leads')
           .select('id')
           .ilike('email', escapeIlikeValue(email))
@@ -678,9 +682,15 @@ function createHandler(options = {}) {
           .limit(1);
 
         if (dupError) {
+          // `status` viene de la respuesta HTTP, no del objeto de error:
+          // es lo unico que distingue "PostgREST rechazo la consulta" de
+          // "el endpoint ni siquiera hablo PostgREST" cuando el cuerpo no
+          // es JSON y el error llega sin `name` ni `code`.
           log.error(
             'supabase_duplicados_error',
-            metadatosDeError('supabase_duplicados_error', dupError)
+            Object.assign(metadatosDeError('supabase_duplicados_error', dupError), {
+              supabase_status_code: dupStatus,
+            })
           );
           respond(500, { error: 'error_interno' });
           return;
@@ -710,7 +720,7 @@ function createHandler(options = {}) {
       // smtp-ferozo/spec.md). Sin cambios en el mapeo campo->columna del
       // insert en si.
       const inicioInsercion = now();
-      const { data, error } = await supabase
+      const { data, error, status: insertStatus } = await supabase
         .from('leads')
         .insert([
           {
@@ -737,6 +747,7 @@ function createHandler(options = {}) {
         log.error(
           'supabase_insercion_error',
           Object.assign(metadatosDeError('supabase_insercion_error', error), {
+            supabase_status_code: insertStatus,
             duracion_ms: duracionInsercion,
           })
         );
@@ -818,7 +829,7 @@ function createHandler(options = {}) {
           // respuesta ya decidida (criterio 9/f05): el email si se
           // envio, solo el flag de tracking no se pudo persistir.
           try {
-            const { error: updateError } = await supabase
+            const { error: updateError, status: updateStatus } = await supabase
               .from('leads')
               .update({ notificacion_clinica_enviada: true })
               .eq('id', data.id);
@@ -828,6 +839,7 @@ function createHandler(options = {}) {
                 Object.assign(metadatosDeError('flag_actualizacion_error', updateError), {
                   lead_id: leadId,
                   flag: 'notificacion_clinica_enviada',
+                  supabase_status_code: updateStatus,
                 })
               );
             }
@@ -878,7 +890,7 @@ function createHandler(options = {}) {
           // loguea pero NO cambia la respuesta HTTP ya decidida
           // (criterio 16/f06).
           try {
-            const { error: updateError } = await supabase
+            const { error: updateError, status: updateStatus } = await supabase
               .from('leads')
               .update({ confirmacion_paciente_enviada: true })
               .eq('id', data.id);
@@ -888,6 +900,7 @@ function createHandler(options = {}) {
                 Object.assign(metadatosDeError('flag_actualizacion_error', updateError), {
                   lead_id: leadId,
                   flag: 'confirmacion_paciente_enviada',
+                  supabase_status_code: updateStatus,
                 })
               );
             }

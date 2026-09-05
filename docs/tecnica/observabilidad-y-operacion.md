@@ -103,6 +103,7 @@ El orden de serialización es fijo, para que las líneas sean comparables.
 | `tipo` | token | `[A-Za-z0-9_.-]{1,64}` | `err.name`. |
 | `codigo` | token | ídem | SQLSTATE de Postgres (`23505`) o código de Nodemailer (`EAUTH`). |
 | `smtp_response_code` | entero | ≥ 0 | Código numérico SMTP (`535`, `550`). |
+| `supabase_status_code` | entero | ≥ 0 | Status HTTP de la respuesta de Supabase/PostgREST. **No confundir con `http_status`**, que es el que devolvemos nosotros al cliente. |
 | `huella` | 16 hex | patrón hash | Agrupación de errores equivalentes (ver abajo). |
 | `duracion_ms` | entero | ≥ 0 | Duración de la operación. |
 
@@ -149,15 +150,15 @@ La correlación **no** usa el email ni el teléfono del paciente.
 | `lead_rechazado` | warn | `motivo`, `ip_hash` |
 | `duplicado_detectado` | info | `lead_id` |
 | `supabase_cliente_error` | error | `tipo`, `codigo`, `huella` |
-| `supabase_duplicados_error` | error | `tipo`, `codigo`, `huella` |
+| `supabase_duplicados_error` | error | `tipo`, `codigo`, `huella`, `supabase_status_code?` |
 | `supabase_insercion_ok` | info | `lead_id`, `duracion_ms` |
-| `supabase_insercion_error` | error | `tipo`, `codigo`, `huella`, `duracion_ms` |
+| `supabase_insercion_error` | error | `tipo`, `codigo`, `huella`, `supabase_status_code?`, `duracion_ms` |
 | `smtp_configuracion_error` | error | `tipo`, `codigo`, `huella` |
 | `smtp_clinica_ok` | info | `lead_id`, `duracion_ms` |
 | `smtp_clinica_error` | error | `lead_id`, `tipo`, `codigo`, `smtp_response_code?`, `huella`, `duracion_ms` |
 | `smtp_paciente_ok` | info | `lead_id`, `duracion_ms` |
 | `smtp_paciente_error` | error | ídem que clínica |
-| `flag_actualizacion_error` | error | `lead_id`, `flag`, `tipo`, `codigo`, `huella` |
+| `flag_actualizacion_error` | error | `lead_id`, `flag`, `tipo`, `codigo`, `huella`, `supabase_status_code?` |
 | `error_no_controlado` | error | `tipo`, `codigo`, `huella` |
 | `solicitud_finalizada` | info | `http_status`, `lead_id?`, `duracion_ms` |
 

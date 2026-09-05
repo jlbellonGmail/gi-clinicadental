@@ -161,6 +161,7 @@ test('la lista blanca no contiene ningun campo de texto libre', () => {
     'tipo',
     'codigo',
     'smtp_response_code',
+    'supabase_status_code',
     'huella',
     'duracion_ms',
   ]);
@@ -410,4 +411,27 @@ test('hashOpaco es estable, corto y no reversible por inspeccion', () => {
   assert.notEqual(hash, hashOpaco('203.0.113.11'));
   assert.match(hash, /^[0-9a-f]{16}$/);
   assert.equal(hash.includes('203.0.113.10'), false);
+});
+
+test('supabase_status_code: acepta enteros y descarta texto (f16)', () => {
+  // Campo agregado por la feature 16. Origen: en Production, un error de
+  // Supabase sin `name` ni `code` dejaba el log en sin_tipo/sin_codigo,
+  // sin nada accionable. El status HTTP de la respuesta es la senal que
+  // faltaba, y por ser un entero no puede transportar PII.
+  const { parseadas } = capturarLogs(() => {
+    emitir('error', 'supabase_duplicados_error', { request_id: 'r1', supabase_status_code: 404 });
+    emitir('error', 'supabase_duplicados_error', { request_id: 'r2', supabase_status_code: '503' });
+    emitir('error', 'supabase_duplicados_error', {
+      request_id: 'r3',
+      supabase_status_code: 'paciente@example.com',
+    });
+  });
+
+  assert.equal(parseadas[0].supabase_status_code, 404);
+  // Un numerico en string se normaliza a entero, como el resto de campos
+  // enteros del esquema.
+  assert.equal(parseadas[1].supabase_status_code, 503);
+  // Texto libre: el campo se descarta entero, no se trunca.
+  assert.equal('supabase_status_code' in parseadas[2], false);
+  assert.equal(JSON.stringify(parseadas[2]).includes('paciente@example.com'), false);
 });
