@@ -2,28 +2,29 @@
 
 ## Estado
 
-**Fase 2 en curso — pasos 1 a 6 completos.** Artefactos preparados en
-`feature/16-validacion-mvp-produccion`, y las dos tandas de correcciones
-pre-release construidas, probadas y ya integradas a `develop`:
+**Fase 2 en curso — pasos 1 a 10 completos.** Artefactos preparados en
+`feature/16-validacion-mvp-produccion`, tres tandas de correcciones
+pre-release integradas a `develop`, preflight **P1-P8 aprobado** y
+**`audit-1` de OpenCode aprobada**.
 
 | PR | Rama | Contenido | Estado |
 |---|---|---|---|
 | #21 | `release/v1.0.0-preparacion` | marca, Open Graph, `docs.yml` v1, versión 1.0.0 | mergeada, CI verde |
 | #22 | `fix/docs-pages-no-disponible` | `docs.yml` sin dependencia de Pages, `AGENTS.md` | mergeada, CI verde |
+| #23 | `fix/email-contacto-publico` | contacto público real, sitio declarado demo técnica | mergeada, CI verde |
 
-**Candidato de release: `origin/develop` @ `74297a7`.**
+**Candidato de release: `origin/develop` @ `26e2a682bcb0eb635c9f2d3e69c1062968cd81dd`.**
 
-Falta: completar el preflight (P3, P4 y P6 dependen de los paneles de
-Vercel y Supabase), `audit-1` de OpenCode sobre el candidato, el release a
-`main`, la validación real en Production, `audit-2`, HITL 2, tag y cierre.
+Falta: PR `develop → main`, deployment de Production, validación funcional
+real, `audit-2`, HITL 2, tag y cierre.
 
 `main` sigue intacto en `a034703`, sin tags, y `ROADMAP.md` en
-`[ ] 16-validacion-mvp-produccion`.
+`[ ] 16-validacion-mvp-produccion`. **El MVP no está cerrado.**
 
-Las dos PRs mergeadas son de **preparación del release** hacia `develop`,
-no de esta feature: `feature/16` sigue sin PR y sin mergear, no hay tag, y
-`ROADMAP.md` no tiene `[-]` ni `[x]`. Este archivo se completa a medida
-que la secuencia avanza; no afirma ningún resultado que no esté
+Las tres PRs mergeadas son de **preparación del release** hacia
+`develop`, no de esta feature: `feature/16` sigue sin PR y sin mergear, no
+hay tag, y `ROADMAP.md` no tiene `[-]` ni `[x]`. Este archivo se completa
+a medida que la secuencia avanza; no afirma ningún resultado que no esté
 verificado.
 
 ## Evidencias
@@ -32,8 +33,11 @@ verificado.
   con los tres ajustes exigidos antes de autorizar la Fase 2)
 - `docs/tecnica/validacion-mvp-produccion.md`
 - `docs/usuario/validacion-mvp-produccion.md`
-- Pendientes: `test-report-1.md`, `audit-1.md`, `test-report-2.md`,
-  `audit-2.md`, `evidencia/`
+- `runs/16-validacion-mvp-produccion/test-report-1.md` (preflight P1-P8,
+  aprobado sobre `26e2a68`)
+- `runs/16-validacion-mvp-produccion/audit-1.md` (OpenCode, `approved`,
+  sobre `26e2a68`)
+- Pendientes: `test-report-2.md`, `audit-2.md`, `evidencia/`
 
 ## Decisiones demostrables
 
@@ -309,6 +313,144 @@ Pasan a `estado='descartado'` desde el panel de Supabase. Dejarlos en
 borrarlos destruiría la evidencia de que la validación ocurrió. El estado
 `descartado` resuelve las dos cosas y usa el procedimiento operativo que
 ya existe (feature 15).
+
+### El candidato cambió dos veces, y eso invalidó dos auditorías potenciales
+
+`60dbb6c` → `74297a7` → `26e2a68`. Cada corrección pre-release produjo un
+árbol distinto, y `audit-1` sólo vale sobre el árbol exacto que la PR
+`develop → main` va a mover. Ninguna verificación previa se reutilizó: el
+preflight se reejecutó completo sobre `26e2a68` y la auditoría corrió
+sobre ese SHA.
+
+Es el control antideriva funcionando, no un contratiempo: si hubiera
+auditado el primer candidato y liberado el tercero, el veredicto no
+habría cubierto lo que efectivamente se publica.
+
+### La marca tenía tres grafías y hubo que fijarla antes de auditar
+
+Al llegar los datos de Production aparecieron tres formas en circulación:
+**`Sonríe más`** en los HTML, en `mkdocs.yml` y en el ítem 10 del roadmap;
+**`sonrimas`** en el dominio, el email del footer y las redes sociales; y
+**`sonriamas`** en las cuentas SMTP nuevas (`sonriamas@nextgia.io`,
+`sonriamas-contactos@nextgia.io`).
+
+El checklist del humano pedía verificar `marca pública = SONRIAMAS`, y esa
+grafía aparecía **0 veces** en el sitio. En vez de asumir cuál era la
+correcta —o peor, reescribir 24 ocurrencias por mi cuenta— se planteó la
+discrepancia con la evidencia a la vista. Resolución: **la marca visible
+es `Sonríe más`; `sonriamas` es el identificador técnico de las cuentas de
+correo, no la marca.** El sitio no se tocó.
+
+### El contacto público apuntaba a un buzón inexistente
+
+`contacto@sonrimas.com` estaba en el footer, y `sonrimas.com` no tiene
+registro A: quien escribiera ahí no llegaba a nadie. Se reemplazó por
+`sonriamas-contactos@nextgia.io`, que es el buzón real y el mismo que
+recibe los avisos de cada lead.
+
+No es cosmético: un sitio que publica un canal de contacto muerto es peor
+que uno que no publica ninguno, porque promete una respuesta que nunca va
+a llegar.
+
+### La política de privacidad publicaba tres "[A COMPLETAR POR EL CLIENTE]"
+
+Incluido el del **responsable del tratamiento de datos**. Publicar un
+documento legal con marcadores de pendiente, y sin identificar a nadie
+como responsable, no era aceptable para el primer release estable.
+
+El humano precisó la situación real: `Sonríe más` es hoy una demostración
+técnica y de portfolio, y NextGIA no es una persona jurídica constituida.
+Instrucciones explícitas: **no inventar razón social, CUIT ni domicilio**,
+y **no publicar datos personales del desarrollador** como responsable
+legal.
+
+La solución no fue rellenar los huecos ni borrarlos, sino **decir la
+verdad**: la política declara que no existe una entidad responsable,
+porque no la hay. Sección 0 nueva con el aviso de demostración técnica;
+la finalidad pasa a ser demostrar el circuito y no gestionar turnos; los
+destinatarios dejan de ser "el personal administrativo de la clínica"; la
+conservación se ata a la vida de la demo sin inventar un plazo comercial;
+y el canal ARCO apunta al buzón real.
+
+**Queda registrado como condición actual de la demo, no como deuda
+bloqueante de Production.**
+
+De paso se corrigió un dato falso heredado: la sección de destinatarios
+nombraba a **Ferozo** como proveedor SMTP, y el proveedor real es
+**DonWeb**.
+
+### El aviso se puso donde actúa, no sólo donde es legalmente prolijo
+
+Una advertencia de "no ingreses datos reales" que vive únicamente en un
+documento enlazado no protege a nadie: casi nadie abre la política antes
+de enviar un formulario. Por eso el aviso se repite en dos lugares con
+efecto real: un bloque visible **encima del formulario**, y el texto del
+checkbox de consentimiento, que pasó de *"autorizo a la clínica a
+contactarme para responder mi solicitud"* a *"entiendo que este sitio es
+una demostración técnica"*.
+
+Lo que **no** se tocó: el mensaje de éxito sigue diciendo *"Solicitud
+recibida. La clínica se comunicará para confirmar el turno"*, que
+contradice el aviso. Es un criterio de aceptación explícito de V4 en esta
+misma validación, así que modificarlo habría invalidado la prueba. Queda
+como observación para después del cierre.
+
+### La auditoría independiente casi no ocurre, y hubo que resolver tres obstáculos
+
+Se declaran los tres porque afectan a la credibilidad del veredicto:
+
+**1. Ningún proveedor configurado funcionaba.** `opencode.json` apunta a
+`anthropic/claude-sonnet-4-5`, pero **no hay credencial de Anthropic**
+—`AGENTS.md` ya advertía que ese valor era un ejemplo a ajustar—.
+OpenRouter respondió *"can only afford 2010 tokens"* y `opencode-go`
+*"Insufficient balance"*. La auditoría corrió finalmente con
+`opencode/nemotron-3-ultra-free`.
+
+`opencode.json` **no se modificó**: el modelo se pasó por flag. Cambiar un
+archivo versionado habría alterado el SHA candidato y obligado a repetir
+todo el preflight.
+
+**2. `reviewer-agent` no se puede usar como auditor.** Está declarado
+`mode: subagent` en `.opencode/agent/reviewer-agent.md`, así que OpenCode
+lo rechaza como agente primario y **cae al agente por defecto, que no
+hereda sus permisos de solo lectura** (`edit`, `bash` y `webfetch` en
+`deny`). El aviso literal fue: *"agent reviewer-agent is a subagent, not a
+primary agent. Falling back to default agent"*.
+
+Es un defecto real del circuito, no una particularidad de esta ejecución:
+**cualquier intento futuro de auditar con `reviewer-agent` vía
+`opencode run` correrá con permisos de escritura sin que nadie lo note.**
+Se registra como brecha a corregir fuera del alcance de este release.
+
+**3. La garantía de solo lectura no se delegó en la configuración.** Como
+no se podía confiar en los permisos del agente, la auditoría se ejecutó
+sobre una **copia aislada del árbol** (`git archive`, sin `.git`, fuera
+del repositorio). Aunque el agente hubiera intentado escribir, no podía
+tocar el repo ni los worktrees.
+
+La precaución resultó justificada: el **primer** intento, anterior a
+aislar el árbol, dejó una escritura real —OpenCode sincronizó su propio
+`.opencode/package.json` de `1.18.23` a `1.18.27` al arrancar en el
+worktree—. **Ese cambio fue detectado y revertido**; es ajeno al punto 16
+y no se coló en el release. Confirma que el runtime escribe con
+independencia de los permisos del agente.
+
+### `audit-1`: aprobada
+
+Veredicto de OpenCode sobre `26e2a68`: **`status: approved`**, sin
+hallazgos bloqueantes, con cinco observaciones no bloqueantes que
+coinciden con las ya registradas en `test-report-1.md` (favicon y
+apple-touch-icon inexistentes, contradicción del mensaje de éxito,
+deprecación de Node 20, ausencia de `canonical`, `sonrimas.com` sin
+registro A).
+
+El informe se persistió **literalmente** en `audit-1.md`, verificado byte
+a byte contra la salida cruda de OpenCode. Se conservó incluso su
+preámbulo —el informe abre con una línea de prosa antes del bloque YAML,
+en lugar de empezar por el bloque como pide `AGENTS.md`—: corregir esa
+desviación de formato habría significado editar el artefacto de otro
+auditor, que es exactamente lo que la separación de autoría prohíbe. Se
+declara acá en vez de arreglarse en silencio.
 
 ## Desviación de proceso declarada
 
