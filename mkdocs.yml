@@ -1,0 +1,57 @@
+site_name: Sonríe más — Documentación
+
+theme:
+  name: material
+  language: es
+
+  icon:
+    logo: material/tooth
+
+  favicon: assets/favicon.ico
+
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Cambiar a modo oscuro
+
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Cambiar a modo claro
+
+  features:
+    - navigation.tabs
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.prune
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+extra_css:
+  - css/extra.css
+
+markdown_extensions:
+  - attr_list
+  - md_in_html
+
+nav:
+  - Inicio: index.md
+  - Técnica: tecnica/index.md
+  - Usuario: usuario/index.md
+
+plugins:
+  - search
+  - tags

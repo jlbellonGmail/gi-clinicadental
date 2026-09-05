@@ -1,0 +1,4 @@
+# Dependencias para correr los tests del circuito (scripts/*.ps1).
+# No hay backend de producto todavia; cuando exista, sus dependencias
+# de runtime iran en su propio requirements.txt (ver AGENTS.md).
+pytest>=8.0.0

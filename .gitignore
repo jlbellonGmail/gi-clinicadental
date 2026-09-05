@@ -1,0 +1,30 @@
+# Python (tooling del circuito: pytest para tests/*.ps1 wrappers)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Node.js (backend serverless en api/, feature 03-endpoint-recepcion-leads)
+node_modules/
+
+# Local editor / agent settings
+.claude/settings.local.json
+.cursor/
+.vscode/
+.idea/
+
+# MkDocs build output
+site/
+
+# opencode local runtime state (wiring stays versioned via .opencode/.gitignore)
+.opencode/node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
