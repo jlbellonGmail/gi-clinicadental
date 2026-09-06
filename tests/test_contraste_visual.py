@@ -261,15 +261,37 @@ def _sin_scope_de_hero(objetivo):
     """¿Este selector toca `.hero-content` sin colgar de `.hero`?
 
     `.hero .hero-content p` está scopeado; `.hero-content p` y
-    `.equipo .hero-content h1` no lo están. Se mira solo la parte del
-    selector **anterior** a `.hero-content`, que es donde estarían los
-    ancestros. El `(?!-)` evita que `.hero-content` se cuente a sí mismo
-    como si fuera el ancestro `.hero`.
+    `.equipo .hero-content h1` no lo están. Se mira la parte del selector
+    **anterior** a `.hero-content`, que es donde estarían los ancestros.
+    El `(?!-)` evita que `.hero-content` se cuente a sí mismo como si
+    fuera el ancestro `.hero`.
+
+    Dos precisiones que pidió `audit-1-intento-7.md`:
+
+    - `.hero + .hero-content p` y `.hero ~ .hero-content p` son
+      **hermanos**, no ancestros: el elemento no está dentro del hero, así
+      que no cuentan como scope. Solo valen los combinadores de
+      descendencia (espacio) y de hijo (`>`).
+    - `.foo:not(.hero) .hero-content p` menciona `.hero` justamente para
+      **excluirlo**. El contenido de `:not(...)` se descarta antes de
+      buscar.
     """
     if not re.search(r"\.hero-content\b", objetivo):
         return False
+
     ancestros = objetivo.split(".hero-content")[0]
-    return not re.search(r"\.hero\b(?!-)", ancestros)
+    ancestros = re.sub(r":not\([^)]*\)", "", ancestros)
+
+    ultimo = None
+    for coincidencia in re.finditer(r"\.hero\b(?!-)", ancestros):
+        ultimo = coincidencia
+    if ultimo is None:
+        return True
+
+    # Entre `.hero` y `.hero-content` no puede haber un combinador de
+    # hermano: eso sacaria al elemento de dentro del hero.
+    entre = ancestros[ultimo.end():]
+    return "+" in entre or "~" in entre
 
 
 def test_el_color_del_hero_no_se_escapa_al_reuso_sobre_fondo_claro():
@@ -325,15 +347,22 @@ def test_el_gradiente_general_del_sitio_no_se_toca():
     comprobar solo la presencia de las dos variables permitía invertir
     las paradas, cambiar el ángulo o mover las posiciones sin que el test
     dijera nada, mientras el reporte afirmaba que el valor se conservaba.
+
+    Se compara sin espacios ni mayúsculas, no la cadena literal:
+    `audit-1-intento-7.md` señaló que exigir el formato exacto hacía
+    fallar el test por quitar un espacio detrás de una coma, con el valor
+    CSS intacto. Lo que se protege es el **valor**, no cómo esté escrito.
     """
     esperado = "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)"
     valor = variables_root().get("--gradient-primary")
     assert valor, "Desapareció `--gradient-primary`"
 
-    normalizado = re.sub(r"\s+", " ", valor).strip()
-    assert normalizado == esperado, (
+    def canonico(texto):
+        return re.sub(r"\s+", "", texto).lower()
+
+    assert canonico(valor) == canonico(esperado), (
         "`--gradient-primary` cambió de valor.\n  esperado: " + esperado
-        + "\n  encontrado: " + normalizado
+        + "\n  encontrado: " + valor.strip()
         + "\nEl hero tiene su propia superficie (`--gradient-hero`); este "
         "gradiente es el del resto del sitio y no se toca para arreglarlo."
     )
