@@ -784,3 +784,163 @@ investigación a un vistazo:
 
 Queda pendiente de decisión, junto con el redeploy que hará falta de
 todos modos.
+
+---
+
+# Anexo C — Tercera ronda: corrijo un error propio y aíslo la causa
+
+**Fecha**: 2026-09-05.
+**Insumo humano**: `NEXT_PUBLIC_SUPABASE_URL` termina exactamente en
+`.supabase.co`, sin `/rest/v1`, sin ruta adicional y sin barra final.
+
+## C.1 — Error mío en el Anexo A, que hay que corregir
+
+En el Anexo A escribí esta tabla de descartes:
+
+> | Clave inválida | JSON con mensaje de API key | ✅ descartada |
+
+**Esa línea es incorrecta y eliminó indebidamente la hipótesis que hoy es
+la más probable.**
+
+El razonamiento que usé fue: "todas las causas de base de datos devuelven
+JSON **con `code`**, luego `sin_codigo` las descarta". El fallo del
+razonamiento es que **una clave rechazada no la contesta PostgREST, sino
+el gateway que está delante**, y ése responde con una forma distinta:
+
+```json
+{"message":"Invalid API key","hint":"Double check your Supabase `anon` or `service_role` API key."}
+```
+
+**Ese JSON no tiene `code`.** Y en `postgrest-js`, la rama de respuesta
+no-ok hace `error = JSON.parse(body)` cuando el cuerpo **sí** es JSON:
+
+```js
+} else {
+  const body = await res.text();
+  try {
+    error = JSON.parse(body);      // <-- el objeto parseado, tal cual
+    ...
+  } catch (_unused2) { ... error = { message: body }; }
+}
+```
+
+Si ese JSON no trae `code`, el objeto resultante tampoco lo trae. Y no es
+una instancia de `Error`, así que tampoco tiene `name`. **Resultado:
+`sin_tipo` + `sin_codigo`, exactamente lo observado.**
+
+Es decir: el síntoma **no exige** que el cuerpo sea no-JSON, como afirmé
+en el Anexo A. Basta con que sea **un JSON sin campo `code`**. Corrijo la
+conclusión: el conjunto de causas posibles es más amplio de lo que
+declaré, y una clave rechazada estaba dentro todo el tiempo.
+
+## C.2 — Lo que sí queda excluido, ahora con prueba
+
+**Un `ref` de proyecto inexistente o mal escrito queda excluido.**
+Verificado empíricamente:
+
+```
+curl https://noexisteesteproyecto123456.supabase.co/rest/v1/leads
+  → curl: (6) Could not resolve host
+```
+
+Supabase **no tiene DNS comodín**: un proyecto que no existe no resuelve.
+Un fallo de DNS hace que `fetch` lance, y eso toma la rama
+`catch(fetchError)` de `postgrest-js`, que construye `code: ""` — un
+string vacío que el logger registra como **`no_valido`**, no como
+`sin_codigo`.
+
+Como el log dice `sin_codigo`, **el host resolvió y contestó**. El
+proyecto del `ref` existe y está en línea.
+
+Combinado con el insumo de esta ronda —la URL base está bien formada—
+quedan excluidas todas las variantes de forma de la URL.
+
+## C.3 — Estado del descarte, actualizado
+
+| Hipótesis | Estado | Por qué |
+|---|---|---|
+| Columna inexistente | excluida | daría `codigo=42703` |
+| Tabla inexistente | excluida | daría `codigo=42P01` o `PGRST205` |
+| RLS bloqueando | excluida | daría `codigo=42501` / `PGRST301` |
+| Cliente mal creado | excluida | daría `supabase_cliente_error` |
+| Variable vacía | excluida | ídem: `getSupabaseClient()` lanza |
+| Duplicado real | excluida | la tabla tiene 0 filas |
+| URL con ruta de más | **excluida** | insumo humano de esta ronda |
+| URL con barra final / espacio | excluida | se normalizan (Anexo B) |
+| URL sin protocolo | excluida | lanza en `createClient()` |
+| `ref` inexistente o mal escrito | **excluida** | no resolvería por DNS (C.2) |
+| Proyecto pausado | excluida | el `COUNT(*)` respondió (Anexo B) |
+| **Clave rechazada por el gateway** | **← candidata principal** | JSON **sin `code`** (C.1) |
+| Cuerpo no-JSON de un intermediario | posible, menos probable | mismo síntoma |
+
+## C.4 — Por qué la clave es ahora la hipótesis principal
+
+Sobrevive a todas las restricciones simultáneamente:
+
+- El cliente **se crea**: la variable existe y no está vacía. ✔
+- El host **resuelve y contesta**: el `ref` es real. ✔
+- La URL está **bien formada**. ✔
+- La respuesta trae **JSON sin `code`**, que es exactamente la forma de
+  los errores de autenticación del gateway de Supabase. ✔
+- **La tabla, el esquema y RLS son irrelevantes**: la petición se rechaza
+  **antes** de llegar a PostgREST, así que da igual que `public.leads`
+  esté perfecta. Eso explica la aparente contradicción entre "verifiqué
+  la tabla por SQL y está bien" y "la consulta falla". **Son dos caminos
+  distintos**: el editor SQL del panel entra por la conexión de Postgres
+  autenticada por la sesión del panel; el backend entra por HTTP con la
+  clave. Que uno funcione no dice nada del otro.
+
+Formas concretas en que la clave puede ser rechazada teniendo la variable
+"definida":
+
+1. **La clave pertenece a otro proyecto.** URL y clave se configuraron en
+   momentos distintos, o se copió la de otro proyecto de la cuenta.
+2. **La clave fue rotada en Supabase y no se actualizó en Vercel.**
+3. **Está truncada o con espacios/saltos de línea al pegarla.** Las claves
+   JWT son largas y es un error frecuente.
+4. **Formato**: Supabase migró a claves `sb_secret_…`; si el proyecto
+   deshabilitó las claves JWT heredadas, una clave JWT antigua se
+   rechaza.
+5. **Se pegó la `anon` en la variable de `service_role`.** No daría
+   "Invalid API key" sino un rechazo de RLS con `code`, así que esta
+   variante en particular **no** encaja con `sin_codigo`.
+
+## C.5 — La verificación que lo resuelve, sin revelar el secreto
+
+Una clave `service_role` con formato JWT lleva su **payload en claro** en
+el segmento del medio. Decodificarlo **no revela la firma**, que es la
+parte secreta, y responde las dos preguntas que importan.
+
+```bash
+python -c "import base64,json,sys; p=sys.argv[1].split('.')[1]; p+='='*(-len(p)%4); d=json.loads(base64.urlsafe_b64decode(p)); print('ref  =', d.get('ref')); print('role =', d.get('role'))" "<SUPABASE_SERVICE_ROLE_KEY>"
+```
+
+Reportar únicamente esas dos líneas. **Ninguna de las dos es secreta.**
+
+- `role` debe decir **`service_role`**. Si dice `anon`, la variable tiene
+  la clave equivocada.
+- `ref` debe coincidir con **el subdominio de `NEXT_PUBLIC_SUPABASE_URL`**
+  y con el proyecto donde se verificó `public.leads`.
+
+**Si el comando falla** porque la clave no tiene dos puntos, entonces no
+es un JWT sino una clave del formato nuevo (`sb_secret_…`), y eso es en sí
+mismo el dato: hay que verificar si el proyecto acepta ese formato en el
+endpoint REST.
+
+### Alternativa sin decodificar nada
+
+En Supabase → **Settings → API**, comparar los **últimos 6 caracteres**
+del `service_role key` con los del valor guardado en Vercel. Si difieren,
+la clave está desactualizada o es de otro proyecto.
+
+Ninguna de las dos comprobaciones modifica nada.
+
+## C.6 — Si la clave resulta correcta
+
+Entonces la causa es la otra rama: **un intermediario devolviendo un
+cuerpo no-JSON**. En ese caso ya no hay más que deducir desde acá, y la
+vía es el campo `supabase_status_code` que se agregó en la PR #26: tras el
+próximo deployment, el log dirá el status en una línea y eso cierra el
+caso —`401` clave, `404` ruta, `200` con cuerpo raro, `5xx` upstream—.
+
+Es exactamente el escenario para el que se agregó el campo.
