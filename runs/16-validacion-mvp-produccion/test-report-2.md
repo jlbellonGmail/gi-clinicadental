@@ -1032,3 +1032,158 @@ retener el release.
 `supabase_status_code` no aparezca en ningún evento de error, porque no
 debería haber errores de Supabase. Si volviera a fallar, ese campo dirá
 el motivo en una línea — que es exactamente para lo que se agregó.
+
+---
+
+# Anexo E — Segundo deployment: el 500 persiste, y aparece un sospechoso en el cliente
+
+**Fecha**: 2026-09-06.
+
+## E.1 — El release llegó bien; el fallo no
+
+Segundo release ejecutado y desplegado correctamente:
+
+| | |
+|---|---|
+| `main` | `dc8a40b5c79519e065d60db9c8b6642aa8836667` (PR #27) |
+| Candidato liberado | `8611e96` — coincide con el SHA de `audit-1-intento-2` |
+| Deployment | `6287515993`, environment `Production`, **`success`** |
+| Fecha/hora | 2026-09-06T00:38:46Z |
+
+**V1 pasa completo**, y hay prueba de que este deployment es el nuevo:
+
+| Comprobación | Resultado |
+|---|---|
+| `/`, `/politica-privacidad.html`, `/404.html` | 200 |
+| `GET /api/leads` | 405 |
+| Cabeceras de seguridad | las tres presentes |
+| `Savia` en el HTML | **0** |
+| `equipo-dental.webp` servido | **7558 bytes** — el regenerado |
+| `interior-clinica.webp` servido | **2850 bytes** — el regenerado |
+| `paciente-sonrisa.webp` | 11186 bytes — intacto, como debía |
+
+Los pesos de las dos imágenes regeneradas coinciden exactamente con los
+del repositorio: **el bloqueante 2 está resuelto en Production**.
+
+## E.2 — V4 vuelve a fallar
+
+Envío desde la UI real con el dataset aprobado:
+
+```
+POST https://gi-clinicadental.vercel.app/api/leads  →  HTTP 500
+{"error":"error_interno"}
+```
+
+Reproducido también por `curl`. **El cambio de clave no resolvió el
+fallo.**
+
+## E.3 — Un hallazgo en `@supabase/supabase-js@2.112.3`
+
+Al revisar cómo el cliente maneja las claves de formato nuevo apareció
+esto, **en un comentario del propio paquete**:
+
+```js
+/**
+* New-format Supabase API keys (`sb_publishable_…` / `sb_secret_…`) are not JWTs and
+* must never be sent as a Bearer token — they belong only in the `apikey` header.
+* All other keys (legacy JWT keys, `sb_temp_…` temporary keys, unrecognized `sb_`
+* subtypes) keep the Bearer fallback.
+*/
+const isNewApiKey = (key) => key.startsWith("sb_publishable_") || key.startsWith("sb_secret_");
+```
+
+La regla es tajante: una clave `sb_secret_…` **nunca** debe viajar como
+Bearer.
+
+Pero mirá cómo se aplica:
+
+```js
+const allowKeyAsBearer = !((options?.omitApiKeyAsBearer) && isNewApiKey(supabaseKey));
+...
+if (!headers.has("apikey")) headers.set("apikey", supabaseKey);
+if (!headers.has("Authorization")) {
+  const bearer = realToken ?? (allowKeyAsBearer ? supabaseKey : null);
+  if (bearer) headers.set("Authorization", `Bearer ${bearer}`);
+}
+```
+
+`allowKeyAsBearer` sólo vale `false` si **quien llama pasa
+`omitApiKeyAsBearer: true`**. Y en el constructor del cliente:
+
+```js
+this.fetch          = fetchWithAuth(supabaseKey, supabaseUrl, ..., settings.global.fetch, settings.tracePropagation);
+this.functionsFetch = fetchWithAuth(supabaseKey, supabaseUrl, ..., settings.global.fetch, settings.tracePropagation, { omitApiKeyAsBearer: true });
+```
+
+**Sólo `functionsFetch` lo pasa.** El `fetch` que usa `this.rest` —el que
+hace nuestra consulta de duplicados— **no lo pasa**, así que
+`options` es `undefined`, `allowKeyAsBearer` queda en `true`, y la clave
+`sb_secret_…` **se envía como `Authorization: Bearer`**, que es
+exactamente lo que el comentario del paquete prohíbe.
+
+Si el gateway rechaza esa cabecera, la respuesta es un error de
+autenticación en **JSON sin campo `code`** — que produce, otra vez,
+`sin_tipo` + `sin_codigo`.
+
+**Encaja con el orden de los hechos**: con la clave legacy JWT el Bearer
+era válido y el fallo tenía otra causa aparente; al cambiar a
+`sb_secret_…` el `apikey` pasó a ser correcto pero el Bearer pasó a ser
+inválido, y el síntoma se mantuvo idéntico.
+
+## E.4 — Por qué esto NO se declara todavía como causa raíz
+
+Porque sería repetir el error del Anexo A: dar por cerrada una hipótesis
+sin la evidencia que la distingue de sus alternativas.
+
+Lo que hay es un sospechoso muy fuerte, no una prueba. Las alternativas
+siguen vivas:
+
+- La clave nueva podría no estar habilitada para el endpoint REST.
+- El deployment podría no haber tomado el valor nuevo.
+- El gateway podría estar rechazando por otro motivo.
+
+**La diferencia con las rondas anteriores es que ahora el log lo dice.**
+La PR #26 agregó `supabase_status_code`, y este deployment ya la lleva.
+
+## E.5 — La comprobación que cierra el caso, en un campo
+
+En **Vercel → el proyecto → Logs → función `api/leads` → entorno
+Production**, alrededor de `2026-09-06T00:40Z`, buscar el evento
+`supabase_duplicados_error` y leer **un solo campo**:
+
+```
+supabase_status_code
+```
+
+| Valor | Significado | Acción |
+|---|---|---|
+| **401** | El gateway rechaza la autenticación → **confirma E.3** | Workaround en el cliente o actualizar el paquete |
+| **404** | La ruta no existe | Revisar URL |
+| **200** | Respondió OK con un cuerpo que no es JSON | El host no es PostgREST |
+| **5xx** | Upstream caído | Reintentar / soporte |
+| **ausente** | El deployment no lleva la instrumentación | Revisar qué se desplegó |
+
+Es exactamente el escenario para el que se agregó el campo: la
+investigación que antes llevó tres rondas ahora debería resolverse
+leyendo un número.
+
+## E.6 — Correcciones previstas según el valor
+
+**Si es 401** (confirma E.3), hay tres caminos, en orden de preferencia:
+
+1. **Actualizar `@supabase/supabase-js`** a una versión donde el cliente
+   REST no mande la clave nueva como Bearer. Es la corrección de raíz y
+   no agrega código propio.
+2. **Envolver `fetch`** en `createClient` con un wrapper que elimine la
+   cabecera `Authorization` cuando la clave sea de formato nuevo. Es
+   pequeño y bajo nuestro control, pero es código propio compensando un
+   defecto de terceros, y hay que documentarlo como tal.
+3. **Volver a una clave legacy JWT**, si el proyecto todavía las acepta.
+   Es un retroceso y no se recomienda.
+
+Cualquiera de los tres es un cambio de código o de dependencia, así que
+pasa por el circuito completo: nuevo candidato, tests, re-auditoría y
+release.
+
+**Si no es 401**, el valor indica otra dirección y se descarta E.3 sin
+haber tocado nada — que es la razón de pedir el dato antes de corregir.
