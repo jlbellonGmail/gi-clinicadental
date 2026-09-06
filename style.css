@@ -535,6 +535,140 @@ footer {
    El desborde se corrige en su causa -la barra no cabia- y NO con
    overflow-x:hidden, que solo lo habria escondido.
    --------------------------------------------------------------- */
+/* ---------------------------------------------------------------------
+   Envio del formulario: estado de carga, error y confirmacion.
+   Punto 16. Antes el unico feedback era reescribir el textContent del
+   boton: el usuario no veia que el sistema estaba trabajando durante los
+   segundos que tardan el INSERT y los dos envios SMTP, y el mensaje de
+   exito pasaba desapercibido.
+   --------------------------------------------------------------------- */
+
+.form-submit {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* El spinner ocupa lugar solo mientras se envia, para que el boton no
+   cambie de ancho al aparecer. */
+.form-submit__spinner {
+    display: none;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: girar 0.7s linear infinite;
+}
+
+.form-submit[aria-busy="true"] .form-submit__spinner {
+    display: block;
+}
+
+@keyframes girar {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Respeta a quien pidio menos movimiento: el spinner sigue indicando
+   trabajo en curso, sin girar. */
+@media (prefers-reduced-motion: reduce) {
+    .form-submit__spinner {
+        animation: none;
+        border-top-color: currentColor;
+        opacity: 0.6;
+    }
+}
+
+/* `aria-disabled` en vez de `disabled` a secas: el boton sigue siendo
+   enfocable y un lector de pantalla anuncia el estado, en vez de que el
+   foco se pierda en el aire. */
+.form-submit[aria-disabled="true"] {
+    opacity: 0.75;
+    cursor: not-allowed;
+}
+
+.form-error {
+    /* #b3261e sobre #fdecea da 5.9:1: por encima del minimo AA. */
+    color: #b3261e;
+    background-color: #fdecea;
+    border-left: 4px solid #b3261e;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+/* --- Modal de confirmacion --- */
+
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal__fondo {
+    position: absolute;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+}
+
+.modal__caja {
+    position: relative;
+    width: 100%;
+    /* `min()` en vez de un ancho fijo: a 320 px un `max-width: 440px`
+       sumado al padding del contenedor desbordaria. */
+    max-width: min(440px, 100%);
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    background-color: var(--white);
+    color: var(--text);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    padding: 32px 28px;
+    text-align: center;
+}
+
+.modal__titulo {
+    font-size: 1.5rem;
+    line-height: 1.25;
+    margin-bottom: 12px;
+    color: var(--primary-deep);
+}
+
+.modal__texto p {
+    color: var(--text);
+    margin-bottom: 12px;
+}
+
+.modal__texto p:last-child {
+    margin-bottom: 0;
+}
+
+.modal__accion {
+    margin-top: 24px;
+    width: 100%;
+}
+
+
+/* Bloqueo de scroll del fondo mientras el dialogo esta abierto. NO es una
+   mascara de desborde: va sobre `body.con-modal` -no sobre `body` a
+   secas-, solo existe mientras el modal esta visible y script.js la quita
+   al cerrarlo. El criterio del punto 16 prohibe ocultar el desborde, no
+   bloquear el scroll de fondo de un dialogo modal. */
+body.con-modal {
+    overflow: hidden;
+}
+
 @media (max-width: 768px) {
     /* El header pasa a dos filas: barra (logo + hamburguesa) y, al
        abrir, los paneles a ancho completo. `flex-wrap` evita
@@ -687,4 +821,19 @@ footer {
     .legal-content section {
         margin-bottom: 28px;
     }
+
+    /* Confirmacion de envio: la caja se acerca a los bordes y el titulo
+       baja, igual que el resto de la tipografia en movil. */
+    .modal {
+        padding: 16px;
+    }
+
+    .modal__caja {
+        padding: 24px 20px;
+    }
+
+    .modal__titulo {
+        font-size: 1.3rem;
+    }
 }
+

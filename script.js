@@ -69,11 +69,163 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Form Handling
+    // Envio del formulario. Reescrito en el punto 16 por tres problemas
+    // observados en pruebas reales:
+    //
+    // 1. El guard de doble envio estaba invertido. Ponia `disabled = true`
+    //    ANTES de comprobar `dataset.submitting` y, al detectar un segundo
+    //    submit, REHABILITABA el boton y restauraba el texto con la
+    //    request todavia en vuelo.
+    // 2. El unico feedback era reescribir el `textContent` del boton, asi
+    //    que durante los segundos que tardan el INSERT y los dos envios
+    //    SMTP la pagina parecia trabada.
+    // 3. El mensaje de exito, tambien dentro del boton, pasaba
+    //    desapercibido.
+    //
+    // Ahora el estado vive en una variable explicita (`enviando`), no en
+    // el atributo `disabled` ni en un `dataset`: el DOM refleja el estado,
+    // no lo define.
     const leadForm = document.getElementById('leadForm');
-    if (leadForm) {
+    const botonEnvio = document.getElementById('submitLead');
+    const etiquetaEnvio = document.getElementById('submitLeadLabel');
+    const cajaError = document.getElementById('formError');
+
+    if (leadForm && botonEnvio && etiquetaEnvio) {
+        const TEXTO_INICIAL = etiquetaEnvio.textContent;
+        const TEXTO_ENVIANDO = 'Enviando solicitud...';
+
+        // La fuente de verdad del estado de envio. `disabled` y
+        // `aria-busy` son su reflejo en el DOM, no el estado en si.
+        let enviando = false;
+
+        const modal = document.getElementById('modalExito');
+        let focoPrevioAlModal = null;
+
+        function bloquearEnvio() {
+            enviando = true;
+            botonEnvio.disabled = true;
+            botonEnvio.setAttribute('aria-busy', 'true');
+            botonEnvio.setAttribute('aria-disabled', 'true');
+            etiquetaEnvio.textContent = TEXTO_ENVIANDO;
+        }
+
+        function liberarEnvio() {
+            enviando = false;
+            botonEnvio.disabled = false;
+            botonEnvio.removeAttribute('aria-busy');
+            botonEnvio.removeAttribute('aria-disabled');
+            etiquetaEnvio.textContent = TEXTO_INICIAL;
+        }
+
+        function mostrarError(mensaje) {
+            if (!cajaError) return;
+            cajaError.textContent = mensaje;
+            cajaError.hidden = false;
+        }
+
+        function limpiarError() {
+            if (!cajaError) return;
+            cajaError.textContent = '';
+            cajaError.hidden = true;
+        }
+
+        function abrirModal() {
+            if (!modal) return;
+            focoPrevioAlModal = document.activeElement;
+            modal.hidden = false;
+            // Bloqueo de scroll del fondo mientras el dialogo esta
+            // abierto. NO es una mascara de desborde: va sobre
+            // `body.con-modal`, solo existe mientras el modal esta
+            // visible, y se quita al cerrarlo.
+            document.body.classList.add('con-modal');
+            const cerrar = document.getElementById('modalExitoCerrar');
+            if (cerrar) cerrar.focus();
+        }
+
+        function cerrarModal() {
+            if (!modal || modal.hidden) return;
+            modal.hidden = true;
+            document.body.classList.remove('con-modal');
+            // Devolver el foco a donde estaba evita que un lector de
+            // pantalla quede al principio del documento.
+            if (focoPrevioAlModal && typeof focoPrevioAlModal.focus === 'function') {
+                focoPrevioAlModal.focus();
+            }
+            focoPrevioAlModal = null;
+        }
+
+        // Elementos que pueden recibir foco dentro del dialogo.
+        const ENFOCABLES = [
+            'a[href]',
+            'button:not([disabled])',
+            'input:not([disabled])',
+            'select:not([disabled])',
+            'textarea:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])',
+        ].join(', ');
+
+        if (modal) {
+            modal.querySelectorAll('[data-cerrar-modal]').forEach((elemento) => {
+                elemento.addEventListener('click', cerrarModal);
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (modal.hidden) return;
+
+                if (e.key === 'Escape') {
+                    cerrarModal();
+                    return;
+                }
+
+                // Trampa de foco. Con `aria-modal="true"` el resto del
+                // documento se anuncia como inerte, pero el Tab del
+                // teclado igual se escapa si nadie lo retiene: el foco
+                // terminaba en la pagina de atras, que visualmente esta
+                // tapada.
+                if (e.key !== 'Tab') return;
+
+                const caja = modal.querySelector('.modal__caja');
+                const items = caja ? Array.from(caja.querySelectorAll(ENFOCABLES)) : [];
+                if (items.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
+
+                const primero = items[0];
+                const ultimo = items[items.length - 1];
+                const activo = document.activeElement;
+
+                if (!caja.contains(activo)) {
+                    e.preventDefault();
+                    primero.focus();
+                } else if (e.shiftKey && activo === primero) {
+                    e.preventDefault();
+                    ultimo.focus();
+                } else if (!e.shiftKey && activo === ultimo) {
+                    e.preventDefault();
+                    primero.focus();
+                }
+            });
+        }
+
+        // Segunda barrera, por si algun navegador dejara pasar el click
+        // sobre un boton ya deshabilitado. El guard real es el del submit.
+        botonEnvio.addEventListener('click', (e) => {
+            if (enviando) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+
         leadForm.addEventListener('submit', (e) => {
             e.preventDefault();
+
+            // Guard central: cubre el click, el Enter y cualquier submit
+            // programatico. Sale sin tocar nada, para no pisar el estado
+            // del envio que ya esta en curso.
+            if (enviando) {
+                return;
+            }
 
             // Segunda capa explícita de validación del consentimiento:
             // el atributo `required` del checkbox #consent ya impide que
@@ -85,13 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const btn = leadForm.querySelector('button');
-            const originalText = btn.textContent;
-
-            // Payload listo para que la feature 08-conexion-frontend-api
-            // lo envíe con fetch('/api/leads', { method: 'POST', body:
-            // JSON.stringify(leadPayload) }); no se transmite todavía en
-            // esta feature.
             const leadPayload = {
                 nombre: document.getElementById('name').value.trim(),
                 email: document.getElementById('email').value.trim(),
@@ -102,72 +247,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 version_politica_privacidad: POLITICA_PRIVACIDAD_VERSION,
             };
 
-            btn.disabled = true;
-            btn.textContent = 'Enviando solicitud...';
-            btn.style.opacity = '0.7';
-            btn.style.backgroundColor = 'var(--primary)';
-
-            // Evitar solicitudes duplicadas
-            if (btn.dataset.submitting) {
-                btn.disabled = false;
-                btn.textContent = originalText;
-                btn.style.opacity = '1';
-                btn.style.backgroundColor = 'var(--primary)';
-                return;
-            }
-            btn.dataset.submitting = 'true';
+            limpiarError();
+            bloquearEnvio();
 
             fetch('/api/leads', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(leadPayload)
+                body: JSON.stringify(leadPayload),
             })
-                .then(response => {
-                    if (!response.ok) {
-                        if (response.status === 429) {
-                            btn.textContent = 'Demasiados intentos, espere unos minutos';
-                            throw new Error('rate_limit');
-                        }
+                .then((response) => {
+                    if (response.status === 429) {
+                        throw new Error('rate_limit');
+                    }
+                    // Los dos caminos de exito del endpoint responden 201,
+                    // incluido el de idempotencia. Cualquier otra cosa es
+                    // un fallo: no se resetea el formulario.
+                    if (response.status !== 201) {
                         throw new Error('connection');
                     }
-                    return response.json();
+                    // El cuerpo NO se lee. Nada de la UI depende del `id`
+                    // que devuelve el endpoint, y parsearlo solo agregaba
+                    // una rama ambigua: con `json()` fallido habia que
+                    // decidir si un 201 confirmado cuenta como exito.
+                    // Sin parseo no hay ambiguedad: manda el status.
                 })
-                .then((data) => {
-                    btn.textContent = 'Solicitud recibida. La clínica se comunicará para confirmar el turno';
+                .then(() => {
+                    // Recien aca, con el 201 confirmado, se descarta lo
+                    // que el usuario escribio.
                     leadForm.reset();
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.textContent = originalText;
-                        btn.style.opacity = '1';
-                        btn.style.backgroundColor = 'var(--primary)';
-                        delete btn.dataset.submitting;
-                    }, 3000);
+                    liberarEnvio();
+                    abrirModal();
                 })
                 .catch((error) => {
-                    // Mover foco al botón para que el usuario pueda volver a intentar
-                    btn.focus();
-
-                    if (error.message === 'rate_limit') {
-                        btn.textContent = 'Demasiados intentos, espere unos minutos';
-                        setTimeout(() => {
-                            btn.disabled = false;
-                            btn.textContent = originalText;
-                            btn.style.opacity = '1';
-                            btn.style.backgroundColor = 'var(--primary)';
-                            delete btn.dataset.submitting;
-                        }, 5000);
-                    } else {
-                        btn.textContent = 'Error en la conexión, intente más tarde';
-                        setTimeout(() => {
-                            btn.disabled = false;
-                            btn.textContent = originalText;
-                            btn.style.opacity = '1';
-                            btn.style.backgroundColor = 'var(--primary)';
-                            delete btn.dataset.submitting;
-                        }, 5000);
-                    }
+                    // Ante error se conserva TODO lo escrito y se permite
+                    // reintentar. Nunca se muestra detalle tecnico:
+                    // ni request_id, ni codigos, ni errores de SMTP o
+                    // Supabase.
+                    mostrarError(
+                        error && error.message === 'rate_limit'
+                            ? 'Recibimos demasiados intentos desde esta conexión. Esperá unos minutos y volvé a intentarlo.'
+                            : 'No pudimos enviar tu solicitud. Revisá tu conexión e intentá nuevamente.'
+                    );
+                    liberarEnvio();
+                    botonEnvio.focus();
                 });
         });
     }

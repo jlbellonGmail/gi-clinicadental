@@ -201,7 +201,15 @@
                                         y entiendo que este sitio es una demostración técnica.</span>
                                 </label>
                             </div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%;">Enviar Solicitud</button>
+                            <!-- El error vive fuera del boton: antes se escribia
+                                 en su textContent, que lo dejaba corto, sin
+                                 contraste propio y sin anunciarse a un lector de
+                                 pantalla. `role="alert"` lo anuncia solo. -->
+                            <p class="form-error" id="formError" role="alert" hidden></p>
+                            <button type="submit" class="btn btn-primary form-submit" id="submitLead">
+                                <span class="form-submit__spinner" aria-hidden="true"></span>
+                                <span class="form-submit__label" id="submitLeadLabel">Enviar Solicitud</span>
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -250,6 +258,26 @@
             </div>
         </div>
     </footer>
+
+    <!-- Confirmacion de envio. Reemplaza al mensaje que antes se escribia
+         dentro del boton y pasaba desapercibido. Arranca oculto con el
+         atributo `hidden`; script.js lo muestra solo tras un 201 confirmado.
+         El texto NO afirma que se envio ningun correo: el frontend no puede
+         saberlo con certeza desde la respuesta del endpoint. -->
+    <div class="modal" id="modalExito" hidden>
+        <div class="modal__fondo" data-cerrar-modal></div>
+        <div class="modal__caja" role="dialog" aria-modal="true"
+             aria-labelledby="modalExitoTitulo" aria-describedby="modalExitoTexto">
+            <h2 class="modal__titulo" id="modalExitoTitulo">Solicitud enviada</h2>
+            <div class="modal__texto" id="modalExitoTexto">
+                <p>Recibimos tu solicitud correctamente.</p>
+                <p>Tu turno todavía no está confirmado. Nos comunicaremos con vos
+                   para coordinarlo.</p>
+            </div>
+            <button type="button" class="btn btn-primary modal__accion" id="modalExitoCerrar"
+                    data-cerrar-modal>Entendido</button>
+        </div>
+    </div>
 
     <script src="script.js"></script>
     <style>
