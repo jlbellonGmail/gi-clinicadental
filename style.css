@@ -227,9 +227,15 @@ header {
     font-size: 3.5rem;
     line-height: 1.1;
     margin-bottom: 24px;
-    /* Antes: gradiente gris-oscuro -> teal recortado al texto, sobre un
-       fondo teal. El extremo derecho quedaba teal sobre teal: 1.00:1,
-       literalmente invisible. Blanco solido sobre el hero: 5.02-7.37:1. */
+}
+
+/* El color va scopeado a `.hero`, no en la regla de arriba: `.hero-content`
+   se reutiliza en la seccion de equipo, sobre fondo claro, y un blanco
+   global ahi seria invisible.
+   Antes: gradiente gris-oscuro -> teal recortado al texto, sobre un fondo
+   teal. El extremo derecho quedaba teal sobre teal: 1.00:1, literalmente
+   invisible. Blanco solido sobre el hero: 5.02-7.37:1. */
+.hero .hero-content h1 {
     color: var(--white);
 }
 
@@ -240,6 +246,8 @@ header {
     color: var(--accent-soft);
 }
 
+/* Sin scope a proposito: este es el color del reuso sobre fondo claro
+   (seccion de equipo). El hero lo pisa en la regla scopeada de abajo. */
 .hero-content p {
     font-size: 1.2rem;
     color: var(--text-muted);
@@ -297,7 +305,10 @@ header {
 
 .services-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    /* `min(280px, 100%)` en vez de `280px` a secas: por debajo de ~340 px
+       de viewport el minimo fijo era mas ancho que la columna disponible
+       y las tarjetas desbordaban 3 px a 320 px. */
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
     gap: 30px;
 }
 
@@ -617,8 +628,11 @@ footer {
     /* A 320-360px el logo a 1.5rem mas el icono a 1.8rem empujaban al
        boton hamburguesa contra el borde. */
     .logo {
-        font-size: 1.15rem;
+        /* Fluido y sin envolver: a 320 px, con 1.15rem fijo, "Sonrie mas"
+           caia a dos lineas y estiraba el header a 75 px. */
+        font-size: clamp(1rem, 4.2vw, 1.15rem);
         gap: 8px;
+        white-space: nowrap;
     }
 
     .logo i {

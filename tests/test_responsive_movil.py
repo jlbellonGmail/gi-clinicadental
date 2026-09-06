@@ -35,18 +35,30 @@ BREAKPOINT_MOVIL = "max-width: 768px"
 
 
 def bloque_movil() -> str:
-    """Devuelve el texto del bloque `@media (max-width: 768px)`."""
+    """Contenido **interno** del bloque `@media (max-width: 768px)`.
+
+    Devuelve lo de adentro, sin el `@media (...) {` ni la llave que
+    cierra. Antes devolvía el bloque entero, y eso dejaba muerto a
+    `test_el_breakpoint_movil_tampoco_enmascara`: `reglas_de_bloque`
+    asume un fragmento plano, así que tomaba `@media (max-width: 768px)`
+    como si fuera un selector y a partir de ahí cada regla quedaba
+    emparejada con el cuerpo de la anterior. El selector `body` nunca
+    aparecía solo, y una máscara global declarada dentro del breakpoint
+    pasaba sin que nadie la viera. Verificado: se reintrodujo y el test
+    seguía en verde.
+    """
     css = CSS.read_text(encoding="utf-8")
     inicio = css.find("@media (" + BREAKPOINT_MOVIL + ")")
     assert inicio != -1, "Falta el breakpoint móvil de la corrección V12"
+    apertura = css.find("{", inicio)
     profundidad = 0
-    for i in range(css.find("{", inicio), len(css)):
+    for i in range(apertura, len(css)):
         if css[i] == "{":
             profundidad += 1
         elif css[i] == "}":
             profundidad -= 1
             if profundidad == 0:
-                return css[inicio : i + 1]
+                return css[apertura + 1 : i]
     raise AssertionError("El bloque del breakpoint móvil no cierra")
 
 
@@ -233,3 +245,30 @@ def test_el_menu_movil_no_afecta_a_paginas_sin_el():
                 "Regla móvil sin scopear a `.has-mobile-nav`: dejaría a "
                 "404.html sin navegación. Línea: " + limpia
             )
+
+
+def test_ninguna_grilla_fija_un_minimo_mas_ancho_que_la_pantalla():
+    """`minmax(280px, 1fr)` desborda por debajo de ~340 px de viewport.
+
+    `.services-grid` usaba un mínimo fijo de 280 px. A 320 px el área de
+    contenido son 257 px, así que las tarjetas se salían 3 px y aparecía
+    scroll horizontal.
+
+    No lo detectó la medición anterior porque comparaba contra
+    `window.innerWidth` (320) en vez de `documentElement.clientWidth`
+    (297): la diferencia es el ancho de la barra de scroll, y ahí se
+    escondía el desborde. La forma correcta es `minmax(min(280px, 100%),
+    1fr)`, que cede cuando no hay espacio.
+    """
+    culpables = []
+    for selector, cuerpo in reglas_css():
+        for minimo in re.findall(r"minmax\(\s*([^,]+),", cuerpo):
+            minimo = minimo.strip()
+            if re.fullmatch(r"\d+(\.\d+)?(px|rem|em)", minimo):
+                culpables.append(selector + " -> minmax(" + minimo + ", ...)")
+
+    assert not culpables, (
+        "Hay grillas con un mínimo fijo que no cede en pantallas "
+        "estrechas: " + "; ".join(culpables) + ". Usar "
+        "`minmax(min(<ancho>, 100%), 1fr)`."
+    )
