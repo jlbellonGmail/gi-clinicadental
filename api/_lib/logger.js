@@ -40,6 +40,14 @@ const PATRON_TOKEN = /^[A-Za-z0-9_.-]{1,64}$/;
 const PATRON_HASH = /^[0-9a-f]{16}$/;
 const PATRON_LEAD_ID = /^[0-9a-fA-F-]{1,64}$/;
 
+// Host y pathname del endpoint de Supabase. Ambos patrones excluyen
+// deliberadamente `?`, `&`, `=`, `@` y el espacio, de modo que **es
+// imposible** colar por aca un query string. Eso importa: la consulta de
+// duplicados lleva el email del paciente en la query, y el email
+// URL-encodeado (`a%40b.co`) tampoco pasaria estos patrones.
+const PATRON_HOST = /^[A-Za-z0-9.-]{1,253}$/;
+const PATRON_PATH = /^\/[A-Za-z0-9/_.-]{0,200}$/;
+
 const VALOR_NO_VALIDO = 'no_valido';
 const CAMPO_NO_PERMITIDO = 'no_permitido';
 
@@ -152,6 +160,14 @@ const CAMPOS = {
   //
   // Es un entero acotado por protocolo: no puede transportar PII.
   supabase_status_code: validarEntero,
+  // Endpoint efectivo contra el que se hizo la consulta, cuando falla.
+  // Se registran SOLO host y pathname, nunca el query string: la consulta
+  // de duplicados lleva el email del paciente ahi. Agregados por la
+  // feature 16 tras un 404 cuyo origen no se podia identificar sin saber
+  // a que URL se estaba llamando realmente. Ver
+  // runs/16-validacion-mvp-produccion/test-report-2.md, anexo F.
+  supabase_host: validarPatron(PATRON_HOST),
+  supabase_path: validarPatron(PATRON_PATH),
   huella: validarPatron(PATRON_HASH),
   duracion_ms: validarEntero,
 };

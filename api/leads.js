@@ -238,6 +238,32 @@ function escapeIlikeValue(value) {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
+/**
+ * Extrae del builder de Supabase el endpoint efectivo contra el que se
+ * hizo la consulta: SOLO `host` y `pathname`.
+ *
+ * REGLA DURA: el query string NO se lee nunca. La consulta de duplicados
+ * lleva el email del paciente en la query (`email=ilike.…`), asi que
+ * `search` es PII y no debe salir de aca bajo ninguna circunstancia. El
+ * logger ademas lo rechazaria por patron, pero la defensa empieza aca:
+ * lo que no se lee no se puede filtrar.
+ *
+ * Existe porque un 404 de Supabase no dice a QUE URL se llamo, y sin ese
+ * dato no se puede distinguir "la tabla no existe" de "le estamos
+ * pegando al host equivocado". Ver anexo F de
+ * runs/16-validacion-mvp-produccion/test-report-2.md.
+ *
+ * Nunca lanza: un fallo aca no debe alterar el resultado de la request.
+ */
+function metadatosDeEndpoint(builder) {
+  try {
+    const url = new URL(String(builder.url));
+    return { supabase_host: url.host, supabase_path: url.pathname };
+  } catch (_) {
+    return {};
+  }
+}
+
 function sendJson(res, statusCode, body, extraHeaders = {}) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -669,11 +695,10 @@ function createHandler(options = {}) {
 
       let existingLeads;
       try {
-        const {
-          data: dupData,
-          error: dupError,
-          status: dupStatus,
-        } = await supabase
+        // La consulta se construye en un paso aparte, sin await, para
+        // poder leer del builder el endpoint efectivo si falla. Awaitear
+        // la cadena directamente descarta esa informacion.
+        const consultaDuplicados = supabase
           .from('leads')
           .select('id')
           .ilike('email', escapeIlikeValue(email))
@@ -681,16 +706,26 @@ function createHandler(options = {}) {
           .gte('fecha_creacion', duplicateWindowStartIso)
           .limit(1);
 
+        const {
+          data: dupData,
+          error: dupError,
+          status: dupStatus,
+        } = await consultaDuplicados;
+
         if (dupError) {
           // `status` viene de la respuesta HTTP, no del objeto de error:
           // es lo unico que distingue "PostgREST rechazo la consulta" de
           // "el endpoint ni siquiera hablo PostgREST" cuando el cuerpo no
-          // es JSON y el error llega sin `name` ni `code`.
+          // es JSON y el error llega sin `name` ni `code`. Y host+path
+          // distinguen "la tabla no existe" de "le estamos pegando al
+          // host equivocado", que el status por si solo no separa.
           log.error(
             'supabase_duplicados_error',
-            Object.assign(metadatosDeError('supabase_duplicados_error', dupError), {
-              supabase_status_code: dupStatus,
-            })
+            Object.assign(
+              metadatosDeError('supabase_duplicados_error', dupError),
+              metadatosDeEndpoint(consultaDuplicados),
+              { supabase_status_code: dupStatus }
+            )
           );
           respond(500, { error: 'error_interno' });
           return;
@@ -720,7 +755,9 @@ function createHandler(options = {}) {
       // smtp-ferozo/spec.md). Sin cambios en el mapeo campo->columna del
       // insert en si.
       const inicioInsercion = now();
-      const { data, error, status: insertStatus } = await supabase
+      // Igual que en la consulta de duplicados: se construye aparte para
+      // poder leer el endpoint efectivo si falla.
+      const consultaInsercion = supabase
         .from('leads')
         .insert([
           {
@@ -736,6 +773,8 @@ function createHandler(options = {}) {
         .select('id, fecha_creacion')
         .single();
 
+      const { data, error, status: insertStatus } = await consultaInsercion;
+
       const duracionInsercion = duracionDesde(inicioInsercion);
 
       if (error || !data || !data.id) {
@@ -746,10 +785,11 @@ function createHandler(options = {}) {
         // fila (ej. "Key (email)=(...)"), es decir PII del paciente.
         log.error(
           'supabase_insercion_error',
-          Object.assign(metadatosDeError('supabase_insercion_error', error), {
-            supabase_status_code: insertStatus,
-            duracion_ms: duracionInsercion,
-          })
+          Object.assign(
+            metadatosDeError('supabase_insercion_error', error),
+            metadatosDeEndpoint(consultaInsercion),
+            { supabase_status_code: insertStatus, duracion_ms: duracionInsercion }
+          )
         );
         respond(500, { error: 'error_interno' });
         return;
