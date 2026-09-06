@@ -16,15 +16,24 @@ verificado_por_claude:
   - V11 desktop
   - N1 GET /api/leads -> 405
   - N2 formulario sin consentimiento -> bloqueado sin peticion
-pendiente_de_verificacion_humana:
-  - V5 filas en Supabase
-  - V6 correo a la clinica
-  - V7 correo al paciente
-  - V8 flags de notificacion
-  - V9 logs estructurados
-  - V10 ausencia de PII/secretos en logs
+confirmado_por_el_humano_despues:
+  - V5 lead creado en Supabase
+  - V6 aviso a la clinica recibido
+  - V7 confirmacion al paciente recibida, aclara que el turno no esta confirmado
+  - V8 flags en true
+pendiente:
+  - V9 logs estructurados (panel de Vercel)
+  - V10 ausencia de PII/secretos en logs (panel de Vercel)
   - V12 render movil en dispositivo real
 ```
+
+> **Actualizacion posterior.** V5-V8 quedaron confirmados por el humano,
+> pero **con el lead `PRUEBA SMTP`**, no con los de este reporte: la
+> autenticacion SMTP se corrigio despues de estos envios. Los tres leads
+> creados aqui se insertaron con SMTP aun fallando, asi que lo esperable
+> es que tengan los dos flags de notificacion en `false` — que es el
+> comportamiento especificado en la feature 05, no un defecto.
+> Consolidacion completa en el **anexo G de `test-report-2.md`**.
 
 **El MVP no se cierra todavía.** Sin `audit-2`, sin tag, `ROADMAP.md` en
 `[ ]`.

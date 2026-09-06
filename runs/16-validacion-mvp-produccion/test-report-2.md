@@ -1294,3 +1294,113 @@ supabase_path
 
 Ninguno de los dos es secreto: el host es el subdominio público del
 proyecto y el pathname es una ruta fija de la API.
+
+---
+
+# Anexo G — Consolidación final de la evidencia (V1–V12)
+
+**Fecha**: 2026-09-06.
+**Punto de entrada único de la evidencia del punto 16.** El detalle de la
+segunda ejecución vive en `test-report-3.md`; este anexo consolida el
+estado de las doce comprobaciones y de dónde sale cada una.
+
+## G.0 — Un matiz que cambia la lectura de la evidencia anterior
+
+La confirmación humana incluye que **la autenticación SMTP quedó
+corregida** (`SMTP_USER` / `SMTP_FROM` = `sonriamas@nextgia.io`), y que la
+prueba con flags en `true` es la del lead **`PRUEBA SMTP`**.
+
+Consecuencia que hay que dejar escrita: **los tres leads que creé antes de
+esa corrección (`SONDA`, `DESKTOP`, `MOVIL`) se insertaron cuando SMTP
+todavía fallaba.** Lo esperable es que tengan
+`notificacion_clinica_enviada = false` y
+`confirmacion_paciente_enviada = false`.
+
+Eso **no es un defecto**: es exactamente el comportamiento especificado en
+la feature 05 —un fallo de SMTP no elimina ni duplica el lead, sólo deja
+el flag en `false`—. Pero significa que **la evidencia autoritativa de V6,
+V7 y V8 es el lead `PRUEBA SMTP`, no los míos**. Atribuirles flags en
+`true` sería falsear el registro.
+
+## G.1 — Estado de las doce comprobaciones
+
+| # | Comprobación | Estado | Fuente de la evidencia |
+|---|---|---|---|
+| **V1** | Sitio público | ✅ **PASS** | `test-report-3.md` §V1 — verificado por Claude Code |
+| **V2** | Consentimiento obligatorio | ✅ **PASS** | `test-report-3.md` §V2 — bloqueo nativo, sin petición a la API |
+| **V3** | Envío desde la UI real | ✅ **PASS** | `test-report-3.md` §V3/V4 |
+| **V4** | Respuesta de la API | ✅ **PASS** | 201, body `{id}`, **0 ocurrencias de `X-Request-Id`** |
+| **V5** | Lead en Supabase | ✅ **PASS** | Confirmación humana — lead `PRUEBA SMTP` creado correctamente |
+| **V6** | Aviso a la clínica | ✅ **PASS** | Confirmación humana — recibido en `sonriamas-contactos@nextgia.io` |
+| **V7** | Confirmación al paciente | ✅ **PASS** | Confirmación humana — recibido, y **aclara que el turno no está confirmado** |
+| **V8** | Flags y consentimiento | ✅ **PASS** | Confirmación humana — `consentimiento_privacidad`, `notificacion_clinica_enviada` y `confirmacion_paciente_enviada` en `true` |
+| **V9** | Logs correlacionados | ⛔ **pendiente** | Requiere el panel de Vercel |
+| **V10** | Sin PII ni secretos en logs | ⛔ **pendiente** | Requiere el panel de Vercel |
+| **V11** | Desktop | ✅ **PASS** | `test-report-3.md` §V11 |
+| **V12** | Móvil | ⛔ **pendiente** | Requiere un teléfono real — ver G.3 |
+| **N1** | `GET /api/leads` → 405 | ✅ **PASS** | `test-report-3.md` |
+| **N2** | Formulario sin consentimiento | ✅ **PASS** | `test-report-3.md` |
+
+**9 de 12 con evidencia suficiente.** Las tres pendientes dependen de
+accesos que este agente no tiene, no de pruebas por ejecutar.
+
+## G.2 — Configuración de Production confirmada
+
+| Componente | Estado |
+|---|---|
+| Supabase Data API | habilitada |
+| Schema `public` | expuesto |
+| Tabla `leads` | expuesta |
+| `NEXT_PUBLIC_SUPABASE_URL` | correcta |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | correcta (`sb_publishable_…`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | correcta (`sb_secret_…`) |
+| `SMTP_USER` / `SMTP_FROM` | `sonriamas@nextgia.io` |
+| `LEADS_NOTIFICATION_EMAIL` | `sonriamas-contactos@nextgia.io` |
+| `SMTP_PASS` | configurada — **no se muestra ni se persiste** |
+
+**Causa raíz del episodio, cerrada**: la configuración de Supabase en
+Vercel, más un segundo problema de autenticación SMTP. **Ambos de
+entorno.** No se cambió código de producto para resolverlos.
+
+## G.3 — Por qué V12 sigue pendiente
+
+`resize_window` reportó éxito con 390×844 y con 414×896, pero
+`window.innerWidth` siguió devolviendo **1696** en ambos intentos: la
+ventana no se redimensiona de verdad en este entorno, así que **no hay
+manera de evaluar las media queries a ancho de móvil**.
+
+**No hace falta enviar otro formulario.** La parte funcional ya está
+cubierta por el backend: el lead móvil `2b3513ed-…` se creó desde la UI
+con 201, y el circuito completo de correos quedó probado con
+`PRUEBA SMTP`. Lo único que falta es **mirar el render**.
+
+Comprobación concreta pedida: abrir
+`https://gi-clinicadental.vercel.app` en un teléfono y confirmar que se
+ve bien la cabecera, las imágenes, el aviso de demostración técnica y el
+formulario, sin scroll horizontal.
+
+## G.4 — Inventario de filas sintéticas
+
+Cuatro filas, todas sintéticas. **Ninguna se borra**: son la evidencia de
+que la validación ocurrió.
+
+| # | `nombre` | `email` | `id` | Notas |
+|---|---|---|---|---|
+| 1 | `PRUEBA MVP16 SONDA` | `…+sonda@gmail.com` | `b61f91f5-06f8-47b6-963d-f7effa8f1bc4` | Sonda de diagnóstico. Flags probablemente `false` (SMTP aún roto) |
+| 2 | `PRUEBA MVP16 DESKTOP` | `…+desktop@gmail.com` | *(en Supabase)* | UI real, V3/V4. Flags probablemente `false` |
+| 3 | `PRUEBA MVP16 MOVIL` | `…+movil@gmail.com` | `2b3513ed-42e4-4d5d-9971-2bfe2566fcb3` | UI real, dataset móvil. Flags probablemente `false` |
+| 4 | `PRUEBA SMTP` | `…+desktop@gmail.com` | *(en Supabase)* | **Evidencia autoritativa de V5–V8**: flags en `true` |
+
+**Pasarlas a `estado = 'descartado'` sólo cuando toda la evidencia esté
+registrada**, es decir después de V9, V10 y V12 — porque V9 y V10 se
+verifican sobre los logs de esas mismas requests.
+
+## G.5 — Lo que falta para poder lanzar `audit-2`
+
+1. **V9** — secuencia de eventos correlacionados.
+2. **V10** — ausencia de PII y secretos en los logs.
+3. **V12** — render en un teléfono real.
+
+`audit-2` **no se lanza antes**. Auditar una evidencia con tres
+comprobaciones sin confirmar sería pedirle al auditor que valide huecos, y
+un veredicto sobre evidencia incompleta no vale nada.
