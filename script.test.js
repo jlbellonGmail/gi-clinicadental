@@ -51,6 +51,10 @@ async function montarPagina() {
   const llamadas = [];
   let resolverActual = null;
   let rechazarActual = null;
+  // Cuenta invocaciones de `json()`. El codigo NO debe leer el cuerpo: si
+  // volviera a hacerlo, este contador lo delata aunque el resultado final
+  // sea el mismo.
+  const lecturasDeCuerpo = { total: 0 };
 
   window.fetch = (url, opciones) => {
     llamadas.push({ url, opciones });
@@ -93,18 +97,25 @@ async function montarPagina() {
     error: documento.getElementById('formError'),
     modal: documento.getElementById('modalExito'),
     esperarMicrotareas,
+    lecturasDeCuerpo,
     responder(status, cuerpo = { id: 'lead-sintetico' }) {
       resolverActual({
         status,
         ok: status >= 200 && status < 300,
-        json: () => window.Promise.resolve(cuerpo),
+        json: () => {
+          lecturasDeCuerpo.total += 1;
+          return window.Promise.resolve(cuerpo);
+        },
       });
     },
     responderConCuerpoIlegible(status) {
       resolverActual({
         status,
         ok: status >= 200 && status < 300,
-        json: () => window.Promise.reject(new window.Error('Unexpected token < in JSON')),
+        json: () => {
+          lecturasDeCuerpo.total += 1;
+          return window.Promise.reject(new window.Error('Unexpected token < in JSON'));
+        },
       });
     },
     fallarRed(mensaje = 'network') {
@@ -467,6 +478,13 @@ test('un 201 con cuerpo ilegible sigue siendo exito', async () => {
   pagina.responderConCuerpoIlegible(201);
   await pagina.esperarMicrotareas();
 
+  assert.equal(
+    pagina.lecturasDeCuerpo.total,
+    0,
+    'El cuerpo no debe leerse. Con `response.json().catch(...)` el ' +
+      'resultado final sería el mismo, así que comprobar solo el efecto ' +
+      'no distingue una implementación de la otra.'
+  );
   assert.equal(pagina.documento.getElementById('name').value, '');
   assert.equal(pagina.modal.hidden, false);
   assert.equal(pagina.error.hidden, true);
@@ -536,4 +554,27 @@ test('con el dialogo cerrado el Tab no se interfiere', async () => {
 
   assert.equal(evento.defaultPrevented, false, 'Sin modal abierto, el Tab es del navegador');
   assert.equal(pagina.documento.activeElement, nombre);
+});
+
+test('el cuerpo de la respuesta no se lee en ningun camino', async () => {
+  // Hallazgo de `audit-3` intento 2: el test anterior comprobaba el
+  // efecto (que el 201 con cuerpo roto fuera exito) y no la causa. Con
+  // `response.json().catch(() => ({}))` reintroducido, el efecto es
+  // identico y el guard no lo detectaba.
+  for (const status of [201, 429, 500]) {
+    const pagina = await montarPagina();
+    completarFormulario(pagina.documento);
+
+    enviar(pagina);
+    pagina.responder(status);
+    await pagina.esperarMicrotareas();
+
+    assert.equal(
+      pagina.lecturasDeCuerpo.total,
+      0,
+      'Se leyó el cuerpo con status ' + status + '. Nada de la UI depende ' +
+        'del `id` que devuelve el endpoint: parsearlo solo agrega una rama ' +
+        'ambigua que hay que decidir.'
+    );
+  }
 });
