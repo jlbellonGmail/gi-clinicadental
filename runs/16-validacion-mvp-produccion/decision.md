@@ -44,8 +44,12 @@ Verificado por Claude Code: **V1, V2, V3, V4, V11, N1 y N2**.
 Pendiente de verificación humana: **V5, V6, V7, V8, V9, V10** (paneles de
 Supabase y Vercel) y **V12** (teléfono real).
 
-Falta: esas verificaciones, la limpieza de los tres leads sintéticos,
-`audit-2`, HITL 2, tag y cierre. **El MVP no está cerrado.**
+**`audit-2` aprobada** (`audit-2.md`), sin bloqueantes. **11 de 12
+validaciones con evidencia suficiente.**
+
+Falta: **V12** (render móvil, comprobación visual humana), la limpieza de
+las **cinco** filas sintéticas a `descartado`, HITL 2, tag y cierre.
+**El MVP no está cerrado.**
 
 `main` sigue intacto en `a034703`, sin tags, y `ROADMAP.md` en
 `[ ] 16-validacion-mvp-produccion`. **El MVP no está cerrado.**
@@ -650,6 +654,57 @@ no tiene acceso. Lanzar `audit-2` ahora sería pedirle al auditor que
 valide huecos, y un veredicto sobre evidencia incompleta no vale nada
 —precisamente el tipo de aprobación cómoda que este circuito existe para
 evitar—.
+
+### `audit-2`: aprobada, con lo pendiente declarado antes de auditar
+
+Veredicto de OpenCode sobre `main` @ `9ad6874`: **`status: approved`**,
+**sin bloqueantes**.
+
+Al auditor se le declararon por escrito las dos cosas pendientes —V12 sin
+ejecutar y la limpieza de las filas sintéticas— **antes** de auditar, y se
+le pidió explícitamente que decidiera él si V12 era bloqueante. Su
+respuesta: no lo es para cerrar el MVP, pero debe completarse antes de
+HITL 2. Es la misma conclusión a la que se había llegado, pero ahora
+sostenida por alguien que no construyó nada de esto.
+
+Dos cosas que validó de forma específica y que conviene destacar:
+
+- **V9 no es un atajo.** Se le pidió que evaluara si combinar dos
+  requests distintas —una con la secuencia correlacionada observada, otra
+  con ambos flags en `true`— era legítimo. Verificó la implicación en el
+  código (cada flag se escribe sólo en la rama de éxito, justo después de
+  su evento `_ok`) y lo aprobó como cobertura sin huecos lógicos.
+- **Ningún fallo quedó oculto.** Enumeró los ocho —dos bloqueantes, tres
+  hipótesis refutadas, el envío no disparado, el ETIMEDOUT transitorio y
+  la sonda no planificada— y localizó cada uno en su artefacto.
+
+### Dos imprecisiones menores en `audit-2.md`, no corregidas
+
+El informe dice *"4 filas"* de limpieza; son **cinco** (se sumó
+`PRUEBA MVP16 SMTP RETRY` en la prueba controlada del anexo H, posterior
+al inventario que el auditor leyó). Y dice *"lista blanca estricta de
+13/14 campos"*; son **16** desde la PR #28.
+
+**No se editan.** Corregir el artefacto de otro auditor es justo lo que
+la separación de autoría prohíbe, y ninguna de las dos afecta al
+veredicto. Se anotan acá, que es donde corresponde.
+
+### Tres hipótesis mías refutadas, y ninguna llegó al código
+
+Es el resultado del que más vale la pena dejar constancia, porque no fue
+suerte:
+
+| Hipótesis | Refutada por | Qué habría costado darla por buena |
+|---|---|---|
+| "Variables ausentes; el fallo es previo a la red" | El evento era `supabase_duplicados_error` | Buscar en la configuración equivocada |
+| "Clave `sb_secret_` rechazada como Bearer" | `supabase_status_code = 404`, no `401` | Actualizar el paquete o envolver `fetch` para arreglar algo intacto |
+| "El segundo envío SMTP agota el timeout" | Ambos flags en `true` tras la prueba controlada | Meter `pool: true` sin causa demostrada |
+
+En las tres escribí que eran probables **pero no probadas**, y pedí el
+dato que las decidía. Las tres resultaron falsas. **El diagnóstico duró
+más, y el código quedó intacto**: la causa raíz siempre estuvo en el
+entorno, y las dos únicas PRs de código del episodio (#26 y #28) fueron
+instrumentación para poder ver, no intentos de arreglar a ciegas.
 
 ## Desviación de proceso declarada
 
