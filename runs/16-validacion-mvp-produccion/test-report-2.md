@@ -944,3 +944,91 @@ próximo deployment, el log dirá el status en una línea y eso cierra el
 caso —`401` clave, `404` ruta, `200` con cuerpo raro, `5xx` upstream—.
 
 Es exactamente el escenario para el que se agregó el campo.
+
+---
+
+# Anexo D — Causa raíz CONFIRMADA
+
+**Fecha**: 2026-09-05.
+**Confirmado por el humano.**
+
+## D.1 — Qué era
+
+`SUPABASE_SERVICE_ROLE_KEY` en Vercel contenía una **clave legacy en
+formato JWT** (`eyJ...`). El proyecto Supabase ya no la acepta, así que el
+**gateway rechazaba la petición antes de que llegara a PostgREST**.
+
+Fue reemplazada por la **Secret key activa `sb_secret_...`** llamada
+`gi_clinicadental`, del **mismo** proyecto. No se tocaron
+`NEXT_PUBLIC_SUPABASE_URL` ni `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+## D.2 — Encaja exactamente con la hipótesis C.4.4
+
+Era la cuarta forma listada en el Anexo C:
+
+> **Formato**: Supabase migró a claves `sb_secret_…`; si el proyecto
+> deshabilitó las claves JWT heredadas, una clave JWT antigua se rechaza.
+
+Y explica cada observación sin forzar nada:
+
+| Observación | Explicación |
+|---|---|
+| El cliente se creaba bien | La variable existía y no estaba vacía; `createClient()` no valida la clave contra el servidor |
+| El host resolvía y contestaba | El `ref` y la URL siempre fueron correctos |
+| `sin_tipo` + `sin_codigo` | El gateway responde `{"message":"Invalid API key","hint":"..."}`, **JSON sin campo `code`** |
+| El `COUNT(*)` funcionaba | El editor SQL del panel entra por la conexión de Postgres autenticada por la sesión, **no** por HTTP con la clave. Son dos caminos distintos |
+| Tabla, esquema y RLS irrelevantes | La petición se rechazaba **antes** de llegar a PostgREST |
+| Primera ejecución real del endpoint | R3, anotado como riesgo desde el preflight: esas credenciales nunca se habían usado |
+
+## D.3 — La corrección del Anexo C fue la que destrabó el caso
+
+Vale la pena dejarlo escrito porque es la lección del episodio.
+
+En el Anexo A descarté la clave con este razonamiento: *"todas las causas
+devuelven JSON con `code`, luego `sin_codigo` las descarta"*. **Era
+falso**, y mantuvo la hipótesis correcta fuera de consideración durante
+dos rondas enteras.
+
+El error fue asumir que **un solo componente** contestaba. Delante de
+PostgREST hay un gateway, y ese gateway tiene su **propio formato de
+error, sin `code`**. Corregir esa afirmación en el Anexo C fue lo que
+devolvió la clave a la lista de candidatas, y de ahí salió la causa.
+
+## D.4 — Verificación de compatibilidad del cliente
+
+Antes de dar el caso por cerrado se comprobó que la versión instalada
+soporta el formato nuevo, para no cambiar un fallo por otro.
+
+`@supabase/supabase-js@2.112.3` **conoce las claves nuevas de forma
+explícita**: su código incluye un helper `isNewApiKey(supabaseKey)` y una
+opción `omitApiKeyAsBearer` para controlar cómo se envía. Por defecto
+manda la clave en ambos sitios:
+
+```js
+if (!headers.has("apikey")) headers.set("apikey", supabaseKey);
+if (!headers.has("Authorization")) headers.set("Authorization", `Bearer ${bearer}`);
+```
+
+**No se requiere ningún cambio de código** para usar `sb_secret_…`. El
+constructor sólo valida que la clave no esté vacía (`supabaseKey is
+required.`), sin asumir formato JWT.
+
+## D.5 — Estado y qué falta
+
+La corrección es de **entorno**, coherente con la clasificación clase A
+que se mantuvo durante todo el diagnóstico: **no se cambió una sola línea
+de código por este fallo**.
+
+El humano **no hizo redeploy manual**, y es lo correcto: las variables se
+inyectan en el build, así que el deployment actual de Production
+(`eaf4e6f`) sigue con la clave vieja. **El próximo release construye de
+cero y toma el valor nuevo**, en el mismo movimiento que lleva las
+imágenes corregidas y el logger instrumentado.
+
+Un solo deployment, una sola validación, como se había planificado al
+retener el release.
+
+**Verificación pendiente tras el deployment**: que
+`supabase_status_code` no aparezca en ningún evento de error, porque no
+debería haber errores de Supabase. Si volviera a fallar, ese campo dirá
+el motivo en una línea — que es exactamente para lo que se agregó.

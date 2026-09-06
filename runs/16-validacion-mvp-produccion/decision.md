@@ -29,14 +29,15 @@ Correcciones posteriores al release, ya en `develop`:
 | #25 | imágenes regeneradas sin marca + test de regresión (6 casos) |
 | #26 | `supabase_status_code` en el logger + 5 tests |
 
-**Candidato vigente: `origin/develop` @ `8611e96`.** No se ha liberado:
-el release queda en espera deliberada para hacer **un solo deployment y
-una sola validación** una vez corregida la configuración de Supabase.
+**Candidato vigente: `origin/develop` @ `8611e96`**, con
+**`audit-1` intento 2 aprobada** (`audit-1-intento-2.md`).
 
-Falta: verificación humana de la URL, corrección de entorno, release
-`develop → main`, deployment, validación funcional completa, `audit-2`,
-HITL 2, tag y cierre. **`audit-1` debe rehacerse**: el candidato cambió
-dos veces desde el SHA auditado.
+Causa raíz del 500 **confirmada y corregida en el entorno**: clave legacy
+JWT reemplazada por la Secret key `sb_secret_...`. Sin redeploy manual, a
+propósito: el release construye de cero y toma el valor nuevo.
+
+Falta: release `develop → main`, deployment, validación funcional
+completa, `audit-2`, HITL 2, tag y cierre.
 
 `main` sigue intacto en `a034703`, sin tags, y `ROADMAP.md` en
 `[ ] 16-validacion-mvp-produccion`. **El MVP no está cerrado.**
@@ -471,6 +472,47 @@ en lugar de empezar por el bloque como pide `AGENTS.md`—: corregir esa
 desviación de formato habría significado editar el artefacto de otro
 auditor, que es exactamente lo que la separación de autoría prohíbe. Se
 declara acá en vez de arreglarse en silencio.
+
+### La causa raíz era la clave, y mi propio error la mantuvo oculta dos rondas
+
+Confirmado por el humano: `SUPABASE_SERVICE_ROLE_KEY` tenía una **clave
+legacy en formato JWT** que el proyecto ya no acepta, así que el gateway
+de Supabase rechazaba la petición **antes de que llegara a PostgREST**.
+Reemplazada por la Secret key `sb_secret_...` del mismo proyecto.
+
+Lo que hay que registrar no es el acierto final sino el error propio. En
+el Anexo A descarté la clave razonando que *"todas las causas devuelven
+JSON con `code`, luego `sin_codigo` las descarta"*. **Era falso.** Asumí
+que un solo componente contestaba, cuando delante de PostgREST hay un
+gateway con su **propio formato de error, sin `code`**. Esa afirmación
+mantuvo la hipótesis correcta fuera de consideración durante dos rondas
+completas. Corregirla en el Anexo C fue lo que destrabó el caso.
+
+Coherente con la clasificación clase A que se sostuvo todo el
+diagnóstico: **no se cambió una sola línea de código por este fallo.**
+
+Se verificó además que `@supabase/supabase-js@2.112.3` soporta el formato
+nuevo de forma nativa —incluye un helper `isNewApiKey()` y la opción
+`omitApiKeyAsBearer`—, para no cambiar un fallo por otro.
+
+### Dos imprecisiones menores en `audit-1-intento-2.md`, no corregidas
+
+El informe de OpenCode dice *"lista blanca estricta de 13 campos"*; son
+**14** desde la PR #26. Y dice que se regeneraron *"las tres"* imágenes;
+fueron **dos** — `paciente-sonrisa` no se tocó porque nunca llevó la
+marca.
+
+**No se editan**: corregir el artefacto de otro auditor es exactamente lo
+que la separación de autoría prohíbe. Ninguna de las dos afecta al
+veredicto. Se anotan acá, que es donde corresponde.
+
+### `audit-1.md` y `audit-1-intento-2.md` conviven
+
+`audit-1.md` aprobó el candidato `26e2a68`, que se liberó y falló en
+Production. Sigue siendo cierto **para ese SHA**, y por eso no se borra ni
+se sobrescribe. `audit-1-intento-2.md` aprueba `8611e96`, que es el que se
+libera ahora. Los dos juntos cuentan la historia real; uno solo la
+falsearía.
 
 ## Desviación de proceso declarada
 
