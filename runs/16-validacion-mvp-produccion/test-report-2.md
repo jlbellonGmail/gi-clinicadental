@@ -1404,3 +1404,149 @@ verifican sobre los logs de esas mismas requests.
 `audit-2` **no se lanza antes**. Auditar una evidencia con tres
 comprobaciones sin confirmar sería pedirle al auditor que valide huecos, y
 un veredicto sobre evidencia incompleta no vale nada.
+
+---
+
+# Anexo H — `smtp_paciente_error` / ETIMEDOUT: análisis
+
+**Fecha**: 2026-09-06.
+**Insumo humano**: `request_id 87854053-e779-4a53-b850-130be2a4c8f7`,
+secuencia `solicitud_recibida → validacion_aceptada →
+supabase_insercion_ok → smtp_clinica_ok → smtp_paciente_error
+(codigo=ETIMEDOUT) → solicitud_finalizada (201)`.
+
+## H.1 — Lo que el propio log descarta
+
+`smtp_clinica_ok` es un dato muy fuerte: **el host SMTP responde, el TLS
+del 465 negocia y las credenciales autentican correctamente**. Por lo
+tanto quedan fuera, sin necesidad de probar nada:
+
+- credenciales SMTP incorrectas,
+- host o puerto mal configurados,
+- Supabase (la inserción fue correcta),
+- el lead (se creó, y el 201 es correcto por diseño: la feature 05 fija
+  que un fallo de correo no altera la respuesta ya decidida).
+
+El fallo está **exclusivamente en el segundo envío**.
+
+## H.2 — Prueba controlada única (autorizada)
+
+Un solo envío nuevo, con cuenta controlada y `nombre` distinto para no
+chocar con la ventana de idempotencia.
+
+| | |
+|---|---|
+| Hora | 2026-09-06T03:25:38Z |
+| `lead_id` | `37390789-37dd-48d6-8d8b-1b247207d986` |
+| Respuesta | **201** |
+| **Duración total** | **7,92 s** |
+
+### Descomposición del tiempo, medida contra líneas de base reales
+
+| Ruta | Tiempo | Qué ejecuta |
+|---|---|---|
+| `400` validación | 0,583 s / 0,577 s | sólo validación local, sin red externa |
+| `201` rama duplicado | 0,642 s / 0,617 s | + un `SELECT` a Supabase, **sin insert y sin SMTP** |
+| `201` completo | **7,92 s** | + insert + **2 envíos SMTP** + 2 `UPDATE` |
+
+De ahí: el viaje a Supabase cuesta **~0,05 s** (0,63 − 0,58), y las tres
+operaciones de base suman ~0,15 s. **Quedan ~7,1 s para los dos envíos
+SMTP.**
+
+Con `connectionTimeout` y `socketTimeout` en **5000 ms**, el reparto que
+encaja es: clínica ~2 s, paciente **agotando los 5 s**.
+
+**Límite honesto de esta medición**: el tiempo total es compatible con el
+timeout, pero **también** con dos envíos simplemente lentos (~3,5 s cada
+uno). La duración por sí sola no distingue los dos casos. La confirmación
+está en `confirmacion_paciente_enviada` de ese lead, o en su log.
+
+## H.3 — Análisis de los cinco puntos
+
+### Reutilización de conexión entre ambos envíos
+
+**No hay reutilización.** `createTransporter()` cachea el *objeto*
+transporter a nivel de módulo, pero `nodemailer.createTransport()` se
+llama **sin `pool`** (`grep -c pool api/_lib/mailer.js` → **0**).
+
+Sin pool, nodemailer abre **una conexión TCP+TLS nueva por cada
+`sendMail()`**. Los dos correos no comparten conexión: hacen dos
+handshakes completos y **dos autenticaciones**.
+
+### Timeout configurado
+
+```js
+const SMTP_CONNECTION_TIMEOUT_MS = 5000;
+const SMTP_SOCKET_TIMEOUT_MS = 5000;
+```
+
+Cinco segundos para abrir un TLS implícito en el 465 contra un host
+compartido, autenticar y entregar. Es un presupuesto ajustado para una
+**primera** conexión; para una **segunda inmediata** deja muy poco margen.
+
+### Comportamiento de Nodemailer
+
+Sin pool, cada `sendMail()` recorre el ciclo completo: `connect` → saludo
+→ TLS → `AUTH` → `MAIL FROM` → `DATA` → `QUIT`. Dos mensajes = dos ciclos
+completos, incluidas dos autenticaciones.
+
+### Cierre y reapertura
+
+Es exactamente el punto. La conexión del primer correo **se cierra** al
+terminar, y el segundo **abre una nueva**. Lo que agota el timeout no es
+enviar el segundo mensaje: es **volver a conectar**.
+
+Entre ambos envíos hay además un `UPDATE` a Supabase, así que la segunda
+conexión llega ~2 s después de cerrarse la primera.
+
+### Límites del servidor SMTP
+
+Los servidores de hosting compartido suelen aplicar límites de
+**conexiones por minuto y por IP**, y retardar deliberadamente conexiones
+sucesivas como medida antispam. Dos conexiones consecutivas desde la
+misma IP en pocos segundos es justo el patrón que dispara ese retardo.
+
+Encaja con la asimetría observada: la primera conexión pasa, la segunda
+se queda esperando.
+
+## H.4 — Corrección mínima propuesta (NO aplicada)
+
+**Que los dos correos viajen por una sola conexión**, en vez de abrir una
+segunda:
+
+```js
+pool: true,
+maxConnections: 1,
+```
+
+Ataca la causa directamente —elimina el segundo handshake, que es lo que
+expira— y de paso baja la latencia total de la request. Son dos líneas en
+`createTransporter()`, sin tocar `api/leads.js` ni la lógica de envío.
+
+**Alternativa descartada**: subir los timeouts a 10-15 s. No arregla nada,
+sólo espera más al mismo retardo, y alarga cada request. Trataría el
+síntoma.
+
+**Riesgo a vigilar del pool en serverless**: nodemailer mantiene la
+conexión abierta entre invocaciones de una instancia caliente. Si el
+servidor la cierra por inactividad, nodemailer debe reabrirla. Es
+manejable, pero es un cambio de comportamiento y por eso se propone en vez
+de aplicarse a ciegas.
+
+## H.5 — Por qué no se aplica todavía
+
+Porque **la medición no prueba el ETIMEDOUT**, sólo lo hace muy probable.
+Aplicar el pool ahora sería exactamente el cambio especulativo que se
+pidió evitar: si los dos envíos fueron simplemente lentos, el pool no
+cambiaría nada y habría código nuevo sin causa demostrada.
+
+**El dato que lo decide**, sobre el lead
+`37390789-37dd-48d6-8d8b-1b247207d986`:
+
+- `confirmacion_paciente_enviada = false` → el ETIMEDOUT **reprodujo**;
+  la corrección de H.4 queda justificada.
+- `confirmacion_paciente_enviada = true` → el fallo anterior fue
+  **transitorio**; no se toca nada y la validación queda completa.
+
+Equivale a leer `smtp_paciente_ok` o `smtp_paciente_error` en el log de
+esa request.
