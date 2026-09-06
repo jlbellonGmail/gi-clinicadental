@@ -282,16 +282,37 @@ def _sin_scope_de_hero(objetivo):
     ancestros = objetivo.split(".hero-content")[0]
     ancestros = re.sub(r":not\([^)]*\)", "", ancestros)
 
-    ultimo = None
-    for coincidencia in re.finditer(r"\.hero\b(?!-)", ancestros):
-        ultimo = coincidencia
-    if ultimo is None:
-        return True
+    return not any(
+        _es_ancestro(ancestros, m.end())
+        for m in re.finditer(r"\.hero\b(?!-)", ancestros)
+    )
 
-    # Entre `.hero` y `.hero-content` no puede haber un combinador de
-    # hermano: eso sacaria al elemento de dentro del hero.
-    entre = ancestros[ultimo.end():]
-    return "+" in entre or "~" in entre
+
+def _es_ancestro(ancestros, fin):
+    """¿El `.hero` que termina en `fin` es ancestro de lo que sigue?
+
+    Lo decide el combinador que cierra **su** selector compuesto, no si
+    hay algún `+` más adelante. En `.hero + .hero-content` el hero es
+    hermano; en `.hero .foo + .hero-content` es ancestro de los dos, y
+    `audit-1-intento-8.md` señaló que la versión anterior lo rechazaba.
+    """
+    resto = ancestros[fin:]
+    # Saltar lo que quede del mismo compuesto (`.hero.activo`, `.hero:hover`).
+    i = 0
+    while i < len(resto) and resto[i] not in " >+~":
+        i += 1
+    if i >= len(resto):
+        return False
+    # Primer caracter significativo tras el compuesto. `>` es hijo y
+    # cualquier otro inicio de compuesto es descendencia: en los dos casos
+    # `.hero` es ancestro. Solo `+` y `~` lo dejan como hermano.
+    for caracter in resto[i:]:
+        if caracter == " ":
+            continue
+        return caracter not in "+~"
+    # Solo quedaban espacios: lo siguiente es `.hero-content`, que por
+    # tanto desciende de este `.hero`.
+    return True
 
 
 def test_el_color_del_hero_no_se_escapa_al_reuso_sobre_fondo_claro():
@@ -335,6 +356,29 @@ def test_el_color_del_hero_no_se_escapa_al_reuso_sobre_fondo_claro():
     )
 
 
+def _partes_del_gradiente(valor):
+    """`(ángulo, [(variable, posición), ...])` de un `linear-gradient`.
+
+    Compara el **valor**, no su formato. El nombre de la función y las
+    unidades no distinguen mayúsculas en CSS; los nombres de variable
+    personalizada **sí**, así que se conservan tal cual.
+    """
+    texto = re.sub(r"\s+", " ", valor).strip()
+    gradiente = re.fullmatch(r"(?i)linear-gradient\(\s*(.+)\s*\)", texto)
+    assert gradiente, "`--gradient-primary` ya no es un `linear-gradient`: " + texto
+
+    trozos = [t.strip() for t in gradiente.group(1).split(",")]
+    assert len(trozos) >= 2, "El gradiente necesita ángulo y paradas: " + texto
+
+    angulo = trozos[0].lower()
+    paradas = []
+    for trozo in trozos[1:]:
+        parada = re.fullmatch(r"var\(\s*(--[\w-]+)\s*\)\s+(\S+)", trozo)
+        assert parada, "Parada de gradiente inesperada: " + trozo
+        paradas.append((parada.group(1), parada.group(2).lower()))
+    return angulo, paradas
+
+
 def test_el_gradiente_general_del_sitio_no_se_toca():
     """El hero se corrigió con una superficie propia, no reasignando la común.
 
@@ -348,19 +392,21 @@ def test_el_gradiente_general_del_sitio_no_se_toca():
     las paradas, cambiar el ángulo o mover las posiciones sin que el test
     dijera nada, mientras el reporte afirmaba que el valor se conservaba.
 
-    Se compara sin espacios ni mayúsculas, no la cadena literal:
+    Se comparan las **partes** del gradiente, no la cadena:
     `audit-1-intento-7.md` señaló que exigir el formato exacto hacía
-    fallar el test por quitar un espacio detrás de una coma, con el valor
-    CSS intacto. Lo que se protege es el **valor**, no cómo esté escrito.
+    fallar el test por quitar un espacio detrás de una coma, y
+    `audit-1-intento-8.md`, que bajarlo todo a minúsculas igualaba
+    `var(--PRIMARY)` con `var(--primary)` — los nombres de variable CSS
+    **sí** distinguen mayúsculas, así que ahí aceptaba un valor roto.
+
+    Resultado: el nombre de la función y las unidades se comparan sin
+    distinguir mayúsculas; los nombres de variable, distinguiéndolas.
     """
     esperado = "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)"
     valor = variables_root().get("--gradient-primary")
     assert valor, "Desapareció `--gradient-primary`"
 
-    def canonico(texto):
-        return re.sub(r"\s+", "", texto).lower()
-
-    assert canonico(valor) == canonico(esperado), (
+    assert _partes_del_gradiente(valor) == _partes_del_gradiente(esperado), (
         "`--gradient-primary` cambió de valor.\n  esperado: " + esperado
         + "\n  encontrado: " + valor.strip()
         + "\nEl hero tiene su propia superficie (`--gradient-hero`); este "
@@ -406,3 +452,84 @@ def test_la_pagina_404_no_hereda_texto_ilegible_sobre_el_hero():
         + "; ".join(culpables)
         + ". Un color inline no lo puede corregir ninguna regla CSS."
     )
+
+
+def test_el_clasificador_de_scope_distingue_ancestro_de_hermano():
+    """Tabla que fija el comportamiento de `_sin_scope_de_hero`.
+
+    Es la pieza que tres auditorías seguidas hicieron corregir, siempre
+    por casos que nadie había escrito: primero solo miraba el principio
+    del selector, después trataba `.hero + .hero-content` como scope, y
+    después rechazaba `.hero .foo + .hero-content`, que sí desciende del
+    hero. Un guard que decide por su cuenta y no está fijado por ningún
+    caso vuelve a derivar.
+    """
+    scopeados = [
+        ".hero .hero-content p",
+        ".hero>.hero-content p",
+        ".hero > .hero-content p",
+        ".hero.activo .hero-content p",
+        ".hero:hover .hero-content p",
+        # El hermano esta entre `.foo` y `.hero-content`, no despues de
+        # `.hero`: los dos siguen dentro del hero.
+        ".hero .foo + .hero-content p",
+        ".hero .foo ~ .hero-content p",
+        ".hero .wrap > .hero-content p",
+        "section.hero > div .hero-content h2",
+    ]
+    sin_scope = [
+        ".hero-content p",
+        ".equipo .hero-content h1",
+        "body .hero-content p",
+        # Hermanos del hero: el elemento queda fuera.
+        ".hero + .hero-content p",
+        ".hero ~ .hero-content p",
+        ".hero+.hero-content p",
+        ".hero~.hero-content p",
+        # Menciona `.hero` justamente para excluirlo.
+        ".foo:not(.hero) .hero-content p",
+    ]
+
+    fallos = []
+    for selector in scopeados:
+        if _sin_scope_de_hero(selector):
+            fallos.append(selector + " es descendiente de `.hero` y se marcó sin scope")
+    for selector in sin_scope:
+        if not _sin_scope_de_hero(selector):
+            fallos.append(selector + " NO desciende de `.hero` y se dio por scopeado")
+
+    assert not fallos, "El clasificador de scope se equivoca en:\n  " + "\n  ".join(fallos)
+
+
+def test_el_comparador_del_gradiente_mira_el_valor_no_el_formato():
+    """Tabla que fija `_partes_del_gradiente`.
+
+    `audit-1-intento-7.md` pidió tolerar el formato y
+    `audit-1-intento-8.md` avisó de que bajarlo todo a minúsculas
+    igualaba `var(--PRIMARY)` con `var(--primary)`, que en CSS son
+    variables distintas. Las dos direcciones quedan fijadas acá.
+    """
+    base = "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)"
+
+    equivalentes = [
+        "linear-gradient(135deg,var(--primary) 0%,var(--primary-dark) 100%)",
+        "LINEAR-GRADIENT(135DEG, var(--primary) 0%, var(--primary-dark) 100%)",
+        "linear-gradient(  135deg ,  var( --primary ) 0% , var(--primary-dark)  100%  )",
+    ]
+    distintos = [
+        # Nombre de variable en mayusculas: en CSS es otra variable.
+        "linear-gradient(135deg, var(--PRIMARY) 0%, var(--primary-dark) 100%)",
+        "linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%)",
+        "linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%)",
+        "linear-gradient(135deg, var(--primary) 10%, var(--primary-dark) 100%)",
+    ]
+
+    fallos = []
+    for valor in equivalentes:
+        if _partes_del_gradiente(valor) != _partes_del_gradiente(base):
+            fallos.append("debería dar igual y no: " + valor)
+    for valor in distintos:
+        if _partes_del_gradiente(valor) == _partes_del_gradiente(base):
+            fallos.append("debería dar distinto y no: " + valor)
+
+    assert not fallos, "El comparador del gradiente falla en:\n  " + "\n  ".join(fallos)
