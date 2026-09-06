@@ -1,7 +1,12 @@
 'use strict';
 
 const { getSupabaseClient } = require('./_lib/supabase-client');
-const { createTransporter, buildClinicNotificationEmail, buildPatientConfirmationEmail } = require('./_lib/mailer');
+const {
+  createTransporter,
+  buildClinicNotificationEmail,
+  buildPatientConfirmationEmail,
+  enviarConReintento,
+} = require('./_lib/mailer');
 const { crearLogger, crearRequestId, hashOpaco, metadatosDeError } = require('./_lib/logger');
 
 // Contrato completo de la feature 03 en runs/03-endpoint-recepcion-leads/
@@ -841,7 +846,9 @@ function createHandler(options = {}) {
         let clinicSendSucceeded = false;
         const inicioEnvioClinic = now();
         try {
-          await transporter.sendMail(clinicMailOptions);
+          // Un reintento acotado si el fallo fue transitorio. Ver
+          // `enviarConReintento` en _lib/mailer.js.
+          await enviarConReintento(transporter, clinicMailOptions);
           clinicSendSucceeded = true;
           log.info('smtp_clinica_ok', {
             lead_id: leadId,
@@ -903,7 +910,9 @@ function createHandler(options = {}) {
         let patientSendSucceeded = false;
         const inicioEnvioPatient = now();
         try {
-          await transporter.sendMail(patientMailOptions);
+          // Este es el envio que dio ETIMEDOUT en la validacion real: es
+          // el segundo de la misma invocacion.
+          await enviarConReintento(transporter, patientMailOptions);
           patientSendSucceeded = true;
           log.info('smtp_paciente_ok', {
             lead_id: leadId,
