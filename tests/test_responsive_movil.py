@@ -62,7 +62,7 @@ def reglas_de_bloque(fragmento: str):
         apertura = fragmento.find("{", i)
         if apertura == -1:
             break
-        selector = fragmento[i:apertura].strip().split("}")[-1].strip()
+        selector = re.split(r"[};]", fragmento[i:apertura])[-1].strip()
         cierre = fragmento.find("}", apertura)
         if cierre == -1:
             break
@@ -77,6 +77,12 @@ def reglas_css():
     Sin dependencias: recorre el archivo contando llaves. Se necesita
     porque buscar subcadenas sobre el CSS crudo es frágil — de hecho fue
     el origen del fallo que corrige este módulo.
+
+    El selector empieza después del último `}` **o del último `;`**: un
+    at-rule sin bloque, como el `@import` de las fuentes, no cierra con
+    llave. Sin contemplarlo, la primera regla del archivo se leía como
+    parte del `@import` y quedaba fuera del análisis — es decir, una
+    máscara global declarada ahí no se habría detectado.
     """
     css = _sin_comentarios(CSS.read_text(encoding="utf-8"))
     fuera, i = [], 0
@@ -84,7 +90,7 @@ def reglas_css():
         apertura = css.find("{", i)
         if apertura == -1:
             break
-        selector = css[i:apertura].strip().split("}")[-1].strip()
+        selector = re.split(r"[};]", css[i:apertura])[-1].strip()
         profundidad, j = 1, apertura + 1
         while j < len(css) and profundidad:
             if css[j] == "{":
