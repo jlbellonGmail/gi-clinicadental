@@ -29,17 +29,23 @@ Correcciones posteriores al release, ya en `develop`:
 | #25 | imágenes regeneradas sin marca + test de regresión (6 casos) |
 | #26 | `supabase_status_code` en el logger + 5 tests |
 
-**Candidato vigente: `origin/develop` @ `1991211`**, con **`audit-1`
-intento 3 aprobada** (`audit-1-intento-3.md`).
+**El circuito funciona en Production.** `POST /api/leads` devuelve **201**
+y crea leads. Los dos bloqueantes están resueltos.
 
-El segundo release (`main` @ `dc8a40b`) resolvió el bloqueante de las
-imágenes en Production, pero **`POST /api/leads` sigue devolviendo 500**.
-La clave legacy era un problema real y está corregida, pero no era la
-causa de este fallo: el log dio `supabase_status_code = 404`.
+| | |
+|---|---|
+| `main` | `9ad687477a2ef55463952682ddc0120910d6516c` |
+| Candidato liberado | `1991211` = SHA de `audit-1-intento-3` |
+| `develop` | idéntico a `main`, 0 commits por delante |
+| Tags | **0** |
+| `ROADMAP.md` | `[ ] 16-validacion-mvp-produccion` |
 
-Falta: release del candidato actual, deployment, leer host y pathname del
-log, corregir la causa, validación funcional completa, `audit-2`, HITL 2,
-tag y cierre.
+Verificado por Claude Code: **V1, V2, V3, V4, V11, N1 y N2**.
+Pendiente de verificación humana: **V5, V6, V7, V8, V9, V10** (paneles de
+Supabase y Vercel) y **V12** (teléfono real).
+
+Falta: esas verificaciones, la limpieza de los tres leads sintéticos,
+`audit-2`, HITL 2, tag y cierre. **El MVP no está cerrado.**
 
 `main` sigue intacto en `a034703`, sin tags, y `ROADMAP.md` en
 `[ ] 16-validacion-mvp-produccion`. **El MVP no está cerrado.**
@@ -580,6 +586,70 @@ siempre en negativo: quitando la instrumentación, 3 tests fallan.
 
 Cada uno es cierto para su SHA. Conservarlos los tres es lo que permite
 leer la historia real de la etapa; quedarse con el último la falsearía.
+
+### La causa era la configuración, y el diagnóstico no tocó el producto
+
+Cinco rondas de diagnóstico, y la causa raíz estuvo siempre del lado del
+entorno: la configuración de Supabase en Vercel. **No se cambió una sola
+línea de código de producto para arreglarla.** La clasificación clase A
+se sostuvo de principio a fin.
+
+Las dos PRs de código del episodio —#26 (`supabase_status_code`) y #28
+(`supabase_host` / `supabase_path`)— **no fueron intentos de arreglar el
+fallo**, sino de poder verlo. Cada una nació de una pregunta que el log no
+sabía responder, y ambas se pagaron solas: el `404` de la primera refutó
+una hipótesis equivocada antes de que se convirtiera en un cambio inútil.
+
+### Dos hipótesis mías refutadas, y por qué eso salió bien
+
+| Hipótesis | Refutada por | Consecuencia de haberla dado por buena |
+|---|---|---|
+| "Variables ausentes; el fallo es previo a la red" (anexo A) | El evento era `supabase_duplicados_error`, no `supabase_cliente_error` | Habría buscado en la configuración equivocada |
+| "Clave `sb_secret_` rechazada como Bearer" (anexo E) | `supabase_status_code = 404`, no `401` | Habría actualizado el paquete o envuelto `fetch` para arreglar algo que no estaba roto |
+
+En ambos casos escribí explícitamente que no las declaraba causa raíz. Es
+la única razón por la que no terminaron en código. El error del anexo A
+—descartar la clave con un razonamiento falso— sí costó dos rondas, y por
+eso quedó registrado como corrección propia y no como nota al pie.
+
+### El envío que no ocurrió, y por qué importa
+
+El primer clic sobre el botón no disparó el envío: fallo de la
+automatización del navegador, no del sitio. Se detectó porque el estado
+del formulario no coincidía con **ninguno** de los dos caminos del código
+—ni el de éxito, que resetea, ni el de error, que deja los campos.
+
+Si lo hubiera dado por bueno, el dataset oficial habría entrado en la
+ventana de idempotencia de 5 minutos y el siguiente envío habría devuelto
+**201 sin enviar correos**. Habría quedado un V6/V7 dado por válido que
+nunca ocurrió, y con evidencia aparentemente correcta.
+
+### V12 no se ejecutó, y no se disfraza
+
+`resize_window` reportó éxito con 390×844 y con 414×896, pero
+`window.innerWidth` siguió devolviendo **1696** en ambos casos. El envío
+con el dataset móvil pasó, pero **llamar "móvil" a una prueba hecha a
+1696 px sería falsear la evidencia**. Queda como pendiente explícito, no
+como aprobado.
+
+### Una sonda no planificada, registrada
+
+Tras el envío que no se disparó hacía falta saber si la API había vuelto
+a funcionar antes de volver a usar el dataset oficial. Se hizo una sonda
+con datos propios (`PRUEBA MVP16 SONDA`), que devolvió 201 y **creó una
+tercera fila** no prevista en el plan.
+
+Fue la decisión correcta —evitó quemar el dataset oficial contra una API
+que quizá seguía rota— pero es una fila de más, y se registra en el
+inventario de limpieza en vez de disimularla.
+
+### `audit-2` no se lanza con la evidencia incompleta
+
+Seis de las doce comprobaciones dependen de paneles a los que este agente
+no tiene acceso. Lanzar `audit-2` ahora sería pedirle al auditor que
+valide huecos, y un veredicto sobre evidencia incompleta no vale nada
+—precisamente el tipo de aprobación cómoda que este circuito existe para
+evitar—.
 
 ## Desviación de proceso declarada
 
