@@ -1187,3 +1187,110 @@ release.
 
 **Si no es 401**, el valor indica otra dirección y se descarta E.3 sin
 haber tocado nada — que es la razón de pedir el dato antes de corregir.
+
+---
+
+# Anexo F — Tercer deployment: instrumentación de endpoint desplegada
+
+**Fecha**: 2026-09-06.
+
+## F.1 — El 404 refuta la hipótesis del anexo E
+
+Log de Production aportado por el humano:
+
+```
+request_id                 479bf400-5cfb-4f9e-a3e4-9072f277c545
+supabase_duplicados_error  supabase_status_code = 404
+solicitud_finalizada       http_status = 500
+```
+
+**404, no 401.** La hipótesis del anexo E —la clave `sb_secret_` viajando
+como `Authorization: Bearer` y siendo rechazada— **queda refutada**.
+
+Salió bien no haberla declarado causa raíz. De haberlo hecho se habría
+"corregido" algo que no estaba roto —actualizando el paquete o
+envolviendo `fetch`— y el 404 seguiría ahí, ahora con código nuevo
+encima.
+
+## F.2 — Lo que el 404 sí permite afirmar
+
+**Ese 404 no lo emite PostgREST.**
+
+Un 404 de PostgREST por relación o esquema inexistentes devuelve un JSON
+**con `code`**: `42P01` (relación no existe) o `PGRST205` (tabla no
+encontrada en el schema cache). El log sigue registrando `sin_codigo`, y
+`sin_codigo` sólo ocurre cuando el objeto de error no trae `code`.
+
+Conclusión: **el 404 lo emite un componente delante de PostgREST**, y por
+lo tanto la petición no llega a la base. Eso deja fuera, otra vez y por
+una vía distinta, a la tabla, al esquema y a RLS.
+
+## F.3 — Qué faltaba, y por qué
+
+El status no distingue dos escenarios muy diferentes:
+
+- La ruta `/rest/v1/leads` no existe **en el host correcto**.
+- Le estamos pegando a **otro host**, que devuelve 404 a cualquier cosa.
+
+Y el objeto de error de Supabase **no dice a qué URL se llamó**. Sin ese
+dato el diagnóstico no puede avanzar sin adivinar, que es exactamente lo
+que se decidió no hacer.
+
+## F.4 — Instrumentación desplegada (PR #28 → #29)
+
+Dos campos nuevos: `supabase_host` y `supabase_path`.
+
+**La garantía de privacidad, que es lo que hace esto aceptable**: la
+consulta instrumentada lleva el email del paciente en su query string.
+
+1. `metadatosDeEndpoint()` lee **únicamente** `.host` y `.pathname`.
+   Nunca `.search`, nunca la URL completa.
+2. Los patrones del logger excluyen `?`, `=`, `&`, `@`, `%` y el espacio.
+   Un pathname con query se rechaza **entero**; el email URL-encodeado
+   (`%40`) tampoco pasa.
+
+Auditado con foco en este punto en `audit-1-intento-3.md`: **approved**.
+
+### Un defecto del doble de pruebas, encontrado por el camino
+
+`makeFakeSupabaseClient()` devolvía en `limit()` y `single()` **una
+promesa pelada**, mientras el cliente real devuelve un *thenable* que
+expone `.url`. Con ese doble, los tests de la instrumentación **pasaban
+sin probar nada**.
+
+Se corrigió el doble para replicar la forma real. Es el tipo de fallo que
+un test verde esconde, y la razón de verificar siempre en negativo:
+quitando la instrumentación, 3 tests fallan.
+
+## F.5 — Estado del deployment y disparo
+
+| | |
+|---|---|
+| `main` | `9ad687477a2ef55463952682ddc0120910d6516c` (PR #29) |
+| Candidato liberado | `1991211` — coincide con `audit-1-intento-3` |
+| Deployment | `6287860202`, `Production`, **`success`**, 2026-09-06T01:26:21Z |
+| Envío de diagnóstico | 2026-09-06T01:26:39Z → **500 `error_interno`** |
+
+El envío usó datos de diagnóstico, **no** el dataset oficial de la
+validación: como falla, no crea lead ni envía correo, así que las dos
+casillas controladas siguen sin consumirse.
+
+## F.6 — El dato que cierra el diagnóstico
+
+En **Vercel → Logs → función `api/leads` → Production**, alrededor de
+`2026-09-06T01:26:39Z`, evento `supabase_duplicados_error`. Dos campos:
+
+```
+supabase_host
+supabase_path
+```
+
+| Valor | Lectura | Corrección |
+|---|---|---|
+| `<ref>.supabase.co` + `/rest/v1/leads` | La URL es correcta; el 404 viene de otro lado | Investigar el proyecto/gateway |
+| `<ref>.supabase.co` + `/rest/v1/rest/v1/leads` | La variable trae una ruta de más | Corregir la variable |
+| Otro host | La variable apunta a otro destino | Corregir la variable |
+| Ausentes | El deployment no lleva la instrumentación | Revisar qué se desplegó |
+
+Ninguno de los dos es secreto: el host es el subdominio público del
+proyecto y el pathname es una ruta fija de la API.
