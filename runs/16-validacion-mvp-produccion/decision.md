@@ -883,6 +883,181 @@ distinción con el `overflow: hidden` scopeado legítimo— y señaló por su
 cuenta el límite correcto: **la evidencia local no cierra V12 en
 Production ni sustituye la comprobación visual en un teléfono real.**
 
+## V12 falló una segunda vez, y el diagnóstico anterior estaba incompleto
+
+La primera corrección resolvió el **desborde**: cero elementos fuera del
+viewport en los ocho anchos. V12 volvió a fallar en teléfono real de todos
+modos, y el motivo es que el desborde nunca fue el único problema.
+
+El hero era **teal sobre teal**. Sobre `--gradient-primary` (`#0ca9a9`),
+que era su fondo, el blanco puro da 2,89:1 — **ese fondo no admitía texto
+legible de ningún color de la paleta**:
+
+| Elemento | Antes | Por qué | Ahora |
+|---|---|---|---|
+| `h1` | **1,00:1** | degradado recortado al texto, terminaba en teal | 5,02:1 |
+| Párrafo | **1,51:1** | `--text-muted`, un gris para fondo claro | 4,54:1 |
+| CTA primario | **1,00:1** | relleno teal sobre fondo teal | 6,06:1 sobre su botón |
+| CTA secundario | **1,00:1** | borde y texto teal, sin relleno | 5,02:1 |
+
+No era un ajuste de tamaños: era la superficie. Se le dio al hero una
+propia, `--gradient-hero`, más oscura, y `--gradient-primary` quedó
+**intacto** para el resto del sitio.
+
+### Por qué los tests no lo vieron
+
+Los guards del intento anterior verifican que las piezas estén en su
+sitio, **no de qué color son**. Un sitio puede tener cero desbordes y ser
+ilegible, y eso es exactamente lo que pasó. La brecha se cierra con
+`tests/test_contraste_visual.py`, que calcula ratios WCAG sobre el CSS sin
+navegador.
+
+### Dos defectos que encontró esta ronda, no la auditoría
+
+**1. La corrección empeoró `404.html`.** Esa página usa `.hero`, así que
+recibió la superficie oscura nueva, y sus párrafos llevaban
+`color: var(--text-muted)` **inline**. Pasaron de 1,51:1 a **1,15:1** —
+peor que antes de tocar nada—, y al ser inline ninguna regla CSS podía
+corregirlo. Se quitó el color: ahora hereda el del hero, 4,54:1.
+
+Es el tipo de daño que produce cambiar una superficie compartida sin
+inventariar quién la usa. No lo vio la auditoría, porque no se le
+preguntó por el 404, ni los tests, que solo miraban `index.html`.
+
+**2. Mi propia medición tenía un punto ciego.** El detector de desbordes
+comparaba contra `window.innerWidth`. La referencia correcta es
+`documentElement.clientWidth`: la diferencia es justo el ancho de la barra
+de scroll, unos 23 px, y ahí se escondía un desborde real — a 320 px,
+`.service-card` llegaba a 300 sobre un área de 297, por un
+`minmax(280px, 1fr)` que no cede. Corregido con
+`minmax(min(280px, 100%), 1fr)`.
+
+Todas las mediciones de `test-report-5.md` usan ya la referencia
+corregida. **Las del reporte anterior no**, y por eso ese "0 desbordes"
+tenía un margen de error del ancho de la barra de scroll.
+
+## Tres guards que no podían fallar
+
+Los tres se detectaron **reintroduciendo el defecto**, no leyendo el
+código:
+
+1. **El parser tomaba el selector después del último `}`.** `@import` no
+   cierra con llave, así que la primera regla del archivo se leía como
+   parte del at-rule. Una máscara global declarada ahí no se detectaba.
+2. **`bloque_movil()` devolvía el `@media` con su envoltorio.**
+   `reglas_de_bloque` asume un fragmento plano, así que emparejaba cada
+   regla con el cuerpo de la anterior y `body` nunca aparecía como
+   selector: una máscara global **dentro** del breakpoint pasaba en verde.
+   **Este venía del commit que `audit-1-contingencia-codex.md` ya había
+   aprobado.**
+3. **Un carácter backspace literal (`0x08`) dentro de un regex**, por un
+   escape mal resuelto al generar el archivo. El guard de scope nunca
+   podía coincidir.
+
+Es la tercera vez en esta etapa que aparece el mismo patrón —el primero
+lo encontró `audit-1-intento-4.md`—, y la conclusión operativa quedó
+fijada: **leer un guard no basta**. Hay que reintroducir su defecto y ver
+el rojo. El arnés de verificación se corre entero en cada ronda.
+
+Más tarde apareció el reverso: un guard **demasiado estricto** es tan
+inútil como uno que no puede fallar, porque se pone en rojo por lo que no
+importa y termina desactivado. Desde entonces el arnés comprueba las dos
+direcciones: **18 defectos reintroducidos, los 18 en rojo; 4 cambios
+inocuos, los 4 en verde.**
+
+## Cinco rondas de auditoría, cuatro rechazos
+
+| Ronda | SHA | Veredicto | Hallazgos |
+|---|---|---|---|
+| `audit-1-intento-5` | `6d4f90d` | NO APROBADA | color del `h1` sin scopear; el test validaba ese mismo selector; sin guard sobre `--gradient-primary`; el reporte decía 68 px con una tabla que mostraba 75 |
+| `audit-1-intento-6` | `5492cd4` | NO APROBADA | guard de scope anclado al inicio; gradiente comprobado solo por presencia; `overflow` sensible a mayúsculas; parser no recursivo |
+| `audit-1-intento-7` | `653c0ce` | NO APROBADA | `.hero + .hero-content` tomado como scope; `:not(.hero)` idem; guard del gradiente frágil al formato |
+| `audit-1-intento-8` | `8451815` | NO APROBADA | `.hero .foo + .hero-content` rechazado siendo legítimo; minúsculas igualando `var(--PRIMARY)` con `var(--primary)` |
+| `audit-1-intento-9` | `5c94dcf` | **APROBADA** | — |
+
+Todos con Codex CLI en `-s read-only`, sobre una copia aislada del commit
+exacto, y persistidos **literalmente** con cabecera de procedencia.
+
+### Un hallazgo del auditor que no era correcto
+
+`audit-1-intento-6.md` afirma que el módulo de contraste "contiene seis
+funciones `test_`" y que por eso el reporte, al hablar de ocho, es
+incoherente. Tiene **ocho**: se le pasaron
+`test_los_dos_cta_del_hero_se_ven` y
+`test_la_pagina_404_no_hereda_texto_ilegible_sobre_el_hero`.
+`pytest --collect-only` recoge 8.
+
+Se dejó registrado como incorrecto en vez de "corregir" un reporte que
+estaba bien. Persistir la auditoría literal no obliga a aceptarla en
+bloque: obliga a responderla punto por punto. En la ronda siguiente el
+propio auditor lo verificó con `grep -c` y confirmó la cifra.
+
+### La causa de la deriva: los clasificadores no estaban testeados
+
+`_sin_scope_de_hero` se corrigió **tres rondas seguidas**, siempre por un
+caso que nadie había escrito. Cada corrección se probaba contra un
+ejemplo suelto y volvía a derivar en la siguiente. Se cerró con dos tests
+de tabla que fijan el comportamiento de los dos clasificadores: 9
+selectores que descienden del hero y 8 que no; 3 formas equivalentes del
+gradiente y 4 valores realmente distintos.
+
+## V12: qué está probado y qué no
+
+**Probado:** 31 casos a 320/360/390/412/430/768/1024/1440 en las tres
+páginas, más menú abierto, con viewport real y la referencia corregida:
+cero desbordes, cero scroll horizontal, `body overflow-x: visible`,
+header 68/80 px, contrastes por encima del mínimo AA, y el `h2` de la
+sección de equipo en 17,4:1 sobre blanco —la prueba de que el blanco del
+hero no se escapó al reuso—. Production sirve los cinco archivos
+**idénticos byte a byte** al candidato auditado.
+
+**No probado:** la comprobación visual en un **teléfono real**. Es la que
+falló dos veces y la única que esta cadena no puede sustituir: ni el
+iframe ni la identidad de archivos capturan la barra del navegador móvil,
+el `100vh` dinámico de iOS, el zoom por defecto ni el teclado virtual al
+enfocar un input.
+
+Se le presentaron al humano trece comprobaciones concretas. **Su
+respuesta fue "si todo está correcto, adelante", sin responderlas.** No
+se registra V12 como validado en dispositivo real, porque no lo está:
+declararlo sería inventar evidencia, que es justo lo que esta etapa
+lleva quince rondas evitando. Queda como la única aceptación que el HITL
+2 tiene que cubrir explícitamente.
+
+## `audit-2`: rechazada en el primer intento sobre el árbol final
+
+El `audit-2.md` original aprobó `9ad6874`. Después de emitirse, V12 volvió
+a fallar y hubo que rehacer buena parte del frontend, así que **ese
+veredicto dejó de respaldar el árbol liberado**.
+
+`audit-2-intento-2.md` (Codex, sobre `4e86134`) rechazó, y el motivo fue
+exactamente ese: el directorio contenía un `audit-2.md` que aprobaba otro
+deployment, de modo que un lector del HITL 2 podía tomarlo por vigente.
+El auditor lo dijo sin rodeos: *"El rechazo se debe exclusivamente a que
+`runs/audit-2.md` [...] está desactualizado y emite un veredicto sobre
+otro deployment."*
+
+El hallazgo es correcto y la corrección no es cosmética: se le antepuso un
+**aviso de artefacto superado**, con el SHA que auditó, por qué ya no
+aplica, y las dos imprecisiones que arrastraba —decía cuatro filas
+sintéticas donde son cinco, y daba V12 por "pendiente de ejecutar" cuando
+hoy está corregida y desplegada—. No se borra ni se reescribe: ningún
+artefacto se sobrescribe en este circuito.
+
+`audit-2-intento-3.md` (Codex, sobre el mismo `4e86134`, con el aviso ya
+puesto) **aprobó**: el aviso alcanza, y V12 y las cinco filas están
+declaradas con claridad como acciones del HITL 2, sin presentarse como
+validadas ni cerradas.
+
+En el intento rechazado, el auditor ya había dado por buenos los puntos
+que sí importaban para el cierre: sin secretos filtrados, sin datos personales
+reales, `ROADMAP.md` en `[ ]`, las suites coincidiendo con lo declarado, y
+el relato de `decision.md` transparente sobre los fallos propios —incluido
+el diagnóstico equivocado del 500, la marca en píxeles, la medición con
+`innerWidth`, los tres guards ineficaces y el empeoramiento temporal de
+`404.html`—. También confirmó que V12 y las cinco filas están declaradas
+con claridad como acciones humanas pendientes.
+
 ## Desviación de proceso declarada
 
 `AGENTS.md` define 4 subagentes (`analyst` → `reviewer` → `builder` →
@@ -910,21 +1085,44 @@ Registrados acá porque condicionan pasos concretos y no deben perderse:
    está disponible y no se va a habilitar. **Ya no hay ninguna acción
    humana pendiente en la UI de GitHub**: `docs.yml` construye siempre y
    omite el deploy solo (PR #22, verificado en la corrida `33826977524`).
-3. **Pendiente** — `<EMAIL_CONTROLADO_DESKTOP>` y
-   `<EMAIL_CONTROLADO_MOVIL>`, más la confirmación de acceso a la casilla
-   `LEADS_NOTIFICATION_EMAIL`. Bloquean P5 y V3-V7.
-4. **Pendiente** — verificación en los paneles: variables de Production en
-   Vercel (P3), y sobre todo que **`SITE_URL` o `ALLOWED_ORIGINS` contenga
-   exactamente `https://gi-clinicadental.vercel.app`** (P4, riesgo R1);
-   más la tabla `leads` con RLS y `anon` bloqueado en el proyecto Supabase
-   de Production (P6). Se registra presente/ausente, **nunca el valor**.
+3. **Resuelto.** El humano aportó las dos cuentas controladas y
+   confirmó el acceso a la casilla de notificación. P5 y V3-V7 se
+   ejecutaron con ellas.
+4. **Resuelto.** El humano verificó en los paneles: variables de
+   Production en Vercel (P3), el origen exacto
+   `https://gi-clinicadental.vercel.app` (P4, riesgo R1), y la tabla
+   `leads` con RLS y `anon` bloqueado en Supabase de Production (P6).
+   Durante V9 apareció una configuración incorrecta de Supabase —URL y
+   clave legada— que el humano corrigió recreando el proyecto con las
+   claves nuevas. Se registró presente/ausente, **nunca el valor**.
+
+5. **Pendiente** — descartar las **cinco** filas sintéticas
+   (`estado='descartado'` desde el panel de Supabase) y la **comprobación
+   visual de V12 en un teléfono real**. Las dos son acciones humanas, no
+   defectos de producto.
 
 ## Resultado
 
-Pendiente. Este archivo se completará con: resultado del preflight,
-veredicto de `audit-1`, SHA y deployment de Production, resultado de las
-doce comprobaciones, veredicto de `audit-2`, decisión de HITL 2, tag
-emitido y confirmación del cierre en `ROADMAP.md`.
+**Pendiente de HITL 2.** Estado al cierre de la parte automatizable:
+
+| | |
+|---|---|
+| Preflight | P1–P8 aprobados (`test-report-1.md`) |
+| `audit-1` | **APROBADA** sobre `5c94dcf` (`audit-1-intento-9.md`), tras cuatro rechazos |
+| `main` | `4e861340d6812b82e6b2b605e5111d2c5b80140a` (PR #38) |
+| Deployment | `6295205198`, Production, **success** |
+| V1–V11 | validadas (`test-report-2.md`, `test-report-3.md`) |
+| V12 | corregida y medida; **falta la comprobación en teléfono real** |
+| Suites | `npm test` 213/213, `pytest` 59/59, `mkdocs --strict` OK |
+| Tags | **ninguno** |
+| `ROADMAP.md` | `[ ]` |
+| Feature | sin mergear |
+
+| `audit-2` | **APROBADA** sobre `4e86134` (`audit-2-intento-3.md`), tras un rechazo |
+
+Falta: decisión de HITL 2, descartar las cinco filas sintéticas,
+confirmar V12 en un teléfono real, tag emitido por el humano y
+confirmación del cierre en `ROADMAP.md`.
 
 **El MVP no está cerrado y no se afirmará que lo está hasta que las tres
 señales existan: `[x]` en `ROADMAP.md`, tag `v1.0.0` publicado por el

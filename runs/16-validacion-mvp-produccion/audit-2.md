@@ -1,3 +1,27 @@
+# audit-2 — intento 1 — **SUPERADA, NO VÁLIDA PARA EL CIERRE**
+
+> **AVISO.** Este informe aprueba el estado de `main` **`9ad6874`** y el
+> deployment **`6287860202`**, que **ya no son los liberados**. Después de
+> emitirse, V12 volvió a fallar en teléfono real y hubo que corregir el
+> contraste del hero, `404.html` y el desborde a 320 px, con cinco rondas
+> de `audit-1` de por medio. `main` es hoy
+> **`4e861340d6812b82e6b2b605e5111d2c5b80140a`**.
+>
+> **Su veredicto `approved` no respalda el árbol liberado.** Se conserva
+> como historial —ningún artefacto se sobrescribe— pero la auditoría
+> válida para el HITL 2 es la última de la serie `audit-2-intento-N.md`.
+>
+> Dos precisiones sobre su contenido, ya registradas en `decision.md`:
+>
+> - Dice **4 filas sintéticas** pendientes de descartar; son **cinco**.
+> - Da V12 por "pendiente de ejecutar"; hoy está **corregida, medida y
+>   desplegada**, y lo que falta es solo la comprobación en un teléfono
+>   real.
+
+---
+
+## Informe original (sin modificar)
+
 # audit-2 — Auditoría independiente de la evidencia de Production
 
 > **Procedencia del artefacto**
