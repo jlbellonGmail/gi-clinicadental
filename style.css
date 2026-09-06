@@ -114,6 +114,39 @@ img {
     color: var(--white);
 }
 
+/* Boton de menu movil. Oculto por defecto: solo aparece en el
+   breakpoint movil, y solo en las paginas que declaran
+   `.has-mobile-nav` (404.html tiene un unico enlace y no lo necesita). */
+.nav-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--primary);
+    font-size: 1.4rem;
+    cursor: pointer;
+}
+
+.nav-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Antes vivia como estilo inline en index.html. Movido aca para que el
+   breakpoint movil pueda reducir el padding: con 50px fijos el
+   formulario quedaba en 201px sobre un viewport de 360px. */
+.lead-form-container {
+    background: var(--white);
+    padding: 50px;
+    border-radius: 30px;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.07);
+}
+
 /* Header */
 header {
     position: fixed;
@@ -429,5 +462,94 @@ footer {
     }
     .footer-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* ---------------------------------------------------------------
+   Movil (<=768px). Correccion del punto 16, V12.
+
+   Medido con viewport real a 360/390/412/430px antes de corregir:
+   `.nav-links` llegaba a x=460 y `.header-cta` de 460 a 703 sobre un
+   viewport de 360 -343px enteros fuera de pantalla-, y el formulario
+   media 201px. De ahi el desborde y el header cortado.
+
+   El desborde se corrige en su causa -la barra no cabia- y NO con
+   overflow-x:hidden, que solo lo habria escondido.
+   --------------------------------------------------------------- */
+@media (max-width: 768px) {
+    /* El header pasa a dos filas: barra (logo + hamburguesa) y, al
+       abrir, los paneles a ancho completo. `flex-wrap` evita
+       posicionamiento absoluto y numeros magicos dependientes de la
+       cantidad de enlaces. */
+    .has-mobile-nav .header-container {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: 68px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+
+    .has-mobile-nav .nav-toggle {
+        display: inline-flex;
+    }
+
+    .has-mobile-nav .nav-links,
+    .has-mobile-nav .header-cta {
+        display: none;
+        width: 100%;
+    }
+
+    .has-mobile-nav.nav-open .nav-links {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+        margin-top: 8px;
+    }
+
+    .has-mobile-nav.nav-open .nav-links a {
+        padding: 14px 2px;
+    }
+
+    .has-mobile-nav.nav-open .header-cta {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding-bottom: 12px;
+    }
+
+    /* Hero: altura fija 100vh recortaba el contenido en pantallas
+       bajas. Pasa a minimo, y el titulo escala con el viewport. */
+    .hero {
+        height: auto;
+        min-height: 100vh;
+        padding-top: 96px;
+        padding-bottom: 56px;
+    }
+
+    .hero-content h1 {
+        font-size: clamp(1.85rem, 7.5vw, 2.4rem);
+    }
+
+    .hero-btns {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .hero-btns .btn {
+        width: 100%;
+    }
+
+    /* El formulario aprovecha el ancho del telefono en vez de perderlo
+       en padding. */
+    .lead-form-container {
+        padding: 24px 20px;
+        border-radius: 20px;
+    }
+
+    .section {
+        padding: 64px 0;
     }
 }

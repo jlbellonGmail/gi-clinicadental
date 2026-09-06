@@ -25,13 +25,16 @@
 <body>
     <a href="#main" class="skip-link" style="position: fixed; top: -100px; left: 20px; background: var(--primary); color: var(--white); padding: 10px; border-radius: 4px; z-index: 9999; transition: top 0.3s;">Saltar al contenido principal</a>
 
-    <header>
+    <header class="has-mobile-nav">
         <div class="container header-container">
             <a href="#" class="logo">
                 <i class="fas fa-tooth"></i>
                 <span>Sonríe más</span>
             </a>
-            <nav class="nav-links">
+            <button type="button" class="nav-toggle" aria-label="Abrir menú de navegación" aria-expanded="false" aria-controls="navPrincipal">
+                <i class="fas fa-bars" aria-hidden="true"></i>
+            </button>
+            <nav class="nav-links" id="navPrincipal">
                 <a href="#inicio">Inicio</a>
                 <a href="#servicios">Servicios</a>
                 <a href="#equipo">Nuestro Equipo</a>
@@ -159,7 +162,7 @@
                             <img src="static/images/interior-clinica.webp" alt="Interior moderno de la clínica Sonríe más con tecnología CAD/CAM y scanner 3D" style="border-radius: 20px;" loading="lazy">
                         </div>
                     </div>
-                    <div class="lead-form-container" style="background: var(--white); padding: 50px; border-radius: 30px; box-shadow: 0 40px 80px rgba(0,0,0,0.07);">
+                    <div class="lead-form-container">
                         <p class="form-demo-notice" role="note" style="margin: 0 0 25px; padding: 14px 16px; border-left: 4px solid var(--primary); background: rgba(0,0,0,0.04); border-radius: 8px; font-size: 0.9rem; line-height: 1.5;">
                             <strong>Demostración técnica.</strong> Este sitio es un
                             ejemplo de portfolio, no una clínica en funcionamiento: nadie
