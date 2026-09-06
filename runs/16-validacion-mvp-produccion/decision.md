@@ -29,15 +29,17 @@ Correcciones posteriores al release, ya en `develop`:
 | #25 | imágenes regeneradas sin marca + test de regresión (6 casos) |
 | #26 | `supabase_status_code` en el logger + 5 tests |
 
-**Candidato vigente: `origin/develop` @ `8611e96`**, con
-**`audit-1` intento 2 aprobada** (`audit-1-intento-2.md`).
+**Candidato vigente: `origin/develop` @ `1991211`**, con **`audit-1`
+intento 3 aprobada** (`audit-1-intento-3.md`).
 
-Causa raíz del 500 **confirmada y corregida en el entorno**: clave legacy
-JWT reemplazada por la Secret key `sb_secret_...`. Sin redeploy manual, a
-propósito: el release construye de cero y toma el valor nuevo.
+El segundo release (`main` @ `dc8a40b`) resolvió el bloqueante de las
+imágenes en Production, pero **`POST /api/leads` sigue devolviendo 500**.
+La clave legacy era un problema real y está corregida, pero no era la
+causa de este fallo: el log dio `supabase_status_code = 404`.
 
-Falta: release `develop → main`, deployment, validación funcional
-completa, `audit-2`, HITL 2, tag y cierre.
+Falta: release del candidato actual, deployment, leer host y pathname del
+log, corregir la causa, validación funcional completa, `audit-2`, HITL 2,
+tag y cierre.
 
 `main` sigue intacto en `a034703`, sin tags, y `ROADMAP.md` en
 `[ ] 16-validacion-mvp-produccion`. **El MVP no está cerrado.**
@@ -513,6 +515,71 @@ Production. Sigue siendo cierto **para ese SHA**, y por eso no se borra ni
 se sobrescribe. `audit-1-intento-2.md` aprueba `8611e96`, que es el que se
 libera ahora. Los dos juntos cuentan la historia real; uno solo la
 falsearía.
+
+### El 404 refutó mi hipótesis del Bearer, y eso es una buena noticia
+
+El log de Production dio `supabase_status_code = 404`, no `401`. **La
+hipótesis del anexo E —que la clave `sb_secret_` viajara como Bearer y el
+gateway la rechazara— queda refutada.**
+
+Vale la pena señalar por qué salió bien: en el anexo E escribí
+explícitamente *"no lo declaro causa raíz todavía"*, precisamente para no
+repetir el error del anexo A. Si la hubiera dado por buena, habría
+"corregido" algo que no estaba roto —actualizando el paquete o
+envolviendo `fetch`— y el 404 habría seguido ahí, ahora con código nuevo
+encima.
+
+Lo que el 404 sí permite afirmar, y es un avance real: **ese 404 no lo
+emite PostgREST**. Un 404 de PostgREST por relación o esquema
+inexistentes devuelve JSON **con `code`** (`42P01`, `PGRST205`), y el log
+sigue en `sin_codigo`. Lo emite algo delante de PostgREST.
+
+### Registrar una URL exigía una garantía, no una promesa
+
+`supabase_host` y `supabase_path` (PR #28) resuelven la pregunta que el
+status no responde: **a qué URL le estamos pegando realmente**. Un 404 no
+distingue "la tabla no existe" de "el host es otro".
+
+Pero la consulta instrumentada lleva el **email del paciente en su query
+string**, así que registrar parte de esa URL sólo es aceptable con una
+garantía dura, no con cuidado:
+
+1. `metadatosDeEndpoint()` lee **únicamente** `.host` y `.pathname`.
+   Nunca `.search`, nunca la URL completa. Lo que no se lee no se puede
+   filtrar.
+2. Los patrones del logger excluyen `?`, `=`, `&`, `@`, `%` y el espacio.
+   Un pathname con query se rechaza **entero**, no truncado; un host con
+   credenciales embebidas también. El email URL-encodeado (`%40`) tampoco
+   pasa.
+
+Las consultas pasaron a construirse en dos pasos —builder aparte, luego
+`await`— porque awaitear la cadena directamente descarta el builder y con
+él la URL. La auditoría verificó que eso no altera orden de evaluación,
+respuesta HTTP ni efectos.
+
+### El doble de pruebas mentía, y eso invalidaba los tests
+
+Al escribir los tests apareció un defecto en `makeFakeSupabaseClient()`:
+`limit()` y `single()` devolvían **una promesa pelada**, mientras el
+cliente real devuelve un *thenable* que expone `.url`.
+
+Con ese doble, los tests de la instrumentación **pasaban sin probar
+nada**: el campo nunca se registraba y el test tampoco lo exigía. Se
+corrigió el doble para replicar la forma real.
+
+Es el tipo de fallo que un test verde esconde, y la razón de verificar
+siempre en negativo: quitando la instrumentación, 3 tests fallan.
+
+### `audit-1`: tres artefactos, tres candidatos, ninguno sobrescrito
+
+| Artefacto | Candidato | Estado |
+|---|---|---|
+| `audit-1.md` | `26e2a68` | approved — liberado, falló en Production |
+| `audit-1-intento-2.md` | `8611e96` | approved — liberado, el endpoint siguió fallando |
+| `audit-1-intento-3.md` | `1991211` | approved — el que se libera ahora |
+
+Cada uno es cierto para su SHA. Conservarlos los tres es lo que permite
+leer la historia real de la etapa; quedarse con el último la falsearía.
 
 ## Desviación de proceso declarada
 
