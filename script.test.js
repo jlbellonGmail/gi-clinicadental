@@ -100,6 +100,13 @@ async function montarPagina() {
         json: () => window.Promise.resolve(cuerpo),
       });
     },
+    responderConCuerpoIlegible(status) {
+      resolverActual({
+        status,
+        ok: status >= 200 && status < 300,
+        json: () => window.Promise.reject(new window.Error('Unexpected token < in JSON')),
+      });
+    },
     fallarRed(mensaje = 'network') {
       rechazarActual(new window.Error(mensaje));
     },
@@ -447,4 +454,86 @@ test('el payload enviado conserva el consentimiento y la version de la politica'
   assert.equal(cuerpo.consentimiento_privacidad, true);
   assert.match(cuerpo.version_politica_privacidad, /^v\d+-\d{4}-\d{2}-\d{2}$/);
   assert.equal(cuerpo.nombre, 'Paciente De Prueba');
+});
+
+test('un 201 con cuerpo ilegible sigue siendo exito', async () => {
+  // Hallazgo de la auditoria: antes se hacia `response.json().catch(...)`,
+  // y eso dejaba una rama ambigua -un 201 confirmado con cuerpo roto-.
+  // Ahora el cuerpo no se lee: manda el status. El lead fue creado.
+  const pagina = await montarPagina();
+  completarFormulario(pagina.documento);
+
+  enviar(pagina);
+  pagina.responderConCuerpoIlegible(201);
+  await pagina.esperarMicrotareas();
+
+  assert.equal(pagina.documento.getElementById('name').value, '');
+  assert.equal(pagina.modal.hidden, false);
+  assert.equal(pagina.error.hidden, true);
+  assert.equal(pagina.boton.disabled, false);
+});
+
+test('un 500 con cuerpo ilegible sigue siendo error', async () => {
+  const pagina = await montarPagina();
+  completarFormulario(pagina.documento);
+
+  enviar(pagina);
+  pagina.responderConCuerpoIlegible(500);
+  await pagina.esperarMicrotareas();
+
+  assert.equal(pagina.documento.getElementById('name').value, 'Paciente De Prueba');
+  assert.equal(pagina.modal.hidden, true);
+  assert.equal(pagina.error.hidden, false);
+});
+
+test('el foco no se escapa del dialogo con Tab', async () => {
+  // Con `aria-modal="true"` el resto del documento se anuncia como
+  // inerte, pero el Tab del teclado igual se escapaba: el foco terminaba
+  // en la pagina de atras, que visualmente esta tapada.
+  const pagina = await montarPagina();
+  completarFormulario(pagina.documento);
+
+  enviar(pagina);
+  pagina.responder(201);
+  await pagina.esperarMicrotareas();
+
+  const cerrar = pagina.documento.getElementById('modalExitoCerrar');
+  assert.equal(pagina.documento.activeElement, cerrar);
+
+  const tab = (shift) =>
+    pagina.documento.dispatchEvent(
+      new pagina.window.KeyboardEvent('keydown', {
+        key: 'Tab',
+        shiftKey: shift,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+
+  tab(false);
+  assert.equal(pagina.documento.activeElement, cerrar, 'Tab debe quedarse en el diálogo');
+
+  tab(true);
+  assert.equal(pagina.documento.activeElement, cerrar, 'Shift+Tab también');
+
+  // Si algo saca el foco fuera, el siguiente Tab lo devuelve.
+  pagina.documento.getElementById('name').focus();
+  tab(false);
+  assert.equal(pagina.documento.activeElement, cerrar);
+});
+
+test('con el dialogo cerrado el Tab no se interfiere', async () => {
+  const pagina = await montarPagina();
+  const nombre = pagina.documento.getElementById('name');
+  nombre.focus();
+
+  const evento = new pagina.window.KeyboardEvent('keydown', {
+    key: 'Tab',
+    bubbles: true,
+    cancelable: true,
+  });
+  pagina.documento.dispatchEvent(evento);
+
+  assert.equal(evento.defaultPrevented, false, 'Sin modal abierto, el Tab es del navegador');
+  assert.equal(pagina.documento.activeElement, nombre);
 });
