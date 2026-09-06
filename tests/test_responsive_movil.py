@@ -95,8 +95,16 @@ def reglas_css():
     llave. Sin contemplarlo, la primera regla del archivo se leía como
     parte del `@import` y quedaba fuera del análisis — es decir, una
     máscara global declarada ahí no se habría detectado.
+
+    Entra en los at-rules de forma **recursiva**: con un solo nivel de
+    descenso, un `@media` anidado dentro de un `@supports` quedaba sin
+    analizar.
     """
-    css = _sin_comentarios(CSS.read_text(encoding="utf-8"))
+    return _reglas(_sin_comentarios(CSS.read_text(encoding="utf-8")))
+
+
+def _reglas(css):
+    """Motor recursivo de `reglas_css`. Ver su docstring."""
     fuera, i = [], 0
     while i < len(css):
         apertura = css.find("{", i)
@@ -112,7 +120,10 @@ def reglas_css():
             j += 1
         cuerpo = css[apertura + 1 : j - 1]
         if selector.startswith("@"):
-            fuera.extend(reglas_de_bloque(cuerpo))
+            # Recursivo, no plano: un `@media` dentro de un `@supports`
+            # tiene sus reglas dos niveles adentro, y con un solo nivel de
+            # descenso quedaban fuera del analisis.
+            fuera.extend(_reglas(cuerpo))
         else:
             fuera.append((selector, cuerpo))
         i = j
@@ -167,10 +178,10 @@ def test_el_desborde_no_se_tapa_con_overflow_hidden():
     culpables = []
     for selector, cuerpo in reglas_css():
         objetivos = [s.strip() for s in selector.split(",")]
-        if not any(re.fullmatch(r"(html|body)", s) for s in objetivos):
+        if not any(re.fullmatch(r"(html|body)", s, re.I) for s in objetivos):
             continue
-        for valor in re.findall(r"overflow(?:-x)?\s*:\s*([a-z]+)", cuerpo):
-            if valor in ("hidden", "clip"):
+        for valor in re.findall(r"overflow(?:-x)?\s*:\s*([a-z]+)", cuerpo, re.I):
+            if valor.lower() in ("hidden", "clip"):
                 culpables.append(selector + " { overflow-x: " + valor + " }")
 
     assert not culpables, (
@@ -185,8 +196,8 @@ def test_el_breakpoint_movil_tampoco_enmascara():
     bloque = bloque_movil()
     for selector, cuerpo in reglas_de_bloque(_sin_comentarios(bloque)):
         objetivos = [s.strip() for s in selector.split(",")]
-        if any(re.fullmatch(r"(html|body)", s) for s in objetivos):
-            assert "overflow" not in cuerpo, (
+        if any(re.fullmatch(r"(html|body)", s, re.I) for s in objetivos):
+            assert "overflow" not in cuerpo.lower(), (
                 "El breakpoint móvil enmascara el desborde en " + selector
             )
 
