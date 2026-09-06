@@ -12,5 +12,8 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "nodemailer": "^9.0.5"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
   }
 }

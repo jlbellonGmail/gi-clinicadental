@@ -302,3 +302,143 @@ test('buildPatientConfirmationEmail(): incluye version en texto plano equivalent
   assert.ok(mail.text.includes('Ana Pérez'));
   assert.equal(mail.text.includes('<'), false);
 });
+
+// ---------------------------------------------------------------------
+// Reintento acotado de envio (punto 16).
+//
+// Origen: en la validacion real en Production el correo a la clinica
+// salio bien y el del paciente -segundo envio de la misma invocacion-
+// dio ETIMEDOUT. El humano confirmo que fue pasajero. La respuesta es
+// reintentar acotadamente, no alargar timeouts ni paralelizar.
+// ---------------------------------------------------------------------
+
+/** Transporter falso que falla las primeras `fallos` veces. */
+function transporterQueFalla(fallos, error) {
+  const intentos = [];
+  return {
+    intentos,
+    async sendMail(mailOptions) {
+      intentos.push(mailOptions);
+      if (intentos.length <= fallos) {
+        throw error;
+      }
+      return { messageId: 'ok' };
+    },
+  };
+}
+
+function errorCon(propiedades) {
+  return Object.assign(new Error('fallo de envio'), propiedades);
+}
+
+// `dormir` inyectado: los tests no esperan de verdad, solo registran.
+function relojFalso() {
+  const esperas = [];
+  return { esperas, dormir: async (ms) => { esperas.push(ms); } };
+}
+
+test('un envio que sale bien a la primera no se reintenta', async () => {
+  const { enviarConReintento } = require('./mailer');
+  const transporter = transporterQueFalla(0, null);
+  const reloj = relojFalso();
+
+  await enviarConReintento(transporter, { to: 'a@b.test' }, { dormir: reloj.dormir });
+
+  assert.equal(transporter.intentos.length, 1);
+  assert.equal(reloj.esperas.length, 0);
+});
+
+test('un ETIMEDOUT se reintenta una vez y puede salir bien', async () => {
+  const { enviarConReintento } = require('./mailer');
+  const transporter = transporterQueFalla(1, errorCon({ code: 'ETIMEDOUT' }));
+  const reloj = relojFalso();
+
+  const resultado = await enviarConReintento(
+    transporter,
+    { to: 'a@b.test' },
+    { dormir: reloj.dormir }
+  );
+
+  assert.equal(transporter.intentos.length, 2, 'Es el caso exacto que fallo en Production');
+  assert.deepEqual(resultado, { messageId: 'ok' });
+  assert.equal(reloj.esperas.length, 1, 'Espera entre intentos, no reintento inmediato');
+});
+
+test('el reintento esta acotado: dos fallos transitorios propagan el error', async () => {
+  const { enviarConReintento } = require('./mailer');
+  const transporter = transporterQueFalla(5, errorCon({ code: 'ETIMEDOUT' }));
+  const reloj = relojFalso();
+
+  await assert.rejects(
+    enviarConReintento(transporter, { to: 'a@b.test' }, { dormir: reloj.dormir }),
+    /fallo de envio/
+  );
+
+  assert.equal(
+    transporter.intentos.length,
+    2,
+    'Un bucle de reintentos convertiria un fallo de correo en un timeout ' +
+      'de la request entera, con el usuario esperando.'
+  );
+});
+
+test('un fallo de autenticacion NO se reintenta', async () => {
+  const { enviarConReintento } = require('./mailer');
+  const transporter = transporterQueFalla(5, errorCon({ code: 'EAUTH' }));
+  const reloj = relojFalso();
+
+  await assert.rejects(enviarConReintento(transporter, {}, { dormir: reloj.dormir }));
+
+  assert.equal(
+    transporter.intentos.length,
+    1,
+    'Reintentar credenciales invalidas no arregla nada y gasta tiempo'
+  );
+});
+
+test('un rechazo SMTP 5xx NO se reintenta y uno 4xx si', async () => {
+  const { enviarConReintento, esFalloTransitorio } = require('./mailer');
+  const reloj = relojFalso();
+
+  const permanente = transporterQueFalla(5, errorCon({ responseCode: 550 }));
+  await assert.rejects(enviarConReintento(permanente, {}, { dormir: reloj.dormir }));
+  assert.equal(permanente.intentos.length, 1);
+
+  const temporal = transporterQueFalla(1, errorCon({ responseCode: 451 }));
+  await enviarConReintento(temporal, {}, { dormir: reloj.dormir });
+  assert.equal(temporal.intentos.length, 2);
+
+  assert.equal(esFalloTransitorio(errorCon({ responseCode: 550 })), false);
+  assert.equal(esFalloTransitorio(errorCon({ responseCode: 451 })), true);
+});
+
+test('esFalloTransitorio reconoce los codigos de red pasajeros', () => {
+  const { esFalloTransitorio } = require('./mailer');
+
+  for (const code of ['ETIMEDOUT', 'ESOCKET', 'ECONNECTION', 'ECONNRESET', 'EPIPE', 'EAI_AGAIN']) {
+    assert.equal(esFalloTransitorio(errorCon({ code })), true, code + ' deberia reintentarse');
+  }
+  for (const code of ['EAUTH', 'EENVELOPE', 'EMESSAGE']) {
+    assert.equal(esFalloTransitorio(errorCon({ code })), false, code + ' NO deberia reintentarse');
+  }
+  assert.equal(esFalloTransitorio(null), false);
+  assert.equal(esFalloTransitorio(undefined), false);
+  assert.equal(esFalloTransitorio('no soy un error'), false);
+});
+
+test('el transporter reutiliza una sola conexion para los dos envios', () => {
+  process.env.SMTP_HOST = 'smtp.ejemplo.test';
+  process.env.SMTP_USER = 'usuario';
+  process.env.SMTP_PASS = 'irrelevante-para-el-test';
+  process.env.SMTP_FROM = 'no-reply@ejemplo.test';
+  process.env.LEADS_NOTIFICATION_EMAIL = 'clinica@ejemplo.test';
+
+  const { createTransporter } = require('./mailer');
+  const transporter = createTransporter();
+
+  // Sin pool cada sendMail abria su propia conexion: TCP + TLS + AUTH de
+  // nuevo para el segundo correo, que es el que dio ETIMEDOUT.
+  assert.equal(transporter.options.pool, true);
+  assert.equal(transporter.options.maxConnections, 1);
+  assert.equal(transporter.options.secure, true, 'TLS implicito, criterio no negociable');
+});

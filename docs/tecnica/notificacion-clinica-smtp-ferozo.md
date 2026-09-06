@@ -192,3 +192,60 @@ que mostrar (no hubo `INSERT`).
   localmente): toda la cobertura automática usa un transporter
   inyectado/simulado. Verificación de entregabilidad real (SPF/DKIM/DMARC)
   es el ítem `12-entregabilidad-correo-dominio` del roadmap.
+
+## Confiabilidad de los dos envíos consecutivos (punto 16)
+
+En la validación real en Production el correo a la clínica salió bien y
+el del paciente —**segundo envío de la misma invocación**— falló con
+`ETIMEDOUT`. El humano confirmó que fue pasajero: el reintento manual
+funcionó, y el lead quedó con los dos flags en `true`.
+
+Se aplicaron dos cambios acotados, y ninguno toca el contenido ni los
+destinatarios.
+
+### Una sola conexión para los dos correos
+
+`createTransporter()` ahora usa `pool: true` con `maxConnections: 1`.
+
+Sin pool, cada `sendMail` abre su propia conexión: TCP, negociación TLS y
+autenticación otra vez. El segundo envío pagaba ese costo completo por
+segunda vez, y fue justo el que falló. Con una conexión reutilizada, el
+segundo mensaje viaja por la sesión ya abierta y autenticada: **menos
+trabajo y menos superficie de fallo, no más**.
+
+Los timeouts (`connectionTimeout` y `socketTimeout`, 5 s) y el TLS
+implícito en el puerto 465 no cambian.
+
+### Un reintento, acotado
+
+`enviarConReintento()` reintenta **una sola vez** si el fallo fue
+transitorio, con una espera corta de por medio. Ambos envíos lo usan.
+
+Qué cuenta como transitorio:
+
+| Se reintenta | No se reintenta |
+|---|---|
+| `ETIMEDOUT`, `ESOCKET`, `ECONNECTION`, `ECONNRESET`, `EPIPE`, `EAI_AGAIN`, `EDNS` | `EAUTH`, `EENVELOPE`, `EMESSAGE` |
+| Rechazos SMTP **4xx** (temporarios por definición del RFC 5321) | Rechazos SMTP **5xx** (permanentes) |
+
+Reintentar credenciales inválidas o un rechazo definitivo no arregla
+nada y solo gasta tiempo con la persona esperando.
+
+**El límite de un reintento es deliberado.** La función corre dentro de
+una request HTTP; un bucle de reintentos convertiría un fallo de correo
+—que es recuperable y no afecta al lead ya insertado— en un timeout de la
+request entera. Por el mismo motivo `vercel.json` fija ahora
+`maxDuration: 30` para `api/leads.js`: le da margen al reintento sin
+depender del valor por defecto de la plataforma.
+
+La función acepta un `dormir` inyectable, para que los tests ejerciten la
+lógica sin esperar de verdad.
+
+### Lo que no cambió
+
+- El orden sigue siendo secuencial: primero la clínica, después el
+  paciente. No se paralelizó con `Promise.allSettled`.
+- Cada envío conserva su `try/catch` acotado y su propio flag/`UPDATE`.
+  Un fallo definitivo en uno no impide el otro ni afecta al 201 ya
+  decidido.
+- No se agregó instrumentación diagnóstica nueva.

@@ -35,7 +35,7 @@ BREAKPOINT_MOVIL = "max-width: 768px"
 
 
 def bloque_movil() -> str:
-    """Contenido **interno** del bloque `@media (max-width: 768px)`.
+    """Contenido **interno** de los bloques `@media (max-width: 768px)`.
 
     Devuelve lo de adentro, sin el `@media (...) {` ni la llave que
     cierra. Antes devolvía el bloque entero, y eso dejaba muerto a
@@ -46,20 +46,36 @@ def bloque_movil() -> str:
     aparecía solo, y una máscara global declarada dentro del breakpoint
     pasaba sin que nadie la viera. Verificado: se reintrodujo y el test
     seguía en verde.
+
+    Recorre **todos** los bloques con ese breakpoint, no solo el primero.
+    Hoy hay uno solo, y así debería seguir; pero leer únicamente el
+    primero convertiría a un segundo bloque en un punto ciego, que es la
+    misma clase de agujero que el anterior.
     """
     css = CSS.read_text(encoding="utf-8")
-    inicio = css.find("@media (" + BREAKPOINT_MOVIL + ")")
-    assert inicio != -1, "Falta el breakpoint móvil de la corrección V12"
-    apertura = css.find("{", inicio)
-    profundidad = 0
-    for i in range(apertura, len(css)):
-        if css[i] == "{":
-            profundidad += 1
-        elif css[i] == "}":
-            profundidad -= 1
-            if profundidad == 0:
-                return css[apertura + 1 : i]
-    raise AssertionError("El bloque del breakpoint móvil no cierra")
+    marca = "@media (" + BREAKPOINT_MOVIL + ")"
+    partes = []
+    desde = 0
+    while True:
+        inicio = css.find(marca, desde)
+        if inicio == -1:
+            break
+        apertura = css.find("{", inicio)
+        profundidad = 0
+        for i in range(apertura, len(css)):
+            if css[i] == "{":
+                profundidad += 1
+            elif css[i] == "}":
+                profundidad -= 1
+                if profundidad == 0:
+                    partes.append(css[apertura + 1 : i])
+                    desde = i + 1
+                    break
+        else:
+            raise AssertionError("El bloque del breakpoint móvil no cierra")
+
+    assert partes, "Falta el breakpoint móvil de la corrección V12"
+    return "\n".join(partes)
 
 
 def _sin_comentarios(css: str) -> str:
@@ -282,4 +298,63 @@ def test_ninguna_grilla_fija_un_minimo_mas_ancho_que_la_pantalla():
         "Hay grillas con un mínimo fijo que no cede en pantallas "
         "estrechas: " + "; ".join(culpables) + ". Usar "
         "`minmax(min(<ancho>, 100%), 1fr)`."
+    )
+
+
+def test_ninguna_regla_movil_queda_pisada_por_una_regla_base_posterior():
+    """Una adaptación móvil declarada antes que su regla base no se aplica.
+
+    Con la misma especificidad gana la última del archivo. Al mover las
+    reglas móviles del modal dentro del breakpoint, quedaron **antes** que
+    las reglas base —que estaban al final del archivo— y las tres murieron
+    en silencio: el `h2` del modal seguía en 24 px en vez de 20,8 px.
+
+    No lo detectó ningún test: el CSS era válido, los selectores existían
+    y el bloque móvil los contenía. Se encontró midiendo en un viewport
+    real. Este guard lo vuelve detectable sin navegador.
+
+    Solo compara selectores **idénticos**: ahí la especificidad empata y
+    decide el orden. Un selector base más específico es otra discusión, y
+    no es el fallo que ocurrió.
+    """
+    css = _sin_comentarios(CSS.read_text(encoding="utf-8"))
+    marca = "@media (" + BREAKPOINT_MOVIL + ")"
+    inicio = css.find(marca)
+    assert inicio != -1, "Falta el breakpoint móvil"
+
+    apertura = css.find("{", inicio)
+    profundidad, fin = 0, None
+    for i in range(apertura, len(css)):
+        if css[i] == "{":
+            profundidad += 1
+        elif css[i] == "}":
+            profundidad -= 1
+            if profundidad == 0:
+                fin = i
+                break
+    assert fin is not None, "El bloque del breakpoint móvil no cierra"
+
+    declaradas_en_movil = set()
+    for selector, cuerpo in reglas_de_bloque(css[apertura + 1 : fin]):
+        for trozo in cuerpo.split(";"):
+            if ":" in trozo:
+                declaradas_en_movil.add((selector.strip(), trozo.split(":")[0].strip()))
+
+    # Reglas base -fuera de cualquier at-rule- posteriores al breakpoint.
+    muertas = []
+    for selector, cuerpo in _reglas(css[fin + 1 :]):
+        if selector.startswith("@"):
+            continue
+        for trozo in cuerpo.split(";"):
+            if ":" not in trozo:
+                continue
+            propiedad = trozo.split(":")[0].strip()
+            if (selector.strip(), propiedad) in declaradas_en_movil:
+                muertas.append(selector.strip() + " { " + propiedad + " }")
+
+    assert not muertas, (
+        "Estas reglas del breakpoint móvil las pisa una regla base "
+        "declarada después en el archivo, así que no se aplican nunca: "
+        + "; ".join(sorted(set(muertas)))
+        + ". Las reglas base van antes del breakpoint."
     )

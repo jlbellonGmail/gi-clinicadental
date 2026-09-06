@@ -64,6 +64,14 @@ function createTransporter() {
     },
     connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
     socketTimeout: SMTP_SOCKET_TIMEOUT_MS,
+    // Punto 16: los dos correos se envian uno detras del otro en la misma
+    // invocacion. Sin pool, cada `sendMail` abre su propia conexion TCP,
+    // negocia TLS y vuelve a autenticarse; el SEGUNDO envio fue el que
+    // dio ETIMEDOUT en Production. Con una sola conexion reutilizada, el
+    // segundo mensaje viaja por la sesion ya abierta y autenticada: menos
+    // trabajo y menos superficie de fallo, no mas.
+    pool: true,
+    maxConnections: 1,
   });
 
   return cachedTransporter;
@@ -245,4 +253,90 @@ function buildPatientConfirmationEmail(lead) {
   return { to, from, replyTo, subject, html, text };
 }
 
-module.exports = { createTransporter, buildClinicNotificationEmail, buildPatientConfirmationEmail };
+
+// Codigos de error de red/SMTP que describen un fallo pasajero: la
+// conexion se cayo o tardo, no que el mensaje sea invalido. Reintentar
+// un `EAUTH` o un rechazo 5xx no arreglaria nada y solo gastaria tiempo.
+const CODIGOS_TRANSITORIOS = new Set([
+  'ETIMEDOUT',
+  'ESOCKET',
+  'ECONNECTION',
+  'ECONNRESET',
+  'EPIPE',
+  'EAI_AGAIN',
+  'EDNS',
+]);
+
+const REINTENTOS_POR_DEFECTO = 1;
+const ESPERA_ENTRE_INTENTOS_MS = 400;
+
+/**
+ * ¿Este fallo de envio vale la pena reintentarlo?
+ *
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function esFalloTransitorio(err) {
+  if (!err || typeof err !== 'object') {
+    return false;
+  }
+  if (CODIGOS_TRANSITORIOS.has(err.code)) {
+    return true;
+  }
+  // Los 4xx de SMTP son rechazos temporarios por definicion del
+  // protocolo (RFC 5321); los 5xx son permanentes.
+  const responseCode = Number(err.responseCode);
+  return Number.isInteger(responseCode) && responseCode >= 400 && responseCode < 500;
+}
+
+/**
+ * Envia un correo reintentando UNA vez si el fallo fue transitorio.
+ *
+ * Origen: en la validacion en Production el envio a la clinica salio bien
+ * y el del paciente dio `ETIMEDOUT`. El humano confirmo que fue pasajero
+ * -el reintento manual funciono-, asi que la respuesta correcta es
+ * reintentar acotadamente, no alargar los timeouts ni paralelizar.
+ *
+ * El limite es deliberado: un solo reintento. La funcion corre dentro de
+ * una request HTTP con el usuario esperando, y un bucle de reintentos
+ * convertiria un fallo de correo en un timeout de la request entera.
+ *
+ * @param {{ sendMail: (mailOptions: object) => Promise<unknown> }} transporter
+ * @param {object} mailOptions
+ * @param {{ reintentos?: number, esperaMs?: number, dormir?: (ms: number) => Promise<void> }} [opciones]
+ *   `dormir` se inyecta en los tests para no esperar de verdad.
+ * @returns {Promise<unknown>}
+ */
+async function enviarConReintento(transporter, mailOptions, opciones = {}) {
+  const reintentos = Number.isInteger(opciones.reintentos)
+    ? opciones.reintentos
+    : REINTENTOS_POR_DEFECTO;
+  const esperaMs = Number.isInteger(opciones.esperaMs)
+    ? opciones.esperaMs
+    : ESPERA_ENTRE_INTENTOS_MS;
+  const dormir =
+    typeof opciones.dormir === 'function'
+      ? opciones.dormir
+      : (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  let intento = 0;
+  for (;;) {
+    try {
+      return await transporter.sendMail(mailOptions);
+    } catch (err) {
+      if (intento >= reintentos || !esFalloTransitorio(err)) {
+        throw err;
+      }
+      intento += 1;
+      await dormir(esperaMs);
+    }
+  }
+}
+
+module.exports = {
+  createTransporter,
+  buildClinicNotificationEmail,
+  buildPatientConfirmationEmail,
+  enviarConReintento,
+  esFalloTransitorio,
+};
