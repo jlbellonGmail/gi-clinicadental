@@ -13,10 +13,30 @@ pre-release integradas a `develop`, preflight **P1-P8 aprobado** y
 | #22 | `fix/docs-pages-no-disponible` | `docs.yml` sin dependencia de Pages, `AGENTS.md` | mergeada, CI verde |
 | #23 | `fix/email-contacto-publico` | contacto público real, sitio declarado demo técnica | mergeada, CI verde |
 
-**Candidato de release: `origin/develop` @ `26e2a682bcb0eb635c9f2d3e69c1062968cd81dd`.**
+**Release ejecutado** (PR #24 → `main` @ `eaf4e6f`, deployment
+`6286569895` success), **validación en Production FALLIDA** y dos
+bloqueantes tratados:
 
-Falta: PR `develop → main`, deployment de Production, validación funcional
-real, `audit-2`, HITL 2, tag y cierre.
+| Bloqueante | Estado |
+|---|---|
+| `POST /api/leads` → 500 | **diagnosticado** — clase A (entorno). Ver `test-report-2.md`, anexos A y B. Pendiente de una verificación humana sobre `NEXT_PUBLIC_SUPABASE_URL` |
+| Marca incrustada en las imágenes | **CORREGIDO** — PR #25 |
+
+Correcciones posteriores al release, ya en `develop`:
+
+| PR | Contenido |
+|---|---|
+| #25 | imágenes regeneradas sin marca + test de regresión (6 casos) |
+| #26 | `supabase_status_code` en el logger + 5 tests |
+
+**Candidato vigente: `origin/develop` @ `8611e96`.** No se ha liberado:
+el release queda en espera deliberada para hacer **un solo deployment y
+una sola validación** una vez corregida la configuración de Supabase.
+
+Falta: verificación humana de la URL, corrección de entorno, release
+`develop → main`, deployment, validación funcional completa, `audit-2`,
+HITL 2, tag y cierre. **`audit-1` debe rehacerse**: el candidato cambió
+dos veces desde el SHA auditado.
 
 `main` sigue intacto en `a034703`, sin tags, y `ROADMAP.md` en
 `[ ] 16-validacion-mvp-produccion`. **El MVP no está cerrado.**
