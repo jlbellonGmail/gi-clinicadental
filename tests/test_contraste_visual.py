@@ -1,6 +1,6 @@
 """Guardas de contraste del hero.
 
-Origen: `runs/16-validacion-mvp-produccion/test-report-4.md`. La primera
+Origen: `runs/16-validacion-mvp-produccion/test-report-5.md`. La primera
 corrección del responsive hizo que todo entrara en el viewport, y aun así
 la validación visual en teléfono real volvió a fallar: el hero era
 **teal sobre teal**.
@@ -19,8 +19,9 @@ Este módulo sí calcula el ratio WCAG, sin navegador: resuelve las
 variables de `:root`, toma el extremo **más claro** del gradiente del
 hero como caso peor, y compara contra los colores declarados.
 
-LÍMITE: cubre el hero, que es donde falló. No es un barrido de contraste
-de todo el sitio.
+LÍMITE: cubre el hero de `index.html` y de `404.html`, que es donde
+falló, más el scope que impide que ese color se escape al reuso sobre
+fondo claro. **No es un barrido de contraste de todo el sitio.**
 """
 
 import re
@@ -126,7 +127,7 @@ def color_de(selector, propiedad):
 
 def test_el_titulo_del_hero_es_legible():
     fondo = fondo_peor_del_hero()
-    ratio = contraste(color_de(".hero-content h1", "color"), fondo)
+    ratio = contraste(color_de(".hero .hero-content h1", "color"), fondo)
     assert ratio >= AA_TEXTO, (
         "El título del hero contrasta " + str(ratio) + ":1 sobre " + fondo
         + ". Antes de la corrección era 1,00:1 —teal sobre teal— y la "
@@ -254,3 +255,96 @@ def test_el_hero_no_vuelve_al_gradiente_que_no_contrasta():
             "La parada " + parada + " del gradiente del hero deja el blanco "
             "en " + str(ratio) + ":1"
         )
+
+
+def test_el_color_del_hero_no_se_escapa_al_reuso_sobre_fondo_claro():
+    """`.hero-content` se reutiliza en la sección de equipo, fondo claro.
+
+    Hallazgo de `audit-1-intento-5.md`: `.hero-content h1` declaraba
+    `color: var(--white)` **sin scope**. Hoy no rompía nada porque esa
+    sección usa `h2`, pero la regla era global: cualquier `h1` que se
+    agregara ahí habría quedado blanco sobre blanco.
+
+    Este test prohíbe declarar en `.hero-content` sin scope cualquier
+    color que no se lea sobre el fondo claro del sitio.
+    """
+    variables = variables_root()
+    fondo_claro = resolver("var(--white)", variables)
+    culpables = []
+    for selector, props in declaraciones().items():
+        objetivos = [s.strip() for s in selector.split(",")]
+        if not any(re.match(r"^\.hero-content\b", s) for s in objetivos):
+            continue
+        valor = props.get("color")
+        if not valor:
+            continue
+        color = resolver(valor, variables)
+        if not color.strip().startswith("#"):
+            continue
+        ratio = contraste(color, fondo_claro)
+        if ratio < AA_TEXTO_GRANDE:
+            culpables.append(selector + " -> " + color + " (" + str(ratio) + ":1)")
+
+    assert not culpables, (
+        "Hay color del hero declarado sin scopear a `.hero`: "
+        + "; ".join(culpables)
+        + ". `.hero-content` se reutiliza sobre fondo claro, donde ese "
+        "color no se lee. El color del hero va en `.hero .hero-content ...`."
+    )
+
+
+def test_el_gradiente_general_del_sitio_no_se_toca():
+    """El hero se corrigió con una superficie propia, no reasignando la común.
+
+    Hallazgo de `audit-1-intento-5.md`: ningún test garantizaba que
+    `--gradient-primary` conservara su valor. Si alguien lo oscureciera
+    para "arreglar" el hero, afectaría a todo el resto del sitio, que sí
+    lo usa correctamente sobre fondo claro.
+    """
+    variables = variables_root()
+    valor = variables.get("--gradient-primary")
+    assert valor, "Desapareció `--gradient-primary`"
+    assert "var(--primary)" in valor and "var(--primary-dark)" in valor, (
+        "`--gradient-primary` dejó de ir de `--primary` a `--primary-dark`: "
+        + valor
+    )
+
+
+def test_la_pagina_404_no_hereda_texto_ilegible_sobre_el_hero():
+    """`404.html` usa `.hero`, así que le toca la superficie oscura.
+
+    Sus párrafos llevaban `color: var(--text-muted)` **inline**, un gris
+    para fondo claro: 1,15:1 sobre el hero. Inline, además, ninguna regla
+    CSS podía corregirlo. Se quitó el color para que herede el del hero.
+
+    No lo detectó la auditoría —no se le preguntó por el 404— ni el resto
+    de este módulo, que solo mira `index.html`.
+    """
+    html = (ROOT / "404.html").read_text(encoding="utf-8")
+
+    # Solo dentro de `<section class="hero">`. El footer de esa página usa
+    # `#bbb` sobre fondo oscuro, que se lee perfectamente: escanear el
+    # documento entero daba cinco falsos positivos.
+    seccion = re.search(r'<section class="hero">(.*?)</section>', html, re.S)
+    assert seccion, "`404.html` ya no tiene sección `.hero`"
+
+    fondo = fondo_peor_del_hero()
+    variables = variables_root()
+
+    culpables = []
+    for estilo in re.findall(r'style="([^"]*)"', seccion.group(1)):
+        encontrado = re.search(r"(?:^|;)\s*color\s*:\s*([^;]+)", estilo)
+        if not encontrado:
+            continue
+        color = resolver(encontrado.group(1).strip(), variables)
+        if not color.strip().startswith("#"):
+            continue
+        ratio = contraste(color, fondo)
+        if ratio < AA_TEXTO_GRANDE:
+            culpables.append(color + " (" + str(ratio) + ":1)")
+
+    assert not culpables, (
+        "`404.html` declara color inline ilegible sobre el hero: "
+        + "; ".join(culpables)
+        + ". Un color inline no lo puede corregir ninguna regla CSS."
+    )
