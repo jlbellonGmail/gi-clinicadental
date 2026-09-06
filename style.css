@@ -14,6 +14,12 @@
     --radius: 16px;
     --transition: all 0.3s ease;
     --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    /* Superficie del hero. Mas oscura que --gradient-primary a proposito:
+       sobre #0ca9a9 el texto blanco da 2.89:1, por debajo del minimo AA.
+       Con este gradiente el blanco queda entre 5.02:1 y 7.37:1. */
+    --gradient-hero: linear-gradient(135deg, #0a7c7c 0%, #066060 100%);
+    --primary-deep: #076e6e;
+    --accent-soft: #ffd9bd;
 }
 
 * {
@@ -204,7 +210,7 @@ header {
     height: 100vh;
     display: flex;
     align-items: center;
-    background: var(--gradient-primary);
+    background: var(--gradient-hero);
     position: relative;
     padding-top: 80px;
     overflow: hidden;
@@ -221,15 +227,61 @@ header {
     font-size: 3.5rem;
     line-height: 1.1;
     margin-bottom: 24px;
-    background: linear-gradient(to right, var(--secondary), var(--primary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
 }
 
+/* El color va scopeado a `.hero`, no en la regla de arriba: `.hero-content`
+   se reutiliza en la seccion de equipo, sobre fondo claro, y un blanco
+   global ahi seria invisible.
+   Antes: gradiente gris-oscuro -> teal recortado al texto, sobre un fondo
+   teal. El extremo derecho quedaba teal sobre teal: 1.00:1, literalmente
+   invisible. Blanco solido sobre el hero: 5.02-7.37:1. */
+.hero .hero-content h1 {
+    color: var(--white);
+}
+
+/* Scopeada a `.hero`: `.hero-content` se reutiliza en la seccion de
+   equipo, sobre fondo claro. El durazno solo funciona sobre la superficie
+   oscura del hero. */
+.hero .hero-content h1 .accent {
+    color: var(--accent-soft);
+}
+
+/* Sin scope a proposito: este es el color del reuso sobre fondo claro
+   (seccion de equipo). El hero lo pisa en la regla scopeada de abajo. */
 .hero-content p {
     font-size: 1.2rem;
     color: var(--text-muted);
     margin-bottom: 32px;
+}
+
+/* Contenido sobre la superficie del hero. Scopeado a `.hero` para no
+   tocar `.hero-content` cuando se reutiliza sobre fondo claro (seccion
+   de equipo). */
+.hero .hero-content p {
+    color: #eaf6f6;
+}
+
+/* Los CTA eran teal sobre teal: el primario se fundia con el fondo y el
+   secundario -borde y texto teal- quedaba en 1.00:1, invisible. */
+.hero .btn-primary {
+    background-color: var(--white);
+    color: var(--primary-deep);
+}
+
+.hero .btn-primary:hover {
+    background-color: var(--accent-soft);
+    color: var(--primary-deep);
+}
+
+.hero .btn-outline {
+    border-color: var(--white);
+    color: var(--white);
+    background: transparent;
+}
+
+.hero .btn-outline:hover {
+    background-color: var(--white);
+    color: var(--primary-deep);
 }
 
 .hero-btns {
@@ -253,7 +305,10 @@ header {
 
 .services-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    /* `min(280px, 100%)` en vez de `280px` a secas: por debajo de ~340 px
+       de viewport el minimo fijo era mas ancho que la columna disponible
+       y las tarjetas desbordaban 3 px a 320 px. */
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
     gap: 30px;
 }
 
@@ -485,12 +540,19 @@ footer {
        abrir, los paneles a ancho completo. `flex-wrap` evita
        posicionamiento absoluto y numeros magicos dependientes de la
        cantidad de enlaces. */
-    .has-mobile-nav .header-container {
-        flex-wrap: wrap;
+    /* Altura compacta para TODAS las cabeceras en movil, no solo la que
+       tiene menu: si no, la pagina legal se quedaba en 80px y la
+       composicion superior no era consistente entre paginas. */
+    .header-container {
         height: auto;
         min-height: 68px;
         padding-top: 8px;
         padding-bottom: 8px;
+        gap: 12px;
+    }
+
+    .has-mobile-nav .header-container {
+        flex-wrap: wrap;
     }
 
     .has-mobile-nav .nav-toggle {
@@ -540,6 +602,11 @@ footer {
         flex-direction: column;
         align-items: stretch;
         gap: 12px;
+        /* Apilados a ancho completo en telefono, pero con tope: sin el, a
+           768 px los botones quedaban como cintas de 705 px. A 430 px de
+           viewport el contenedor mide 367 px, por debajo del tope, asi que
+           ningun ancho de telefono se ve afectado. */
+        max-width: 420px;
     }
 
     .hero-btns .btn {
@@ -555,5 +622,69 @@ footer {
 
     .section {
         padding: 64px 0;
+    }
+
+    /* --- Branding y cabecera --------------------------------------- */
+    /* A 320-360px el logo a 1.5rem mas el icono a 1.8rem empujaban al
+       boton hamburguesa contra el borde. */
+    .logo {
+        /* Fluido y sin envolver: a 320 px, con 1.15rem fijo, "Sonrie mas"
+           caia a dos lineas y estiraba el header a 75 px. */
+        font-size: clamp(1rem, 4.2vw, 1.15rem);
+        gap: 8px;
+        white-space: nowrap;
+    }
+
+    .logo i {
+        font-size: 1.35rem;
+    }
+
+    /* Boton de accion directo en el header, sin `.header-cta`: es el
+       "Volver al inicio" de la politica de privacidad. A tamaño de
+       escritorio competia visualmente con el titulo de la pagina. */
+    .header-container > .btn {
+        padding: 9px 14px;
+        font-size: 0.85rem;
+        border-width: 1px;
+        white-space: nowrap;
+    }
+
+    /* --- Hero ------------------------------------------------------- */
+    /* `min-height: 100vh` en movil pelea con la barra dinamica del
+       navegador y puede recortar contenido. La altura la marca el
+       contenido. */
+    .hero {
+        min-height: auto;
+    }
+
+    .hero-content h1 {
+        margin-bottom: 16px;
+    }
+
+    .hero .hero-content p {
+        font-size: 1.05rem;
+        margin-bottom: 28px;
+    }
+
+    .hero-grid {
+        gap: 32px;
+    }
+
+    /* --- Paginas legales -------------------------------------------- */
+    .legal-content h1 {
+        font-size: 1.6rem;
+        line-height: 1.25;
+    }
+
+    .legal-content .legal-version {
+        margin-bottom: 24px;
+    }
+
+    .legal-content h2 {
+        font-size: 1.15rem;
+    }
+
+    .legal-content section {
+        margin-bottom: 28px;
     }
 }

@@ -35,18 +35,30 @@ BREAKPOINT_MOVIL = "max-width: 768px"
 
 
 def bloque_movil() -> str:
-    """Devuelve el texto del bloque `@media (max-width: 768px)`."""
+    """Contenido **interno** del bloque `@media (max-width: 768px)`.
+
+    Devuelve lo de adentro, sin el `@media (...) {` ni la llave que
+    cierra. Antes devolvía el bloque entero, y eso dejaba muerto a
+    `test_el_breakpoint_movil_tampoco_enmascara`: `reglas_de_bloque`
+    asume un fragmento plano, así que tomaba `@media (max-width: 768px)`
+    como si fuera un selector y a partir de ahí cada regla quedaba
+    emparejada con el cuerpo de la anterior. El selector `body` nunca
+    aparecía solo, y una máscara global declarada dentro del breakpoint
+    pasaba sin que nadie la viera. Verificado: se reintrodujo y el test
+    seguía en verde.
+    """
     css = CSS.read_text(encoding="utf-8")
     inicio = css.find("@media (" + BREAKPOINT_MOVIL + ")")
     assert inicio != -1, "Falta el breakpoint móvil de la corrección V12"
+    apertura = css.find("{", inicio)
     profundidad = 0
-    for i in range(css.find("{", inicio), len(css)):
+    for i in range(apertura, len(css)):
         if css[i] == "{":
             profundidad += 1
         elif css[i] == "}":
             profundidad -= 1
             if profundidad == 0:
-                return css[inicio : i + 1]
+                return css[apertura + 1 : i]
     raise AssertionError("El bloque del breakpoint móvil no cierra")
 
 
@@ -62,7 +74,7 @@ def reglas_de_bloque(fragmento: str):
         apertura = fragmento.find("{", i)
         if apertura == -1:
             break
-        selector = fragmento[i:apertura].strip().split("}")[-1].strip()
+        selector = re.split(r"[};]", fragmento[i:apertura])[-1].strip()
         cierre = fragmento.find("}", apertura)
         if cierre == -1:
             break
@@ -77,14 +89,28 @@ def reglas_css():
     Sin dependencias: recorre el archivo contando llaves. Se necesita
     porque buscar subcadenas sobre el CSS crudo es frágil — de hecho fue
     el origen del fallo que corrige este módulo.
+
+    El selector empieza después del último `}` **o del último `;`**: un
+    at-rule sin bloque, como el `@import` de las fuentes, no cierra con
+    llave. Sin contemplarlo, la primera regla del archivo se leía como
+    parte del `@import` y quedaba fuera del análisis — es decir, una
+    máscara global declarada ahí no se habría detectado.
+
+    Entra en los at-rules de forma **recursiva**: con un solo nivel de
+    descenso, un `@media` anidado dentro de un `@supports` quedaba sin
+    analizar.
     """
-    css = _sin_comentarios(CSS.read_text(encoding="utf-8"))
+    return _reglas(_sin_comentarios(CSS.read_text(encoding="utf-8")))
+
+
+def _reglas(css):
+    """Motor recursivo de `reglas_css`. Ver su docstring."""
     fuera, i = [], 0
     while i < len(css):
         apertura = css.find("{", i)
         if apertura == -1:
             break
-        selector = css[i:apertura].strip().split("}")[-1].strip()
+        selector = re.split(r"[};]", css[i:apertura])[-1].strip()
         profundidad, j = 1, apertura + 1
         while j < len(css) and profundidad:
             if css[j] == "{":
@@ -94,7 +120,10 @@ def reglas_css():
             j += 1
         cuerpo = css[apertura + 1 : j - 1]
         if selector.startswith("@"):
-            fuera.extend(reglas_de_bloque(cuerpo))
+            # Recursivo, no plano: un `@media` dentro de un `@supports`
+            # tiene sus reglas dos niveles adentro, y con un solo nivel de
+            # descenso quedaban fuera del analisis.
+            fuera.extend(_reglas(cuerpo))
         else:
             fuera.append((selector, cuerpo))
         i = j
@@ -149,10 +178,10 @@ def test_el_desborde_no_se_tapa_con_overflow_hidden():
     culpables = []
     for selector, cuerpo in reglas_css():
         objetivos = [s.strip() for s in selector.split(",")]
-        if not any(re.fullmatch(r"(html|body)", s) for s in objetivos):
+        if not any(re.fullmatch(r"(html|body)", s, re.I) for s in objetivos):
             continue
-        for valor in re.findall(r"overflow(?:-x)?\s*:\s*([a-z]+)", cuerpo):
-            if valor in ("hidden", "clip"):
+        for valor in re.findall(r"overflow(?:-x)?\s*:\s*([a-z]+)", cuerpo, re.I):
+            if valor.lower() in ("hidden", "clip"):
                 culpables.append(selector + " { overflow-x: " + valor + " }")
 
     assert not culpables, (
@@ -167,8 +196,8 @@ def test_el_breakpoint_movil_tampoco_enmascara():
     bloque = bloque_movil()
     for selector, cuerpo in reglas_de_bloque(_sin_comentarios(bloque)):
         objetivos = [s.strip() for s in selector.split(",")]
-        if any(re.fullmatch(r"(html|body)", s) for s in objetivos):
-            assert "overflow" not in cuerpo, (
+        if any(re.fullmatch(r"(html|body)", s, re.I) for s in objetivos):
+            assert "overflow" not in cuerpo.lower(), (
                 "El breakpoint móvil enmascara el desborde en " + selector
             )
 
@@ -227,3 +256,30 @@ def test_el_menu_movil_no_afecta_a_paginas_sin_el():
                 "Regla móvil sin scopear a `.has-mobile-nav`: dejaría a "
                 "404.html sin navegación. Línea: " + limpia
             )
+
+
+def test_ninguna_grilla_fija_un_minimo_mas_ancho_que_la_pantalla():
+    """`minmax(280px, 1fr)` desborda por debajo de ~340 px de viewport.
+
+    `.services-grid` usaba un mínimo fijo de 280 px. A 320 px el área de
+    contenido son 257 px, así que las tarjetas se salían 3 px y aparecía
+    scroll horizontal.
+
+    No lo detectó la medición anterior porque comparaba contra
+    `window.innerWidth` (320) en vez de `documentElement.clientWidth`
+    (297): la diferencia es el ancho de la barra de scroll, y ahí se
+    escondía el desborde. La forma correcta es `minmax(min(280px, 100%),
+    1fr)`, que cede cuando no hay espacio.
+    """
+    culpables = []
+    for selector, cuerpo in reglas_css():
+        for minimo in re.findall(r"minmax\(\s*([^,]+),", cuerpo):
+            minimo = minimo.strip()
+            if re.fullmatch(r"\d+(\.\d+)?(px|rem|em)", minimo):
+                culpables.append(selector + " -> minmax(" + minimo + ", ...)")
+
+    assert not culpables, (
+        "Hay grillas con un mínimo fijo que no cede en pantallas "
+        "estrechas: " + "; ".join(culpables) + ". Usar "
+        "`minmax(min(<ancho>, 100%), 1fr)`."
+    )

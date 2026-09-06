@@ -18,8 +18,40 @@
 
 ### Colores
 
-- Variable `--primary-light` reemplazado por un degradado lineal en el hero:
+- Variable `--primary-light` reemplazado por un degradado lineal:
   `var(--gradient-primary): linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)`
+
+#### Corrección de contraste del hero (validación V12, punto 16)
+
+El hero **ya no usa `--gradient-primary`**. Sobre `--primary` (`#0ca9a9`)
+el texto blanco da **2,89:1**, por debajo del mínimo AA de 4,5:1, y todo
+el contenido del hero quedaba teal sobre teal:
+
+| Elemento | Antes | Ahora |
+|---|---|---|
+| `h1` (degradado recortado al texto, terminaba en teal) | **1,00:1** | 5,02:1 |
+| Párrafo (usaba `--text-muted`, pensado para fondo claro) | **1,51:1** | 4,54:1 |
+| CTA primario (relleno teal sobre fondo teal) | **1,00:1** | 6,06:1 sobre su botón |
+| CTA secundario (borde y texto teal) | **1,00:1** | 5,02:1 |
+
+Variables nuevas, todas acotadas al hero:
+
+- `--gradient-hero: linear-gradient(135deg, #0a7c7c 0%, #066060 100%)` —
+  superficie del hero, deliberadamente más oscura que
+  `--gradient-primary`, que se conserva para el resto del sitio.
+- `--primary-deep: #076e6e` — texto del CTA primario sobre relleno blanco.
+- `--accent-soft: #ffd9bd` — acento del `h1`. Da **3,80:1**, que cumple AA
+  como **texto grande** (el `h1` nunca baja de 29,6 px). Aclararlo hasta
+  4,5:1 exigiría `#fff0e6`, indistinguible del blanco del resto del
+  título: se perdería el acento sin ganar legibilidad.
+
+Las reglas de color del hero están **scopeadas a `.hero`** porque
+`.hero-content` se reutiliza en la sección de equipo, que va sobre fondo
+claro. Sin ese scope, ese contenido quedaría blanco sobre blanco.
+
+`tests/test_contraste_visual.py` calcula estos ratios sobre el CSS, sin
+navegador, y verifica el tamaño del `h1` en vez de asumir que califica
+como texto grande.
 - Variable `--bg-light` cambió de `#f8fbfa` a `#f0f8f7` (fondo más limpio, tono azul-verde suave).
 - Variable `--text` cambiado de `#333333` a `#2d3a3a` (negro-gris más legible).
 - Variable `--text-muted` cambiado de `#666666` a `#6b7c7c` (texto secundario mejorado).
