@@ -44,12 +44,16 @@ Verificado por Claude Code: **V1, V2, V3, V4, V11, N1 y N2**.
 Pendiente de verificación humana: **V5, V6, V7, V8, V9, V10** (paneles de
 Supabase y Vercel) y **V12** (teléfono real).
 
-**`audit-2` aprobada** (`audit-2.md`), sin bloqueantes. **11 de 12
-validaciones con evidencia suficiente.**
+**V12 = FAIL** en teléfono real. Corregido en las PRs #30 y #31, con
+medición de viewport real antes y después (`test-report-4.md`).
 
-Falta: **V12** (render móvil, comprobación visual humana), la limpieza de
-las **cinco** filas sintéticas a `descartado`, HITL 2, tag y cierre.
-**El MVP no está cerrado.**
+**Candidato: `e783b83`**, sin liberar. `audit-2` sobre `9ad6874` queda
+**invalidada**: el candidato cambió.
+
+**Bloqueo actual**: `audit-1` sobre `e783b83` no pudo producir un
+artefacto íntegro tras cuatro ejecuciones (ver la desviación técnica más
+abajo). No se declara aprobada. **El MVP no está cerrado** y el release
+espera decisión humana.
 
 `main` sigue intacto en `a034703`, sin tags, y `ROADMAP.md` en
 `[ ] 16-validacion-mvp-produccion`. **El MVP no está cerrado.**
@@ -705,6 +709,86 @@ dato que las decidía. Las tres resultaron falsas. **El diagnóstico duró
 más, y el código quedó intacto**: la causa raíz siempre estuvo en el
 entorno, y las dos únicas PRs de código del episodio (#26 y #28) fueron
 instrumentación para poder ver, no intentos de arreglar a ciegas.
+
+### DESVIACIÓN TÉCNICA: `audit-1` sobre `e783b83` no pudo producir un artefacto íntegro
+
+**No se declara `audit-1` aprobada para este candidato.** Se registra el
+fallo en vez de presentarlo como aprobación.
+
+#### Qué se intentó
+
+Cuatro ejecuciones reales de OpenCode sobre el candidato `e783b83`, todas
+con el mismo auditor independiente (`opencode/nemotron-3-ultra-free`,
+modelo distinto al constructor, sobre copia aislada sin `.git`):
+
+| # | Configuración | Resultado |
+|---|---|---|
+| 1 | Árbol completo (185 archivos) | **Killed** — 0 bytes de salida |
+| 2 | Árbol completo, prompt sin pedir estado de git | **Timeout 10 min** — falló al intentar `git tag`: el agente pidió permiso de directorio externo y se auto-rechazó |
+| 3 | Árbol completo, prompt ajustado | Emitió `status: approved` y **se cortó a mitad del informe**: 5.076 bytes, secciones 1 y 2 de 8 |
+| 4 | **Árbol mínimo (7 archivos)** + todos los datos dados como contexto, sin git ni shell | **Timeout 9 min — 0 bytes**, sin registrar siquiera una llamada a herramienta |
+
+La ejecución 4 se diseñó específicamente para eliminar las causas de las
+tres anteriores: se le pasó un directorio con **sólo** los archivos
+auditables más el diff exacto, y todos los datos de estado —SHA, suites,
+tags, ROADMAP— entregados en el prompt para que no necesitara ejecutar
+nada. Aun así no produjo salida.
+
+#### Por qué no se usa el informe de la ejecución 3
+
+Emitió `status: approved`, y sería cómodo tomarlo. **No se toma.** El
+informe está truncado: contiene el veredicto y dos de las ocho secciones
+que se le pidieron, y falta precisamente lo que más importa —el análisis
+del scoping, la accesibilidad del menú, la no degradación de desktop y la
+suficiencia de la evidencia—.
+
+Un veredicto emitido antes de completar el análisis no es una auditoría;
+es una primera impresión. Persistirlo como `audit-1-intento-5.md`
+aprobada daría una garantía que nadie verificó, que es exactamente la
+aprobación cómoda que este circuito existe para evitar. Con más razón
+después de haber persistido íntegra la auditoría que **rechazó** el
+candidato anterior.
+
+#### Diagnóstico del fallo
+
+No es un problema del candidato: es del entorno de auditoría. La
+evidencia lo respalda —el mismo auditor, con el mismo modelo y el mismo
+método, **completó sin problemas** las auditorías de `26e2a68`,
+`8611e96`, `1991211`, la `audit-2` sobre `9ad6874` y el rechazo de
+`689f480`—. La degradación es posterior y progresiva: primero un kill,
+luego un timeout, luego un truncamiento, y por último ninguna salida.
+
+La causa más probable es la disponibilidad del modelo gratuito, que es el
+único al que hay acceso: OpenRouter está sin crédito y `opencode-go` sin
+saldo, como ya se registró al ejecutar `audit-1.md`.
+
+#### Estado en que queda el candidato
+
+Lo que **sí** está verificado sobre `e783b83`, por medición directa y
+reproducible:
+
+| | |
+|---|---|
+| `npm test` | 213/213 |
+| `pytest tests/` | 48/48 |
+| `mkdocs build --strict` | OK |
+| CI en `develop` | verde |
+| Desborde a 320/360/390/412/430/768/1024/1440 y en las 3 páginas | **0 elementos fuera del viewport**, ya sin la máscara global |
+| Desktop a 1024 y 1440 | idéntico a antes de la corrección |
+| Tests de regresión | verificados en negativo: fallan cuando deben |
+
+Y lo que **no** está: un dictamen independiente sobre este SHA.
+
+#### Decisión que corresponde al humano
+
+No se procede al release. La opción que se propone es concentrar el
+control en **una `audit-2` completa y reforzada sobre el SHA final**
+—que la secuencia acordada exige de todos modos, y que audita código,
+Production y evidencia a la vez—, en lugar de bloquear la etapa por una
+limitación del proveedor del auditor.
+
+Es una decisión del humano, no del agente, porque implica liberar a
+`main` un candidato sin `audit-1` íntegra.
 
 ## Desviación de proceso declarada
 
