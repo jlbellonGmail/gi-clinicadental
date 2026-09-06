@@ -199,3 +199,74 @@ Por eso V12 **no se declara PASS con esto**. Falta:
 2. Repetir esta medición contra Production.
 3. **Comprobación visual final en un teléfono real**, que es la que
    originalmente falló y la única que puede cerrar el criterio.
+
+---
+
+## Revalidación en Production
+
+**Fecha**: 2026-09-06.
+
+| | |
+|---|---|
+| `main` | `fa20f9b0ace68b4090176a59ce46f65af4acfc87` |
+| Candidato liberado | `e783b83` — el mismo que aprobó `audit-1-contingencia-codex.md` |
+| Deployment | `6293654967`, `Production`, **`success`**, 2026-09-06T13:45:05Z |
+
+### El banco de medición no se puede usar contra Production
+
+El sitio envía **`X-Frame-Options: DENY`**, así que el navegador se niega
+a renderizarlo dentro de un `<iframe>` y el acceso al documento embebido
+falla con `SecurityError`. Es la cabecera de seguridad de `vercel.json`
+**funcionando como debe** — no un defecto—, pero inutiliza la técnica que
+permitió medir en local.
+
+### La equivalencia se demuestra por identidad de los archivos servidos
+
+En vez de inventar otra medición, se comprobó que Production sirve
+**exactamente el mismo código** que se midió:
+
+| Archivo servido por Production | Comparación con el candidato |
+|---|---|
+| `style.css` | **idéntico** (11.553 bytes) |
+| `index.html` | **idéntico** (16.003 bytes) |
+| `script.js` | **idéntico** (8.478 bytes) |
+| `404.html` | **idéntico** (3.594 bytes) |
+| `politica-privacidad.html` | **idéntico** (9.030 bytes) |
+
+Comparación byte a byte tras normalizar fin de línea. Siendo el mismo
+CSS, el mismo HTML y el mismo JS, interpretados por el mismo motor de
+render, **las mediciones locales aplican a Production sin extrapolación**.
+
+### V1 revalidado sobre Production
+
+| Sonda | Resultado |
+|---|---|
+| `GET /` | **200** |
+| `GET /api/leads` | **405** |
+| `GET /politica-privacidad.html` | **200** |
+| `GET /404.html` | **200** |
+| `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` | las tres presentes |
+
+### Por qué no se repiten V4–V10
+
+El diff entre el `main` anterior (`9ad6874`) y el actual (`fa20f9b`)
+toca **únicamente** `index.html`, `script.js`, `style.css` y
+`tests/test_responsive_movil.py`.
+
+**No cambió nada de `api/`, `vercel.json`, `package.json`,
+`package-lock.json` ni `supabase/`.** El backend es el mismo binario
+lógico y las variables de entorno no se tocaron, así que la evidencia de
+V4 a V10 —recogida sobre el deployment anterior y confirmada por el
+humano— sigue siendo válida.
+
+Repetir el circuito completo crearía una sexta fila sintética y dos
+correos más sin aportar información nueva, en contra de la instrucción
+explícita de no repetir pruebas destructivas.
+
+### Lo único que falta para cerrar V12
+
+**La comprobación visual en un teléfono real.** Es la que originalmente
+falló y la única que esta cadena de evidencia no puede sustituir: ni el
+iframe ni la identidad de archivos capturan la barra del navegador móvil,
+el `100vh` dinámico de iOS, el zoom por defecto ni el teclado virtual al
+enfocar un input.
