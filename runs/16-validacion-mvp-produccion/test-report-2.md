@@ -1334,15 +1334,15 @@ V7 y V8 es el lead `PRUEBA SMTP`, no los míos**. Atribuirles flags en
 | **V6** | Aviso a la clínica | ✅ **PASS** | Confirmación humana — recibido en `sonriamas-contactos@nextgia.io` |
 | **V7** | Confirmación al paciente | ✅ **PASS** | Confirmación humana — recibido, y **aclara que el turno no está confirmado** |
 | **V8** | Flags y consentimiento | ✅ **PASS** | Confirmación humana — `consentimiento_privacidad`, `notificacion_clinica_enviada` y `confirmacion_paciente_enviada` en `true` |
-| **V9** | Logs correlacionados | ⛔ **pendiente** | Requiere el panel de Vercel |
-| **V10** | Sin PII ni secretos en logs | ⛔ **pendiente** | Requiere el panel de Vercel |
+| **V9** | Logs correlacionados | ✅ **PASS** | Anexo I.2 — lead `37390789-…` con ambos flags en `true`, más la secuencia correlacionada observada en `87854053-…` |
+| **V10** | Sin PII ni secretos en logs | ✅ **PASS** | Anexo I.3 — confirmación humana: sólo `ip_hash`, nada en claro |
 | **V11** | Desktop | ✅ **PASS** | `test-report-3.md` §V11 |
 | **V12** | Móvil | ⛔ **pendiente** | Requiere un teléfono real — ver G.3 |
 | **N1** | `GET /api/leads` → 405 | ✅ **PASS** | `test-report-3.md` |
 | **N2** | Formulario sin consentimiento | ✅ **PASS** | `test-report-3.md` |
 
-**9 de 12 con evidencia suficiente.** Las tres pendientes dependen de
-accesos que este agente no tiene, no de pruebas por ejecutar.
+**11 de 12 con evidencia suficiente.** La única pendiente es **V12**, que
+requiere mirar el render en un teléfono real (ver G.3).
 
 ## G.2 — Configuración de Production confirmada
 
@@ -1550,3 +1550,79 @@ cambiaría nada y habría código nuevo sin causa demostrada.
 
 Equivale a leer `smtp_paciente_ok` o `smtp_paciente_error` en el log de
 esa request.
+
+---
+
+# Anexo I — Cierre de V9 y V10
+
+**Fecha**: 2026-09-06.
+
+## I.1 — El ETIMEDOUT era transitorio
+
+Confirmado por el humano sobre el lead
+`37390789-37dd-48d6-8d8b-1b247207d986`, el de la prueba controlada del
+anexo H:
+
+```
+notificacion_clinica_enviada  = true
+confirmacion_paciente_enviada = true
+```
+
+**Los dos envíos funcionaron.** El `ETIMEDOUT` de la request
+`87854053-…` fue un fallo transitorio de red/SMTP, no un defecto
+reproducible.
+
+**Decisión: no se aplica el pool, no se tocan los timeouts, no se cambia
+nada de SMTP.** La corrección propuesta en H.4 queda **descartada por
+falta de causa**, que es exactamente para lo que se pidió el dato antes
+de tocar código.
+
+Vale la pena señalar el contraste con el anexo H.2: la medición de 7,92 s
+apuntaba con fuerza al timeout, y **se equivocaba**. Es la tercera
+hipótesis mía que los datos refutan en esta etapa, y la tercera vez que
+declararla "probable pero no probada" evitó un cambio de código
+innecesario.
+
+## I.2 — V9: logs correlacionados ✅ PASS
+
+Evidencia sobre el lead `37390789-37dd-48d6-8d8b-1b247207d986`:
+
+| Evento | Cómo queda evidenciado |
+|---|---|
+| `solicitud_recibida` | La request llegó y devolvió 201 |
+| `validacion_aceptada` | El payload pasó todas las validaciones; si no, habría sido 4xx |
+| `supabase_insercion_ok` | **La fila existe** en `public.leads` con ese `id` |
+| `smtp_clinica_ok` | `notificacion_clinica_enviada = true` |
+| `smtp_paciente_ok` | `confirmacion_paciente_enviada = true` |
+| `solicitud_finalizada` con `http_status: 201` | **201 medido directamente** en la respuesta HTTP |
+
+La cadena es concluyente por construcción del código: cada flag se
+escribe **únicamente** en la rama de éxito del envío correspondiente,
+inmediatamente después de emitir su evento `_ok`. Que ambos estén en
+`true` implica necesariamente que ambos eventos se emitieron.
+
+**Precisión sobre el alcance de esta evidencia**: el `request_id` de esa
+request no quedó capturado —se leyó la fila, no el log—, así que la
+correlación por `request_id` no se verificó *para esta request en
+concreto*. Sí se verificó en la request `87854053-…`, donde el humano
+observó los seis eventos correlacionados; la única diferencia allí fue
+`smtp_paciente_error` en vez de `smtp_paciente_ok`.
+
+Entre ambas requests la secuencia completa queda cubierta: la
+correlación en una, el camino de éxito completo en la otra.
+
+## I.3 — V10: privacidad ✅ PASS
+
+Confirmado por el humano sobre los logs revisados. **No aparecen en
+claro**: nombre, email, teléfono, mensaje, IP real, contraseñas, tokens,
+claves, `Authorization` ni cookies.
+
+Aparece únicamente `ip_hash`, que es el comportamiento correcto: el hash
+truncado que la feature 04 introdujo precisamente para no persistir la IP
+en texto plano.
+
+Es la comprobación que más importaba de las doce. La garantía de la
+feature 15 —lista blanca de campos, ningún campo de texto libre— se
+sostiene en Production con datos reales, incluyendo el camino de error:
+la request `87854053-…` registró un `smtp_paciente_error` y tampoco
+filtró nada.
