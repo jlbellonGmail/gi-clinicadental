@@ -126,6 +126,10 @@ function makeFakeSupabaseClient({
   // toma `postgrest-js` cuando la respuesta no es JSON: un objeto plano
   // con `message` y SIN `name` ni `code`.
   errorOnSelect = { message: 'fallo simulado de Supabase (select)' },
+  // Endpoint que expone el builder. El cliente real lo trae en `.url`;
+  // el falso lo expone para poder verificar que se registran host y
+  // pathname, y -sobre todo- que el query string NO se registra.
+  urlBase = 'https://ejemplo.supabase.co/rest/v1',
 } = {}) {
   const calls = [];
   const selectCalls = [];
@@ -144,18 +148,22 @@ function makeFakeSupabaseClient({
             select(columns) {
               insertSelectCalls.push(columns);
               return {
-                async single() {
-                  if (fail) {
-                    return {
-                      data: null,
-                      error: { message: 'fallo simulado de Supabase' },
-                      status: insertStatus,
-                    };
-                  }
+                single() {
+                  const respuesta = fail
+                    ? {
+                        data: null,
+                        error: { message: 'fallo simulado de Supabase' },
+                        status: insertStatus,
+                      }
+                    : {
+                        data: { id, fecha_creacion: fechaCreacion },
+                        error: null,
+                        status: insertStatus,
+                      };
                   return {
-                    data: { id, fecha_creacion: fechaCreacion },
-                    error: null,
-                    status: insertStatus,
+                    url: `${urlBase}/${table}?select=${encodeURIComponent(columns)}`,
+                    then: (alCumplir, alFallar) =>
+                      Promise.resolve(respuesta).then(alCumplir, alFallar),
                   };
                 },
               };
@@ -165,6 +173,9 @@ function makeFakeSupabaseClient({
         select(columns) {
           const filters = {};
           const builder = {
+            // El query string incluye el email, igual que en el cliente
+            // real. Los tests verifican que NO llegue a ningun log.
+            url: `${urlBase}/${table}?select=${columns}&email=ilike.${encodeURIComponent(PII.email)}`,
             ilike(column, value) {
               filters[column] = { op: 'ilike', value };
               return builder;
@@ -177,12 +188,16 @@ function makeFakeSupabaseClient({
               filters[column] = { op: 'gte', value };
               return builder;
             },
-            async limit(n) {
+            limit(n) {
               selectCalls.push({ table, columns, filters, limit: n });
-              if (failOnSelect) {
-                return { data: null, error: errorOnSelect, status: selectStatus };
-              }
-              return { data: existingLeads, error: null, status: selectStatus };
+              const respuesta = failOnSelect
+                ? { data: null, error: errorOnSelect, status: selectStatus }
+                : { data: existingLeads, error: null, status: selectStatus };
+              // Thenable con `.url`, como PostgrestTransformBuilder.
+              return {
+                url: builder.url,
+                then: (alCumplir, alFallar) => Promise.resolve(respuesta).then(alCumplir, alFallar),
+              };
             },
           };
           return builder;
@@ -2872,3 +2887,95 @@ test('f16: flag_actualizacion_error tambien registra el status', async () => {
   assert.equal(fallos[0].lead_id, 'f1600000-0000-0000-0000-0000000000f1');
 });
 
+// ---------------------------------------------------------------------
+// f16: supabase_host / supabase_path — a que URL le estabamos pegando
+// ---------------------------------------------------------------------
+//
+// Origen: runs/16-validacion-mvp-produccion/test-report-2.md, anexo F.
+//
+// Con `supabase_status_code` ya instrumentado, Production devolvio 404.
+// Pero un 404 no distingue "la tabla no existe" de "le estamos pegando
+// al host equivocado", y el error de Supabase no dice a que URL se
+// llamo. Estos dos campos cierran esa pregunta.
+//
+// REGLA DURA: se registran host y pathname, NUNCA el query string. La
+// consulta de duplicados lleva el email del paciente ahi.
+
+test('f16: supabase_duplicados_error registra host y pathname del endpoint', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({ failOnSelect: true, selectStatus: 404 });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const evento = eventos.find((e) => e.evento === 'supabase_duplicados_error');
+  assert.ok(evento);
+  assert.equal(evento.supabase_host, 'ejemplo.supabase.co');
+  assert.equal(evento.supabase_path, '/rest/v1/leads');
+});
+
+test('f16: el query string NUNCA llega al log, aunque lleve el email', async () => {
+  // Es la garantia que hace aceptable registrar la URL. El builder falso
+  // incluye el email en la query, igual que el real.
+  const { eventos, texto } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({ failOnSelect: true, selectStatus: 404 });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: payloadConPii(), ip: PII.ip }), makeRes());
+  });
+
+  const evento = eventos.find((e) => e.evento === 'supabase_duplicados_error');
+  assert.ok(evento);
+
+  // Ni el email, ni su forma URL-encodeada, ni el separador de query.
+  assertSinPiiNiSecretos(texto, '(endpoint en supabase_duplicados_error)');
+  assert.equal(texto.includes(encodeURIComponent(PII.email)), false);
+  assert.equal(String(evento.supabase_path).includes('?'), false);
+  assert.equal(String(evento.supabase_path).includes('email'), false);
+});
+
+test('f16: supabase_insercion_error tambien registra host y pathname', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({ fail: true, insertStatus: 404 });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const evento = eventos.find((e) => e.evento === 'supabase_insercion_error');
+  assert.ok(evento);
+  assert.equal(evento.supabase_host, 'ejemplo.supabase.co');
+  assert.equal(evento.supabase_path, '/rest/v1/leads');
+});
+
+test('f16: un endpoint con /rest/v1 duplicado se ve en el pathname', async () => {
+  // El escenario que este campo existe para detectar: si la variable de
+  // entorno trajera una ruta de mas, el pathname lo delata.
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({
+      failOnSelect: true,
+      selectStatus: 404,
+      urlBase: 'https://ejemplo.supabase.co/rest/v1/rest/v1',
+    });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const evento = eventos.find((e) => e.evento === 'supabase_duplicados_error');
+  assert.equal(evento.supabase_path, '/rest/v1/rest/v1/leads');
+});
+
+test('f16: un host que no es Supabase se ve en el log', async () => {
+  // El otro escenario: la variable apuntando a otro destino. Sin este
+  // campo, un 404 asi es indistinguible de una tabla inexistente.
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({
+      failOnSelect: true,
+      selectStatus: 404,
+      urlBase: 'https://gi-clinicadental.vercel.app/rest/v1',
+    });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const evento = eventos.find((e) => e.evento === 'supabase_duplicados_error');
+  assert.equal(evento.supabase_host, 'gi-clinicadental.vercel.app');
+});

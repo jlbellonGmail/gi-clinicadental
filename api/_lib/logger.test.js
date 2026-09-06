@@ -162,6 +162,8 @@ test('la lista blanca no contiene ningun campo de texto libre', () => {
     'codigo',
     'smtp_response_code',
     'supabase_status_code',
+    'supabase_host',
+    'supabase_path',
     'huella',
     'duracion_ms',
   ]);
@@ -434,4 +436,35 @@ test('supabase_status_code: acepta enteros y descarta texto (f16)', () => {
   // Texto libre: el campo se descarta entero, no se trunca.
   assert.equal('supabase_status_code' in parseadas[2], false);
   assert.equal(JSON.stringify(parseadas[2]).includes('paciente@example.com'), false);
+});
+
+test('supabase_host / supabase_path: aceptan endpoint y rechazan cualquier query (f16)', () => {
+  const { parseadas } = capturarLogs(() => {
+    emitir('error', 'supabase_duplicados_error', {
+      request_id: 'r1',
+      supabase_host: 'abcdef.supabase.co',
+      supabase_path: '/rest/v1/leads',
+    });
+    // Un pathname con query se rechaza entero: `?` y `=` no estan en el
+    // patron. Es la defensa que hace aceptable registrar la URL, porque
+    // la query de duplicados lleva el email del paciente.
+    emitir('error', 'supabase_duplicados_error', {
+      request_id: 'r2',
+      supabase_path: '/rest/v1/leads?email=ilike.paciente@example.com',
+    });
+    // Y un host con credenciales embebidas tampoco pasa.
+    emitir('error', 'supabase_duplicados_error', {
+      request_id: 'r3',
+      supabase_host: 'usuario:clave@abcdef.supabase.co',
+    });
+  });
+
+  assert.equal(parseadas[0].supabase_host, 'abcdef.supabase.co');
+  assert.equal(parseadas[0].supabase_path, '/rest/v1/leads');
+
+  assert.equal(parseadas[1].supabase_path, 'no_valido');
+  assert.equal(JSON.stringify(parseadas[1]).includes('paciente@example.com'), false);
+
+  assert.equal(parseadas[2].supabase_host, 'no_valido');
+  assert.equal(JSON.stringify(parseadas[2]).includes('clave'), false);
 });
