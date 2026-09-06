@@ -879,7 +879,7 @@ actualizado tras la ampliación de alcance del envío del formulario:
 | | |
 |---|---|
 | Preflight | P1–P8 aprobados (`test-report-1.md`) |
-| `audit-1` (responsive y contraste) | **APROBADA** sobre `5c94dcf` (`audit-1-intento-9.md`), tras cuatro rechazos |
+| `audit-1` | **APROBADA** sobre `5c94dcf` (`audit-1-intento-9.md`). La serie tiene **cinco rechazos**: `intento-4` (máscara global de desborde) e `intentos 5 a 8` (contraste y solidez de los guards) |
 | `audit-3` (envío del formulario) | **APROBADA** sobre `3c66c8a` (`audit-3-envio-formulario-intento-3.md`), tras dos rechazos |
 | `main` | **`109d0afe75803f0e6f8e3e7ae40127d66cee04ef`** (PR #42) |
 | Deployment | **`6298664005`**, Production, **success** |
@@ -891,6 +891,26 @@ actualizado tras la ampliación de alcance del envío del formulario:
 | Tags | **ninguno** |
 | `ROADMAP.md` | `[ ]` |
 | Feature | sin mergear |
+
+### Veredictos de la serie `audit-1`, uno por uno
+
+| Artefacto | SHA | Veredicto |
+|---|---|---|
+| `audit-1.md` | `26e2a68` | approved |
+| `audit-1-intento-2.md` | `8611e96` | approved |
+| `audit-1-intento-3.md` | `1991211` | approved |
+| `audit-1-intento-4.md` | `689f480` | **rejected** |
+| `audit-1-contingencia-codex.md` | `e783b83` | APROBADA |
+| `audit-1-intento-5.md` | `6d4f90d` | **NO APROBADA** |
+| `audit-1-intento-6.md` | `5492cd4` | **NO APROBADA** |
+| `audit-1-intento-7.md` | `653c0ce` | **NO APROBADA** |
+| `audit-1-intento-8.md` | `8451815` | **NO APROBADA** |
+| `audit-1-intento-9.md` | `5c94dcf` | **APROBADA** |
+
+Cinco rechazos en total. Una versión anterior de este documento decía
+"cuatro": contaba solo la ronda de contraste y se dejaba fuera el
+`intento-4`, que rechazó la máscara global de desborde. Lo señaló
+`audit-2-intento-5`.
 
 Un `audit-2` anterior aprobó sobre `4e86134` (`audit-2-intento-3.md`).
 **Ese veredicto no cubre el árbol actual**: después llegó la ampliación de
