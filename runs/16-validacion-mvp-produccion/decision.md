@@ -727,12 +727,50 @@ modelo distinto al constructor, sobre copia aislada sin `.git`):
 | 2 | Árbol completo, prompt sin pedir estado de git | **Timeout 10 min** — falló al intentar `git tag`: el agente pidió permiso de directorio externo y se auto-rechazó |
 | 3 | Árbol completo, prompt ajustado | Emitió `status: approved` y **se cortó a mitad del informe**: 5.076 bytes, secciones 1 y 2 de 8 |
 | 4 | **Árbol mínimo (7 archivos)** + todos los datos dados como contexto, sin git ni shell | **Timeout 9 min — 0 bytes**, sin registrar siquiera una llamada a herramienta |
+| 5 | Árbol mínimo, modelo de pago `opencode-go/gpt-5.6-luna` (OpenCode Zen) | **Timeout 9 min — 0 bytes** |
+| 6 | Ídem, **en segundo plano y sin límite de tiempo** | **Detenida por el humano tras >37 minutos en `running` con 0 bytes** |
 
 La ejecución 4 se diseñó específicamente para eliminar las causas de las
 tres anteriores: se le pasó un directorio con **sólo** los archivos
 auditables más el diff exacto, y todos los datos de estado —SHA, suites,
 tags, ROADMAP— entregados en el prompt para que no necesitara ejecutar
 nada. Aun así no produjo salida.
+
+#### Dos diagnósticos míos, ambos equivocados
+
+Conviene registrarlo porque el patrón de error es el mismo que ya se
+repitió en el diagnóstico del 500, y acá volvió a pasar dos veces
+seguidas.
+
+**Primer diagnóstico, equivocado**: atribuí los fallos a la
+disponibilidad del **modelo gratuito**, único accesible tras agotarse
+OpenRouter y `opencode-go`. **Refutado**: la ejecución 5 usó
+`gpt-5.6-luna`, un modelo de pago en OpenCode Zen, y falló igual.
+
+**Segundo diagnóstico, también equivocado**: al ver que las dos
+ejecuciones con exactamente 0 bytes eran las que corrí en primer plano
+con tope de 9-10 minutos, concluí que el problema era mío —OpenCode
+vuelca su salida al final, así que un modelo lento produce un resultado
+indistinguible de "no hizo nada"—. **Refutado**: la ejecución 6 corrió en
+segundo plano, sin ningún límite, y a los **37 minutos** seguía en
+`running` con 0 bytes.
+
+Ninguna de las dos hipótesis se declaró como causa cerrada, y por eso
+ninguna derivó en un cambio inútil. Pero la lección es la contraria a la
+del episodio del 500: **ahí acerté al no cerrar hipótesis; acá directamente
+no supe diagnosticar**, y el resultado es que la causa de fondo del fallo
+de OpenCode sigue sin determinarse.
+
+#### Lo que sí queda establecido
+
+- **El candidato no es la causa.** Nada en `e783b83` explica que un
+  proceso externo no emita salida, y el mismo auditor completó
+  auditorías anteriores sobre árboles de este mismo repositorio.
+- **OpenCode no puede producir un artefacto íntegro en este entorno**, ni
+  con modelo gratuito ni de pago, ni en primer plano ni en segundo, ni
+  sobre el árbol completo ni sobre uno de 7 archivos.
+- La causa raíz de ese fallo **no se determinó**, y se deja dicho en vez
+  de inventar una explicación.
 
 #### Por qué no se usa el informe de la ejecución 3
 
@@ -779,16 +817,71 @@ reproducible:
 
 Y lo que **no** está: un dictamen independiente sobre este SHA.
 
-#### Decisión que corresponde al humano
+#### Resolución: Codex CLI como auditor independiente de contingencia
 
-No se procede al release. La opción que se propone es concentrar el
-control en **una `audit-2` completa y reforzada sobre el SHA final**
-—que la secuencia acordada exige de todos modos, y que audita código,
-Production y evidencia a la vez—, en lugar de bloquear la etapa por una
-limitación del proveedor del auditor.
+El humano autorizó **excepcionalmente** usar **Codex CLI** como auditor
+independiente de contingencia para cerrar el punto 16, y prohibió gastar
+más créditos en OpenCode en esta etapa.
 
-Es una decisión del humano, no del agente, porque implica liberar a
-`main` un candidato sin `audit-1` íntegra.
+La independencia del control se mantiene, que es lo que importa:
+
+| | |
+|---|---|
+| Constructor | Claude Code |
+| Auditor de contingencia | **Codex CLI 0.151.0**, modelo `gpt-5.5`, perfil `reviewer-agent` (`model_reasoning_effort = high`) |
+| Modo | `-s read-only`: la sandbox impide escribir, no es sólo una instrucción del prompt |
+| Alcance | Árbol mínimo de 7 archivos, con el diff exacto y `test-report-4.md` |
+
+Codex no es un sustituto improvisado: su cableado ya está versionado en
+`.codex/` desde la migración inicial, con `CODEX_HOME` reproducible y un
+perfil `reviewer-agent` propio. `AGENTS.md` lo contempla como uno de los
+tres agentes del circuito. Lo excepcional es usarlo **en lugar de**
+OpenCode, no usarlo.
+
+El informe se persiste como **auditoría de contingencia**, etiquetado
+como tal, para que quede claro que `audit-1` sobre este SHA no la produjo
+el auditor habitual.
+
+#### Dos errores de configuración míos con Codex, antes de que funcionara
+
+Ninguno es del candidato, y conviene que no queden diluidos: el patrón de
+esta tanda es que estoy fallando en el **andamiaje de la auditoría**, no
+en el producto.
+
+1. **`401 Unauthorized`.** Fijé `CODEX_HOME` al `.codex/` del
+   repositorio siguiendo el README, y con eso anulé el home real
+   (`~/.codex`) donde viven las credenciales. El `.codex/` versionado
+   sólo contiene perfiles, no auth.
+2. **Auditor sin acceso a los archivos.** El prompt le prohibía el shell
+   por costumbre, cuando `-s read-only` ya impide escribir **por
+   construcción**. Sin shell, Codex no tiene forma de leer un archivo: le
+   quité su única vía a la evidencia y luego le pedí evidencia.
+
+La segunda merece una nota, porque su respuesta fue mejor que la de
+OpenCode en la misma situación:
+
+> *"No pude leer los siete archivos: las herramientas disponibles no
+> permiten acceso directo al sistema de archivos y el uso de shell está
+> expresamente prohibido. **No emito conclusiones ni invento líneas de
+> evidencia.**"* — y devolvió `NO APROBADA`.
+
+Se negó a dictaminar sin haber leído nada. **No se cuenta como rechazo
+del candidato**: no contiene un solo hallazgo sobre el código. Contrasta
+con la ejecución 3 de OpenCode, que emitió `approved` **antes** de
+completar el análisis — y es exactamente por eso que aquel informe
+truncado no se usó.
+
+#### Resultado
+
+**`AUDITORÍA: APROBADA`** sobre `e783b83`, con informe fundado y citas a
+archivo y línea. Persistido íntegro en
+`audit-1-contingencia-codex.md`.
+
+Codex verificó los dos hallazgos que habían provocado el rechazo previo
+—máscara global eliminada, test reescrito y robusto, incluida la
+distinción con el `overflow: hidden` scopeado legítimo— y señaló por su
+cuenta el límite correcto: **la evidencia local no cierra V12 en
+Production ni sustituye la comprobación visual en un teléfono real.**
 
 ## Desviación de proceso declarada
 
