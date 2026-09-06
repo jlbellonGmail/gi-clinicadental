@@ -37,9 +37,8 @@ BREAKPOINT_MOVIL = "max-width: 768px"
 def bloque_movil() -> str:
     """Devuelve el texto del bloque `@media (max-width: 768px)`."""
     css = CSS.read_text(encoding="utf-8")
-    inicio = css.find(f"@media ({BREAKPOINT_MOVIL})")
+    inicio = css.find("@media (" + BREAKPOINT_MOVIL + ")")
     assert inicio != -1, "Falta el breakpoint móvil de la corrección V12"
-    # Recorre llaves para quedarse con el bloque completo.
     profundidad = 0
     for i in range(css.find("{", inicio), len(css)):
         if css[i] == "{":
@@ -51,15 +50,66 @@ def bloque_movil() -> str:
     raise AssertionError("El bloque del breakpoint móvil no cierra")
 
 
+def _sin_comentarios(css: str) -> str:
+    """Un `overflow-x: hidden` mencionado en una nota no es una regla."""
+    return re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+
+
+def reglas_de_bloque(fragmento: str):
+    """Pares (selector, cuerpo) de un fragmento sin anidamiento."""
+    salida, i = [], 0
+    while i < len(fragmento):
+        apertura = fragmento.find("{", i)
+        if apertura == -1:
+            break
+        selector = fragmento[i:apertura].strip().split("}")[-1].strip()
+        cierre = fragmento.find("}", apertura)
+        if cierre == -1:
+            break
+        salida.append((selector, fragmento[apertura + 1 : cierre]))
+        i = cierre + 1
+    return salida
+
+
+def reglas_css():
+    """Todas las reglas del CSS, entrando también en los `@media`.
+
+    Sin dependencias: recorre el archivo contando llaves. Se necesita
+    porque buscar subcadenas sobre el CSS crudo es frágil — de hecho fue
+    el origen del fallo que corrige este módulo.
+    """
+    css = _sin_comentarios(CSS.read_text(encoding="utf-8"))
+    fuera, i = [], 0
+    while i < len(css):
+        apertura = css.find("{", i)
+        if apertura == -1:
+            break
+        selector = css[i:apertura].strip().split("}")[-1].strip()
+        profundidad, j = 1, apertura + 1
+        while j < len(css) and profundidad:
+            if css[j] == "{":
+                profundidad += 1
+            elif css[j] == "}":
+                profundidad -= 1
+            j += 1
+        cuerpo = css[apertura + 1 : j - 1]
+        if selector.startswith("@"):
+            fuera.extend(reglas_de_bloque(cuerpo))
+        else:
+            fuera.append((selector, cuerpo))
+        i = j
+    return fuera
+
+
 def test_existe_el_boton_de_menu_movil_con_accesibilidad():
     html = INDEX.read_text(encoding="utf-8")
     assert 'class="nav-toggle"' in html, (
         "Desapareció el botón de menú móvil. Sin él la navegación "
         "horizontal vuelve a desbordar el viewport."
     )
-    assert 'aria-expanded' in html, "El botón de menú debe exponer aria-expanded"
-    assert 'aria-controls' in html, "El botón de menú debe apuntar al nav que controla"
-    assert 'aria-label' in html, "El botón de menú necesita un nombre accesible"
+    assert "aria-expanded" in html, "El botón de menú debe exponer aria-expanded"
+    assert "aria-controls" in html, "El botón de menú debe apuntar al nav que controla"
+    assert "aria-label" in html, "El botón de menú necesita un nombre accesible"
 
 
 def test_el_header_declara_que_usa_menu_movil():
@@ -84,17 +134,43 @@ def test_el_desborde_no_se_tapa_con_overflow_hidden():
 
     Criterio explícito del punto 16: no ocultar el desborde con
     `overflow-x: hidden` en lugar de arreglar lo que se sale.
+
+    Este test tuvo un fallo propio, detectado por la auditoría
+    independiente (`audit-1-intento-4.md`): buscaba
+    `body{overflow-x:hidden` como subcadena contigua y no lo encontraba,
+    porque el CSS tiene otras propiedades entre medio. Pasaba en verde
+    mientras la regla prohibida estaba presente desde el commit baseline.
+    Ahora parsea las reglas de verdad.
+
+    `overflow: hidden` **scopeado** a un componente (`.hero`,
+    `.hero-image`) es legítimo: contiene decoraciones y recorta esquinas
+    redondeadas. Lo prohibido es la máscara global sobre `html`/`body`.
     """
-    bloque = bloque_movil()
-    assert "overflow-x: hidden" not in bloque.replace(" ", " "), (
-        "El breakpoint móvil usa overflow-x:hidden. Eso esconde el "
-        "desborde en vez de corregir su causa."
+    culpables = []
+    for selector, cuerpo in reglas_css():
+        objetivos = [s.strip() for s in selector.split(",")]
+        if not any(re.fullmatch(r"(html|body)", s) for s in objetivos):
+            continue
+        for valor in re.findall(r"overflow(?:-x)?\s*:\s*([a-z]+)", cuerpo):
+            if valor in ("hidden", "clip"):
+                culpables.append(selector + " { overflow-x: " + valor + " }")
+
+    assert not culpables, (
+        "Hay una máscara global de desborde: "
+        + "; ".join(culpables)
+        + ". Eso esconde el problema en vez de corregir su causa, que es "
+        "un criterio explícito del punto 16."
     )
-    css = CSS.read_text(encoding="utf-8")
-    for regla in ("body{overflow-x:hidden", "html{overflow-x:hidden"):
-        assert regla not in css.replace(" ", "").replace("\n", ""), (
-            "Hay un overflow-x:hidden global tapando el desborde."
-        )
+
+
+def test_el_breakpoint_movil_tampoco_enmascara():
+    bloque = bloque_movil()
+    for selector, cuerpo in reglas_de_bloque(_sin_comentarios(bloque)):
+        objetivos = [s.strip() for s in selector.split(",")]
+        if any(re.fullmatch(r"(html|body)", s) for s in objetivos):
+            assert "overflow" not in cuerpo, (
+                "El breakpoint móvil enmascara el desborde en " + selector
+            )
 
 
 def test_el_hero_se_adapta_en_movil():
@@ -144,11 +220,10 @@ def test_el_menu_movil_no_afecta_a_paginas_sin_el():
     assert "has-mobile-nav" not in html404, (
         "404.html no debe declarar el menú móvil: no tiene botón que lo abra."
     )
-    bloque = bloque_movil()
-    for linea in bloque.splitlines():
+    for linea in bloque_movil().splitlines():
         limpia = linea.strip()
         if limpia.startswith(".nav-links") or limpia.startswith(".header-cta"):
             raise AssertionError(
                 "Regla móvil sin scopear a `.has-mobile-nav`: dejaría a "
-                f"404.html sin navegación. Línea: {limpia}"
+                "404.html sin navegación. Línea: " + limpia
             )
