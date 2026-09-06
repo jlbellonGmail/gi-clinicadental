@@ -8,7 +8,7 @@ UX confirmados usando el sitio en pruebas reales, más la confiabilidad de
 los dos envíos SMTP consecutivos.
 
 ```yaml
-status: auditado_y_aprobado_pendiente_de_release
+status: liberado_y_validado_en_production
 alcance:
   - A: confiabilidad de los dos envios SMTP consecutivos
   - B: prevencion del doble submit
@@ -370,3 +370,90 @@ viejas tras los cambios —`api/leads.js:746` y `:959`, hoy `:751` y
 
 Release a `main`, deployment, y una validación mínima real en
 Production.
+
+---
+
+## Release y validación mínima real en Production
+
+**Fecha**: 2026-09-06.
+
+| | |
+|---|---|
+| PR de release | **#42**, `develop` → `main` |
+| `main` | `109d0afe75803f0e6f8e3e7ae40127d66cee04ef` |
+| Contenido liberado | `3c66c8a`, el SHA que aprobó `audit-3-envio-formulario-intento-3.md` |
+| Deployment | `6298664005`, `Production`, **`success`** |
+
+El deployment exitoso confirma además que la plataforma **acepta**
+`maxDuration: 30` en `vercel.json`, que era el riesgo declarado en la PR.
+
+### Production sirve el candidato auditado
+
+| Archivo | Bytes | Idéntico al candidato |
+|---|---|---|
+| `style.css` | 19.417 | **sí** |
+| `index.html` | 17.786 | **sí** |
+| `script.js` | 13.307 | **sí** |
+| `404.html` | 3.542 | **sí** |
+| `politica-privacidad.html` | 9.030 | **sí** |
+
+Sondas: `GET /` **200**, `/politica-privacidad.html` **200**,
+`/404.html` **200**, `GET /api/leads` **405**.
+
+### Un envío real, con datos sintéticos
+
+Marca de la fila: `V13-MTQDI8RT`. Nombre `Prueba Sintetica V13-…`,
+destinatario la cuenta controlada del humano, mensaje declarando que es un
+dato de prueba. Es la **sexta** fila sintética.
+
+Se instrumentó un espía sobre `fetch` que **solo cuenta** las llamadas a
+`/api/leads`, sin alterar el comportamiento.
+
+| Comprobación | Resultado |
+|---|---|
+| Primer click → requests | **1** |
+| Tres clicks seguidos → requests | **1** |
+| Más un `Enter` → requests | **1** |
+| Botón, al instante | `disabled`, `aria-busy="true"`, `aria-disabled="true"` |
+| Etiqueta, al instante | **"Enviando solicitud..."** |
+| Spinner | visible (`display: block`) |
+| Respuesta | **201**, sin mensaje de error |
+| Formulario tras el 201 | **reseteado**, consentimiento desmarcado |
+| Botón tras el 201 | disponible, etiqueta restaurada |
+| Diálogo | visible, con el texto correcto |
+| Foco al abrir | `#modalExitoCerrar` |
+| `Tab` dentro del diálogo | se queda en `#modalExitoCerrar` |
+| `Escape` | cierra, y quita `body.con-modal` |
+| URL tras cerrar | **la misma**: no redirige |
+| Scroll horizontal | **no** |
+
+El texto del diálogo, verbatim desde Production:
+
+> Solicitud enviada — Recibimos tu solicitud correctamente. Tu turno
+> todavía no está confirmado. Nos comunicaremos con vos para coordinarlo.
+
+Sin ninguna mención a un correo, que es el criterio.
+
+### La duración: 13,8 segundos
+
+Es el dato más relevante de esta medición. El endpoint tardó **13,8 s** en
+responder el 201.
+
+Eso está **por encima del límite por defecto** que la función tenía antes
+de esta tanda. Sin el `maxDuration: 30` añadido en `vercel.json`, esta
+misma request habría muerto por timeout de plataforma —un 504— con el lead
+ya insertado y los correos posiblemente enviados. El margen no era
+teórico.
+
+**Lo que no se puede afirmar desde acá**: si esos 13,8 s incluyen un
+reintento de alguno de los dos envíos SMTP. Confirmarlo requiere los logs
+de Vercel o los flags del lead en Supabase, y ninguno de los dos es
+accesible desde esta sesión. Queda como comprobación humana, junto con las
+dos que ya estaban pendientes.
+
+### Lo que sigue pendiente de comprobación humana
+
+1. Los dos flags SMTP del lead `V13-MTQDI8RT` en Supabase, y si hubo
+   reintento.
+2. Descartar las **seis** filas sintéticas (`estado='descartado'`).
+3. La comprobación visual de V12 en un teléfono real.
