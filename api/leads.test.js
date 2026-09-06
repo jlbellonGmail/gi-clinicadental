@@ -115,6 +115,17 @@ function makeFakeSupabaseClient({
   existingLeads = [],
   failOnSelect = false,
   failOnUpdate = false,
+  // Status HTTP de la respuesta de Supabase. El cliente real siempre lo
+  // trae; el falso lo expone para poder verificar que se registra como
+  // `supabase_status_code` (feature 16). Defaults del camino feliz.
+  selectStatus = 200,
+  insertStatus = 201,
+  updateStatus = 204,
+  // Error a devolver en el SELECT de duplicados. El default preserva el
+  // comportamiento previo; los tests de la f16 inyectan la forma REAL que
+  // toma `postgrest-js` cuando la respuesta no es JSON: un objeto plano
+  // con `message` y SIN `name` ni `code`.
+  errorOnSelect = { message: 'fallo simulado de Supabase (select)' },
 } = {}) {
   const calls = [];
   const selectCalls = [];
@@ -135,9 +146,17 @@ function makeFakeSupabaseClient({
               return {
                 async single() {
                   if (fail) {
-                    return { data: null, error: { message: 'fallo simulado de Supabase' } };
+                    return {
+                      data: null,
+                      error: { message: 'fallo simulado de Supabase' },
+                      status: insertStatus,
+                    };
                   }
-                  return { data: { id, fecha_creacion: fechaCreacion }, error: null };
+                  return {
+                    data: { id, fecha_creacion: fechaCreacion },
+                    error: null,
+                    status: insertStatus,
+                  };
                 },
               };
             },
@@ -161,9 +180,9 @@ function makeFakeSupabaseClient({
             async limit(n) {
               selectCalls.push({ table, columns, filters, limit: n });
               if (failOnSelect) {
-                return { data: null, error: { message: 'fallo simulado de Supabase (select)' } };
+                return { data: null, error: errorOnSelect, status: selectStatus };
               }
-              return { data: existingLeads, error: null };
+              return { data: existingLeads, error: null, status: selectStatus };
             },
           };
           return builder;
@@ -173,9 +192,13 @@ function makeFakeSupabaseClient({
             async eq(column, value) {
               updateCalls.push({ table, values, column, value });
               if (failOnUpdate) {
-                return { data: null, error: { message: 'fallo simulado de Supabase (update)' } };
+                return {
+                  data: null,
+                  error: { message: 'fallo simulado de Supabase (update)' },
+                  status: updateStatus,
+                };
               }
-              return { data: null, error: null };
+              return { data: null, error: null, status: updateStatus };
             },
           };
         },
@@ -2758,3 +2781,94 @@ test('f15: la funcionalidad preexistente se preserva bajo instrumentacion', asyn
     assert.equal(supabaseClient.updateCalls.length, 2, 'ambos flags actualizados');
   });
 });
+
+// ---------------------------------------------------------------------
+// f16: supabase_status_code — el campo que faltaba para diagnosticar
+// ---------------------------------------------------------------------
+//
+// Origen: runs/16-validacion-mvp-produccion/test-report-2.md, anexos A y B.
+//
+// En Production, `POST /api/leads` devolvio 500 y el log dijo
+// `supabase_duplicados_error` con `tipo=sin_tipo` y `codigo=sin_codigo`.
+// Ocurre porque `postgrest-js` devuelve un objeto plano `{ message }`
+// -sin `name` y sin `code`- cuando la respuesta no es JSON, y
+// `metadatosDeError()` solo lee `name`, `code` y `responseCode`.
+//
+// El log no permitia distinguir "la base rechazo la consulta" de "el
+// endpoint ni siquiera hablo PostgREST". Diagnosticarlo exigio leer
+// node_modules. `supabase_status_code` cierra ese hueco sin relajar la
+// politica de redaccion: es un entero, no puede transportar PII.
+
+test('f16: supabase_duplicados_error registra el status HTTP de la respuesta', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({ failOnSelect: true, selectStatus: 404 });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const evento = eventos.find((e) => e.evento === 'supabase_duplicados_error');
+  assert.ok(evento, 'debe emitirse supabase_duplicados_error');
+  assert.equal(evento.supabase_status_code, 404);
+});
+
+test('f16: con un error sin name ni code, el status es la UNICA senal util', async () => {
+  // Reproduce exactamente la forma del error observada en Production.
+  const errorReal = { message: '<html>The page could not be found</html>' };
+
+  const { eventos, texto } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({
+      failOnSelect: true,
+      selectStatus: 404,
+      errorOnSelect: errorReal,
+    });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const evento = eventos.find((e) => e.evento === 'supabase_duplicados_error');
+  assert.ok(evento);
+
+  // El comportamiento previo se preserva: sin name ni code, ambos quedan
+  // en su valor por defecto. No es un fallo, es la politica de redaccion.
+  assert.equal(evento.tipo, 'sin_tipo');
+  assert.equal(evento.codigo, 'sin_codigo');
+
+  // Y ahora hay algo accionable, que es todo el punto del cambio.
+  assert.equal(evento.supabase_status_code, 404);
+
+  // El cuerpo de la respuesta NO se filtra por ninguna via.
+  assert.equal(texto.includes('could not be found'), false);
+  assert.equal(texto.includes('<html>'), false);
+});
+
+test('f16: supabase_insercion_error tambien registra el status', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({ fail: true, insertStatus: 409 });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const evento = eventos.find((e) => e.evento === 'supabase_insercion_error');
+  assert.ok(evento);
+  assert.equal(evento.supabase_status_code, 409);
+  // No pisa duracion_ms, que ya se registraba en este evento.
+  assert.equal(typeof evento.duracion_ms, 'number');
+});
+
+test('f16: flag_actualizacion_error tambien registra el status', async () => {
+  const { eventos } = await capturarConsola(async () => {
+    const supabaseClient = makeFakeSupabaseClient({
+      id: 'f1600000-0000-0000-0000-0000000000f1',
+      failOnUpdate: true,
+      updateStatus: 403,
+    });
+    const { handler } = newHandler({ supabaseClient });
+    await handler(makeReq({ body: validPayload() }), makeRes());
+  });
+
+  const fallos = eventos.filter((e) => e.evento === 'flag_actualizacion_error');
+  assert.ok(fallos.length >= 1);
+  assert.equal(fallos[0].supabase_status_code, 403);
+  assert.equal(fallos[0].lead_id, 'f1600000-0000-0000-0000-0000000000f1');
+});
+

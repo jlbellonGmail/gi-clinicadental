@@ -138,6 +138,20 @@ const CAMPOS = {
   tipo: validarToken,
   codigo: validarToken,
   smtp_response_code: validarEntero,
+  // Status HTTP de la respuesta de Supabase/PostgREST. NO se reutiliza
+  // `http_status`, que significa otra cosa: el status que devolvemos
+  // NOSOTROS al cliente. Confundirlos haria leer `404` en un error de
+  // Supabase como si nuestra API hubiera respondido 404.
+  //
+  // Existe porque `metadatosDeError()` se quedaba ciego justo cuando mas
+  // hace falta: `postgrest-js` devuelve un objeto plano `{ message }`
+  // -sin `name` y sin `code`- cuando la respuesta no es JSON, y el log
+  // quedaba en `sin_tipo`/`sin_codigo`, que es tanto como no decir nada.
+  // Diagnosticarlo exigio leer node_modules. Ver
+  // runs/16-validacion-mvp-produccion/test-report-2.md, anexos A y B.
+  //
+  // Es un entero acotado por protocolo: no puede transportar PII.
+  supabase_status_code: validarEntero,
   huella: validarPatron(PATRON_HASH),
   duracion_ms: validarEntero,
 };
