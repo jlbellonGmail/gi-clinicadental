@@ -27,7 +27,11 @@ body {
     color: var(--text);
     background-color: var(--white);
     line-height: 1.6;
-    overflow-x: hidden;
+    /* Sin `overflow-x: hidden`. Venia del commit baseline y enmascaraba
+       cualquier desborde horizontal en vez de dejarlo ver. El punto 16
+       lo prohibe explicitamente: el desborde se corrige en su causa.
+       Medido sin la mascara a 320/360/390/412/430/768/1024/1440: cero
+       elementos fuera del viewport. Ver test_responsive_movil.py. */
 }
 
 h1, h2, h3, h4 {
