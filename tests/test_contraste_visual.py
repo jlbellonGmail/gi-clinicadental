@@ -257,6 +257,21 @@ def test_el_hero_no_vuelve_al_gradiente_que_no_contrasta():
         )
 
 
+def _sin_scope_de_hero(objetivo):
+    """¿Este selector toca `.hero-content` sin colgar de `.hero`?
+
+    `.hero .hero-content p` está scopeado; `.hero-content p` y
+    `.equipo .hero-content h1` no lo están. Se mira solo la parte del
+    selector **anterior** a `.hero-content`, que es donde estarían los
+    ancestros. El `(?!-)` evita que `.hero-content` se cuente a sí mismo
+    como si fuera el ancestro `.hero`.
+    """
+    if not re.search(r"\.hero-content\b", objetivo):
+        return False
+    ancestros = objetivo.split(".hero-content")[0]
+    return not re.search(r"\.hero\b(?!-)", ancestros)
+
+
 def test_el_color_del_hero_no_se_escapa_al_reuso_sobre_fondo_claro():
     """`.hero-content` se reutiliza en la sección de equipo, fondo claro.
 
@@ -267,13 +282,18 @@ def test_el_color_del_hero_no_se_escapa_al_reuso_sobre_fondo_claro():
 
     Este test prohíbe declarar en `.hero-content` sin scope cualquier
     color que no se lea sobre el fondo claro del sitio.
+
+    Se busca `.hero-content` **en cualquier posición** del selector, no
+    solo al principio: `audit-1-intento-6.md` señaló que anclar al inicio
+    dejaba pasar algo como `.equipo .hero-content h1`, que tampoco está
+    scopeado a `.hero`.
     """
     variables = variables_root()
     fondo_claro = resolver("var(--white)", variables)
     culpables = []
     for selector, props in declaraciones().items():
         objetivos = [s.strip() for s in selector.split(",")]
-        if not any(re.match(r"^\.hero-content\b", s) for s in objetivos):
+        if not any(_sin_scope_de_hero(o) for o in objetivos):
             continue
         valor = props.get("color")
         if not valor:
@@ -300,13 +320,22 @@ def test_el_gradiente_general_del_sitio_no_se_toca():
     `--gradient-primary` conservara su valor. Si alguien lo oscureciera
     para "arreglar" el hero, afectaría a todo el resto del sitio, que sí
     lo usa correctamente sobre fondo claro.
+
+    Se compara el valor **completo**. `audit-1-intento-6.md` señaló que
+    comprobar solo la presencia de las dos variables permitía invertir
+    las paradas, cambiar el ángulo o mover las posiciones sin que el test
+    dijera nada, mientras el reporte afirmaba que el valor se conservaba.
     """
-    variables = variables_root()
-    valor = variables.get("--gradient-primary")
+    esperado = "linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)"
+    valor = variables_root().get("--gradient-primary")
     assert valor, "Desapareció `--gradient-primary`"
-    assert "var(--primary)" in valor and "var(--primary-dark)" in valor, (
-        "`--gradient-primary` dejó de ir de `--primary` a `--primary-dark`: "
-        + valor
+
+    normalizado = re.sub(r"\s+", " ", valor).strip()
+    assert normalizado == esperado, (
+        "`--gradient-primary` cambió de valor.\n  esperado: " + esperado
+        + "\n  encontrado: " + normalizado
+        + "\nEl hero tiene su propia superficie (`--gradient-hero`); este "
+        "gradiente es el del resto del sitio y no se toca para arreglarlo."
     )
 
 
