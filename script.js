@@ -154,13 +154,56 @@ document.addEventListener('DOMContentLoaded', () => {
             focoPrevioAlModal = null;
         }
 
+        // Elementos que pueden recibir foco dentro del dialogo.
+        const ENFOCABLES = [
+            'a[href]',
+            'button:not([disabled])',
+            'input:not([disabled])',
+            'select:not([disabled])',
+            'textarea:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])',
+        ].join(', ');
+
         if (modal) {
             modal.querySelectorAll('[data-cerrar-modal]').forEach((elemento) => {
                 elemento.addEventListener('click', cerrarModal);
             });
+
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && !modal.hidden) {
+                if (modal.hidden) return;
+
+                if (e.key === 'Escape') {
                     cerrarModal();
+                    return;
+                }
+
+                // Trampa de foco. Con `aria-modal="true"` el resto del
+                // documento se anuncia como inerte, pero el Tab del
+                // teclado igual se escapa si nadie lo retiene: el foco
+                // terminaba en la pagina de atras, que visualmente esta
+                // tapada.
+                if (e.key !== 'Tab') return;
+
+                const caja = modal.querySelector('.modal__caja');
+                const items = caja ? Array.from(caja.querySelectorAll(ENFOCABLES)) : [];
+                if (items.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
+
+                const primero = items[0];
+                const ultimo = items[items.length - 1];
+                const activo = document.activeElement;
+
+                if (!caja.contains(activo)) {
+                    e.preventDefault();
+                    primero.focus();
+                } else if (e.shiftKey && activo === primero) {
+                    e.preventDefault();
+                    ultimo.focus();
+                } else if (!e.shiftKey && activo === ultimo) {
+                    e.preventDefault();
+                    primero.focus();
                 }
             });
         }
@@ -224,7 +267,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (response.status !== 201) {
                         throw new Error('connection');
                     }
-                    return response.json().catch(() => ({}));
+                    // El cuerpo NO se lee. Nada de la UI depende del `id`
+                    // que devuelve el endpoint, y parsearlo solo agregaba
+                    // una rama ambigua: con `json()` fallido habia que
+                    // decidir si un 201 confirmado cuenta como exito.
+                    // Sin parseo no hay ambiguedad: manda el status.
                 })
                 .then(() => {
                     // Recien aca, con el 201 confirmado, se descarta lo
