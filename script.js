@@ -31,6 +31,44 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Menu movil (hamburguesa). Correccion del punto 16, V12: en
+    // pantallas chicas la navegacion horizontal no cabia y se salia del
+    // viewport. El boton solo existe en las paginas que lo declaran; si
+    // no esta, este bloque no hace nada.
+    const navToggle = document.querySelector('.nav-toggle');
+    const headerConNav = document.querySelector('header.has-mobile-nav');
+
+    if (navToggle && headerConNav) {
+        const cerrarMenu = () => {
+            headerConNav.classList.remove('nav-open');
+            navToggle.setAttribute('aria-expanded', 'false');
+            navToggle.setAttribute('aria-label', 'Abrir menú de navegación');
+        };
+
+        navToggle.addEventListener('click', () => {
+            const abierto = headerConNav.classList.toggle('nav-open');
+            navToggle.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+            navToggle.setAttribute(
+                'aria-label',
+                abierto ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'
+            );
+        });
+
+        // Al elegir un destino el menu se cierra: si no, tapa el
+        // contenido al que se acaba de navegar.
+        headerConNav.querySelectorAll('.nav-links a, .header-cta a').forEach((enlace) => {
+            enlace.addEventListener('click', cerrarMenu);
+        });
+
+        // Escape cierra, como cualquier menu desplegable.
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && headerConNav.classList.contains('nav-open')) {
+                cerrarMenu();
+                navToggle.focus();
+            }
+        });
+    }
+
     // Form Handling
     const leadForm = document.getElementById('leadForm');
     if (leadForm) {
