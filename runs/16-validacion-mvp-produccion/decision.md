@@ -891,6 +891,7 @@ actualizado tras la ampliación de alcance del envío del formulario:
 | Tags | **ninguno** |
 | `ROADMAP.md` | `[ ]` |
 | Feature | sin mergear |
+| `audit-2` | **APROBADA** sobre `109d0af` (`audit-2-intento-6.md`), tras dos rechazos |
 
 ### Veredictos de la serie `audit-1`, uno por uno
 
