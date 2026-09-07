@@ -11,6 +11,24 @@
 > - **Veredicto**: **APROBADA**
 > - **Intento anterior**: `audit-6-final.md`, `NO APROBADA`.
 >
+>
+> **ALCANCE DE ESTE INFORME — leer antes que su texto.** El auditor vio el
+> árbol del repositorio en ese commit **sin `runs/`**, más una carpeta
+> `evidencia/` armada para esa ronda. Dos consecuencias, señaladas por
+> `audit-2-intento-7.md`:
+>
+> - Cuando dice que **no hay direcciones personales literales**, se
+>   refiere **solo a los archivos que vio**. Los reportes históricos de
+>   `runs/` —por ejemplo `test-report-2.md`— sí contienen la casilla de
+>   prueba del propio humano. Esa decisión está declarada y razonada en
+>   `test-report-8.md`: no se reescriben artefactos históricos ya
+>   auditados en silencio.
+> - Las rutas `evidencia/...` que cita son las de **ese** directorio de
+>   auditoría. En el repositorio, `evidencia/test-report-8.md` es
+>   `runs/16-validacion-mvp-produccion/test-report-8.md`.
+>
+> El texto del informe **no se modifica**: se precisa su procedencia, que
+> es lo que faltaba.
 > Lo que sigue es el texto del auditor, sin modificar.
 
 ---
