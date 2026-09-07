@@ -87,8 +87,8 @@ Idéntico, valor por valor.
 ## C — Una solicitud sintética controlada: **PASS**
 
 Marca `V14-MTREJ5YZ`. Nombre `Prueba Sintetica V14-MTREJ5YZ`, destinatario
-la cuenta controlada `jlbellon+movil@gmail.com`, mensaje declarando que es
-un dato de prueba.
+la cuenta controlada del humano (`<EMAIL_CONTROLADO_MOVIL>`), mensaje
+declarando que es un dato de prueba.
 
 Se instrumentó un espía sobre `fetch` que **solo cuenta** las llamadas a
 `/api/leads`, sin alterar el comportamiento.
@@ -194,10 +194,17 @@ segundo envío que se documentó en el Anexo H de `test-report-2.md`, y que
 es el defecto que originó toda la corrección de SMTP de esta etapa.
 
 El discriminador que sí es demostrable desde la evidencia: **todos los
-envíos sintéticos de esta etapa usaron direcciones `jlbellon+…@gmail.com`**
-—cuentas controladas del propio humano, con plus-addressing—. Aparecen en
-los artefactos: `jlbellon+desktop`, `+movil`, `+diag`, `+sonda`,
-`+timing`. Ningún envío se hizo con otra dirección.
+envíos sintéticos de esta etapa usaron la casilla controlada del humano
+con plus-addressing** —cinco sufijos distintos, uno por tipo de prueba—.
+Ningún envío se hizo con otra dirección. Los sufijos concretos están en
+los reportes anteriores de esta misma carpeta; no se repiten acá.
+
+**Nota de privacidad.** `audit-6-final.md` señaló que este reporte
+incluía la dirección literal. Se reemplazó por un marcador, que es la
+convención que ya usaban los artefactos de preflight. Las apariciones
+literales en reportes anteriores (`test-report-2.md`) son previas a esta
+convención y quedan a criterio del humano: reescribirlas cambiaría
+artefactos históricos ya auditados, y por eso no se hace en silencio.
 
 Pero **confirmar que esas dos filas concretas coinciden requiere leer la
 base**, y no puedo. Así que quedan como están, para resolución humana, con
