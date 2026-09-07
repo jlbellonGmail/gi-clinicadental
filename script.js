@@ -287,10 +287,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     mostrarResultado(completa ? 'exito' : 'parcial');
                 })
                 .catch(() => {
-                    // El lead NO se registro: se conserva TODO lo escrito
-                    // y se permite reintentar. Nunca se muestra detalle
-                    // tecnico: ni request_id, ni codigos, ni errores de
-                    // SMTP o Supabase.
+                    // Se conserva TODO lo escrito y se permite reintentar.
+                    // Nunca se muestra detalle tecnico: ni request_id, ni
+                    // codigos, ni errores de SMTP o Supabase.
+                    //
+                    // CASO AMBIGUO, declarado a proposito: si `fetch`
+                    // rechaza no hubo respuesta, y la request pudo haber
+                    // llegado e insertado el lead antes de perderse. No
+                    // hay forma de distinguirlo desde el navegador.
+                    //
+                    // Reintentar es seguro igualmente porque el formulario
+                    // conserva los datos y el endpoint es IDEMPOTENTE:
+                    // ante el mismo nombre y email dentro de su ventana
+                    // devuelve el lead que ya existe, sin insertar otro ni
+                    // reenviar correos. Es la segunda linea de defensa, y
+                    // es la que cubre este caso.
+                    //
+                    // Limite residual: pasada esa ventana, un reintento
+                    // sobre un lead que si se habia guardado crea un
+                    // duplicado. Queda documentado en
+                    // docs/tecnica/estado-comunicacion-leads.md.
                     liberarEnvio();
                     mostrarResultado('error');
                 });

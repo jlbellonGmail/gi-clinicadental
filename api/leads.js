@@ -834,6 +834,11 @@ function createHandler(options = {}) {
       // `requiere_revision`, que es exactamente lo que corresponde.
       let clinicSendSucceeded = false;
       let patientSendSucceeded = false;
+      // Distinto de lo anterior: un correo puede salir y su UPDATE fallar.
+      // En ese caso la base NO refleja el envio, y alguien tiene que
+      // reconciliarlo.
+      let clinicFlagPersistido = false;
+      let patientFlagPersistido = false;
 
       let transporter = null;
       try {
@@ -903,6 +908,7 @@ function createHandler(options = {}) {
               .from('leads')
               .update({ notificacion_clinica_enviada: true })
               .eq('id', data.id);
+            clinicFlagPersistido = !updateError;
             if (updateError) {
               log.error(
                 'flag_actualizacion_error',
@@ -965,6 +971,7 @@ function createHandler(options = {}) {
               .from('leads')
               .update({ confirmacion_paciente_enviada: true })
               .eq('id', data.id);
+            patientFlagPersistido = !updateError;
             if (updateError) {
               log.error(
                 'flag_actualizacion_error',
@@ -990,8 +997,20 @@ function createHandler(options = {}) {
       // Estado operativo de la comunicacion. Se deriva de los dos flags,
       // en memoria: no se relee de la base, asi que el contrato de la
       // respuesta no depende de que este UPDATE salga bien.
+      // Dos preguntas distintas, y confundirlas dejaba la base mintiendo.
+      //
+      // Para el usuario: ¿salieron los dos correos? Eso decide el mensaje
+      // que ve.
       const comunicacionCompleta = clinicSendSucceeded && patientSendSucceeded;
-      const estadoComunicacion = comunicacionCompleta ? 'completa' : 'requiere_revision';
+      //
+      // Para operacion: ¿la base REFLEJA que salieron? Un correo puede
+      // haberse enviado y su UPDATE haber fallado; entonces el flag queda
+      // en `false` y la consulta operativa no lo encontraria, mientras
+      // `estado_comunicacion` decia `completa`. Ese lead quedaba invisible.
+      // Se marca `requiere_revision` para que alguien lo reconcilie.
+      const baseConsistente = clinicFlagPersistido && patientFlagPersistido;
+      const estadoComunicacion =
+        comunicacionCompleta && baseConsistente ? 'completa' : 'requiere_revision';
 
       // UPDATE deliberadamente NO fatal y separado de los flags: el dato
       // critico es el lead, y ya esta insertado. Si la columna todavia no
