@@ -237,6 +237,41 @@ def find_lock_pids(tmp_path: Path) -> list[int]:
     return pids
 
 
+def procesos_que_referencian(tmp_path: Path) -> list[int]:
+    """PIDs cuya linea de comandos menciona este directorio temporal.
+
+    Acotado al `tmp_path` del test que lo llama: no puede alcanzar a un
+    proceso ajeno. Sirve para detectar hijos que sobrevivieron a la muerte
+    del padre y que ya no figuran en ningun lock.
+    """
+    ruta = str(tmp_path).replace("'", "''")
+    consulta = (
+        "Get-CimInstance Win32_Process | "
+        "Where-Object { $_.CommandLine -like '*" + ruta + "*' } | "
+        "ForEach-Object { \"$($_.ProcessId)|$($_.CommandLine)\" }"
+    )
+    resultado = run(
+        [powershell(), "-NoProfile", "-Command", consulta],
+        Path(os.getcwd()),
+        check=False,
+    )
+
+    pids = []
+    for linea in resultado.stdout.splitlines():
+        pid, _, cmdline = linea.partition("|")
+        if not pid.strip().isdigit():
+            continue
+        # La consulta lleva la ruta en su PROPIA linea de comandos, asi que
+        # se encuentra a si misma. Sin este filtro el barrido mataba su
+        # propio PowerShell -y con el, la maquinaria de `run()`-.
+        if "Get-CimInstance" in cmdline:
+            continue
+        if int(pid) == os.getpid():
+            continue
+        pids.append(int(pid))
+    return pids
+
+
 @pytest.fixture
 def cleanup_reconcilers(tmp_path):
     """Deja la máquina como la encontró antes de pasar al siguiente test.
@@ -269,6 +304,25 @@ def cleanup_reconcilers(tmp_path):
                 "dejarlo correr contamina los tests siguientes.",
             )
 
+        # Barrido final. Lo anterior solo alcanza a los procesos que
+        # todavia figuran en un lock, y un hijo puede sobrevivir despues de
+        # que el lock desaparecio -lo señalo `audit-6-final.md`-. Este
+        # barrido busca por linea de comandos cualquier proceso que siga
+        # referenciando el directorio temporal de ESTE test, sin tocar
+        # nada de fuera.
+        for pid in procesos_que_referencian(tmp_path):
+            kill_pid(pid)
+        wait_until(
+            lambda: not procesos_que_referencian(tmp_path),
+            30.0,
+            lambda: (
+                "Quedaron procesos vivos referenciando "
+                + str(tmp_path)
+                + ": "
+                + str(procesos_que_referencian(tmp_path))
+            ),
+        )
+
 
 def make_worktree(main: Path, tmp_path: Path, name: str, slug: str) -> Path:
     worktree = tmp_path / name
@@ -300,7 +354,15 @@ def test_start_reconciler_from_linked_worktree(tmp_path, cleanup_reconcilers):
     result = start_reconciler(worktree, SLUG)
     assert result.returncode == 0, result.stdout + result.stderr
     wait_for_reconciler_running(main, SLUG)
-    assert (state_dir(main) / f"{SLUG}.log").exists()
+    # El lock aparece antes que el log: el reconciliador lo escribe recien
+    # cuando arranca a trabajar. Afirmarlo sin esperar era una carrera
+    # latente que el sondeo mas fino destapo. El test hermano
+    # -`test_start_reconciler_in_main_checkout`- ya esperaba asi.
+    wait_until(
+        lambda: (state_dir(main) / f"{SLUG}.log").exists(),
+        30,
+        lambda: "El reconciliador no escribio su log.\n" + diagnostico(main, SLUG),
+    )
     assert not (worktree / ".git" / "feature-reconcilers").exists()
 
 
