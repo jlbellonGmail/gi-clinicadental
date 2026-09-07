@@ -46,14 +46,26 @@ def test_el_atributo_hidden_gana_a_las_reglas_de_autor():
     sobre un elemento oculto para que el `hidden` deje de significar
     nada. Es exactamente lo que pasó con `.modal`.
     """
-    culpables = []
     red = None
+    culpables = []
+
     for selector, cuerpo in reglas_css():
         objetivos = [s.strip() for s in selector.split(",")]
+        valor = re.search(r"display\s*:\s*([^;]+)", cuerpo)
+        if not valor:
+            continue
+        display = valor.group(1).strip().lower()
+
         if any(o == "[hidden]" for o in objetivos):
-            valor = re.search(r"display\s*:\s*([^;]+)", cuerpo)
-            if valor:
-                red = valor.group(1).strip().lower()
+            red = display
+        elif any("[hidden]" in o for o in objetivos):
+            # Un selector MAS especifico que menciona `[hidden]` y declara
+            # otro `display` le gana a la red de seguridad. Lo señaló
+            # `audit-4-punto-16.md`: sin esta rama, un
+            # `.modal[hidden] { display: flex !important }` habría pasado
+            # en verde y el diálogo volvería a verse al cargar.
+            if not display.startswith("none"):
+                culpables.append(selector + " { display: " + display + " }")
 
     assert red is not None, (
         "Falta la regla `[hidden] { display: none !important }`. Sin ella, "
@@ -65,7 +77,10 @@ def test_el_atributo_hidden_gana_a_las_reglas_de_autor():
         "La red de seguridad necesita `!important`: sin él, una regla más "
         "específica —como `.modal.abierto`— volvería a ganarle."
     )
-    assert not culpables
+    assert not culpables, (
+        "Hay reglas que le devuelven un `display` visible a un elemento con "
+        "`hidden`, pisando la red de seguridad: " + "; ".join(culpables)
+    )
 
 
 def test_el_dialogo_y_sus_variantes_arrancan_ocultos_en_el_html():

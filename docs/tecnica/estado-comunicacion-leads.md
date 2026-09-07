@@ -43,8 +43,13 @@ la migración.
 Después de resolver los dos envíos, y **antes** de responder:
 
 ```js
+// Lo que ve la persona: ¿salieron los dos correos?
 const comunicacionCompleta = clinicSendSucceeded && patientSendSucceeded;
-const estadoComunicacion = comunicacionCompleta ? 'completa' : 'requiere_revision';
+// Lo que ve operación: ¿la base lo refleja? Ver "Cuándo se marca
+// requiere_revision" más abajo.
+const baseConsistente = clinicFlagPersistido && patientFlagPersistido;
+const estadoComunicacion =
+  comunicacionCompleta && baseConsistente ? 'completa' : 'requiere_revision';
 ```
 
 Ese `UPDATE` es **deliberadamente no fatal** y va separado de los flags.
@@ -125,6 +130,44 @@ Para este MVP alcanza con persistencia correcta, un estado explícito, una
 consulta segura y un procedimiento documentado. Construir una aplicación
 administrativa ahora sería trabajo grande para un volumen que todavía no
 existe, y la clínica ya entra al panel de Supabase.
+
+## Cuándo se marca `requiere_revision`
+
+No alcanza con "¿salieron los dos correos?". Son **dos preguntas
+distintas**, y confundirlas dejaba la base mintiendo:
+
+| Pregunta | Para qué sirve |
+|---|---|
+| ¿Salieron los dos correos? | decide el mensaje que ve la persona (`comunicacion_completa`) |
+| ¿La base **refleja** que salieron? | decide `estado_comunicacion` |
+
+Un correo puede enviarse y su `UPDATE` de flag fallar. Entonces el flag
+queda en `false` y la consulta operativa no encontraría ese lead —
+mientras `estado_comunicacion` decía `completa`. **Ese lead quedaba
+invisible.** Lo señaló `audit-4-punto-16.md`.
+
+Por eso `completa` exige las dos cosas: los dos envíos exitosos **y** los
+dos flags persistidos. Si algo de eso falla, `requiere_revision`, aunque
+los correos hayan salido. Es conservador a propósito: revisar de más
+cuesta un minuto; un lead invisible cuesta una solicitud perdida.
+
+## El fallo de red del navegador: un caso ambiguo declarado
+
+Si el `fetch` del formulario **rechaza**, no hubo respuesta, y la request
+pudo haber llegado e insertado el lead antes de perderse. Desde el
+navegador no hay forma de distinguirlo.
+
+En ese caso se muestra el diálogo de error, que invita a reintentar. Es
+seguro porque el formulario conserva los datos y **el endpoint es
+idempotente**: ante el mismo nombre y email dentro de su ventana devuelve
+el lead que ya existe, sin insertar otro ni reenviar correos. Es la
+segunda línea de defensa, y es la que cubre este caso.
+
+**Límite residual, declarado:** pasada esa ventana, un reintento sobre un
+lead que sí se había guardado crea un duplicado. Es inherente a cualquier
+envío "al menos una vez" sin un identificador de intento generado en el
+cliente. Si aparece, se ve como dos filas con el mismo email y minutos de
+diferencia.
 
 ## Límite conocido
 

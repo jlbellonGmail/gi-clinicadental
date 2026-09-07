@@ -3138,6 +3138,12 @@ test('f16: si el UPDATE del estado falla, la respuesta NO cambia', async () => {
   assert.deepEqual(Object.keys(res.json), CLAVES_201);
   assert.equal(res.json.comunicacion_completa, true, 'se deriva en memoria, no de la base');
   assert.equal(supabaseClient.calls.length, 1, 'no se reintenta el insert');
+  // Y aun asi el lead queda marcado para revision, porque la base no
+  // refleja los envios: ver el test del flag que no se persiste.
+  assert.equal(
+    supabaseClient.estadoUpdates[0].values.estado_comunicacion,
+    'requiere_revision'
+  );
 });
 
 test('f16: el duplicado informa el estado REAL del lead que ya existe', async () => {
@@ -3209,4 +3215,59 @@ test('f16: el contrato 201 no expone nada de SMTP, proveedores ni motivos', asyn
       assert.ok(!serializado.includes(prohibido), 'el contrato expone ' + prohibido);
     }
   }
+});
+
+test('f16: un correo que sale pero cuyo flag no se persiste deja requiere_revision', async () => {
+  // Hallazgo de `audit-4-punto-16.md`. Antes el estado se derivaba solo de
+  // si los envios habian salido, en memoria. Si un UPDATE de flag fallaba,
+  // la base quedaba con el flag en `false` y el estado en `completa`: ese
+  // lead no aparecia en la consulta operativa y nadie lo reconciliaba.
+  const supabaseClient = makeFakeSupabaseClient({
+    id: 'e0000000-0000-0000-0000-00000000000b',
+    failOnUpdate: true,
+  });
+  const mailer = makeFakeMailer();
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'flag-no-persiste@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  // Para el usuario: los dos correos SI salieron.
+  assert.equal(res.json.comunicacion_completa, true);
+  // Para operacion: la base no lo refleja, asi que alguien tiene que mirar.
+  assert.equal(
+    supabaseClient.estadoUpdates[0].values.estado_comunicacion,
+    'requiere_revision',
+    'Un lead con la base inconsistente no puede quedar invisible'
+  );
+});
+
+test('f16: reintentar tras un fallo de red no crea un segundo lead', async () => {
+  // Si `fetch` rechaza, el navegador no sabe si la request llego. El
+  // formulario conserva los datos y la persona puede reintentar; la
+  // idempotencia del endpoint es la que evita el duplicado.
+  const existingId = 'e0000000-0000-0000-0000-00000000000c';
+  const supabaseClient = makeFakeSupabaseClient({
+    existingLeads: [
+      {
+        id: existingId,
+        notificacion_clinica_enviada: true,
+        confirmacion_paciente_enviada: true,
+      },
+    ],
+  });
+  const mailer = makeFakeMailer();
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  // Mismo payload que el intento perdido.
+  const req = makeReq({ body: validPayload({ email: 'reintento@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, existingId, 'devuelve el lead que ya existia');
+  assert.equal(supabaseClient.calls.length, 0, 'NO inserta un segundo lead');
+  assert.equal(mailer.sentMails.length, 0, 'ni reenvia los correos');
 });
