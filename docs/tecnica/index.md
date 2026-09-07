@@ -68,6 +68,7 @@ hide:
 - [Entregabilidad correo dominio](entregabilidad-correo-dominio.md)
 - [Pipeline de despliegue Vercel](pipeline-despliegue-vercel.md)
 - [Observabilidad y operacion](observabilidad-y-operacion.md)
+- [Estado de comunicacion de los leads](estado-comunicacion-leads.md)
 
 <!-- FEATURE_LINKS_END -->
 

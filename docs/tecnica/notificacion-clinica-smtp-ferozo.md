@@ -221,15 +221,29 @@ implícito en el puerto 465 no cambian.
 `enviarConReintento()` reintenta **una sola vez** si el fallo fue
 transitorio, con una espera corta de por medio. Ambos envíos lo usan.
 
-Qué cuenta como transitorio:
+### Corrección: la pregunta no es si el fallo fue pasajero
 
-| Se reintenta | No se reintenta |
+Una primera versión reintentaba cualquier error "transitorio", incluido
+`ETIMEDOUT`. **Está mal**, y es el caso que de hecho ocurrió: un timeout
+de socket puede producirse *después* de que el servidor aceptó el mensaje,
+cuando solo se perdió la respuesta. Reintentar ahí manda el correo **dos
+veces**.
+
+La pregunta correcta es otra: *¿se puede demostrar que el servidor no
+llegó a aceptarlo?* Solo entonces reintentar es seguro.
+
+| Se reintenta — no hubo entrega | No se reintenta — ambiguo o permanente |
 |---|---|
-| `ETIMEDOUT`, `ESOCKET`, `ECONNECTION`, `ECONNRESET`, `EPIPE`, `EAI_AGAIN`, `EDNS` | `EAUTH`, `EENVELOPE`, `EMESSAGE` |
-| Rechazos SMTP **4xx** (temporarios por definición del RFC 5321) | Rechazos SMTP **5xx** (permanentes) |
+| `ECONNECTION`, `EDNS`, `EAI_AGAIN`: no hubo sesión SMTP | `ETIMEDOUT` **sin** marca de conexión, `ESOCKET`, `ECONNRESET`, `EPIPE`: el mensaje pudo haberse entregado |
+| `ETIMEDOUT` con `command: 'CONN'`: expiró al conectar | `EAUTH`, `EENVELOPE`, `EMESSAGE`: reintentar no arregla nada |
+| Rechazo SMTP **4xx**: el servidor dijo explícitamente que no lo acepta | Rechazo SMTP **5xx**: permanente |
 
-Reintentar credenciales inválidas o un rechazo definitivo no arregla
-nada y solo gasta tiempo con la persona esperando.
+Lo que no se reintenta **no se pierde**: el lead queda en
+`requiere_revision` y aparece en la consulta operativa. La prioridad, en
+orden, es: no perder el lead, no duplicar correos, y dejar la incidencia
+visible para operación.
+
+Ver `docs/tecnica/estado-comunicacion-leads.md`.
 
 **El límite de un reintento es deliberado.** La función corre dentro de
 una request HTTP; un bucle de reintentos convertiría un fallo de correo

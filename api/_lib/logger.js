@@ -66,6 +66,15 @@ const CAMPOS_DE_LEAD_PERMITIDOS = [
 ];
 
 // Codigos de error que el endpoint devuelve en el body. Dominio cerrado.
+// Ciclo de vida de la notificacion automatica. Dominio cerrado, igual
+// que el resto: si llegara cualquier otra cosa, se descarta.
+const ESTADOS_DE_COMUNICACION = [
+  'pendiente',
+  'completa',
+  'requiere_revision',
+  'resuelta_manual',
+];
+
 const CODIGOS_DE_ERROR_API = [
   'metodo_no_permitido',
   'origen_no_permitido',
@@ -143,6 +152,7 @@ const CAMPOS = {
   campo: validarEnum(CAMPOS_DE_LEAD_PERMITIDOS, CAMPO_NO_PERMITIDO),
   motivo: validarEnum(MOTIVOS_DE_RECHAZO),
   flag: validarEnum(FLAGS_DE_NOTIFICACION),
+  estado_comunicacion: validarEnum(ESTADOS_DE_COMUNICACION),
   tipo: validarToken,
   codigo: validarToken,
   smtp_response_code: validarEntero,
