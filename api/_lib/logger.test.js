@@ -158,6 +158,7 @@ test('la lista blanca no contiene ningun campo de texto libre', () => {
     'campo',
     'motivo',
     'flag',
+    'estado_comunicacion',
     'tipo',
     'codigo',
     'smtp_response_code',
@@ -467,4 +468,35 @@ test('supabase_host / supabase_path: aceptan endpoint y rechazan cualquier query
 
   assert.equal(parseadas[2].supabase_host, 'no_valido');
   assert.equal(JSON.stringify(parseadas[2]).includes('clave'), false);
+});
+
+test('ningun validador de la lista blanca deja pasar texto libre', () => {
+  // El test de arriba fija los NOMBRES de los campos. Eso no alcanza:
+  // cambiar `validarEnum(...)` por una funcion que devuelve el valor tal
+  // cual dejaba entrar PII sin que nada fallara, y el guard seguia en
+  // verde. Lo detecto la verificacion en negativo del punto 16.
+  //
+  // Este test comprueba el COMPORTAMIENTO: se alimenta cada campo con una
+  // cadena hostil y se exige que no salga intacta por ningun canal.
+  const HOSTIL = 'Juan Perez <juan.perez@ejemplo.com> +54 9 11 1234-5678 dolor de muela';
+
+  for (const nombre of NOMBRES_DE_CAMPOS) {
+    const { texto } = capturarLogs(() => {
+      emitir('info', 'evento_de_prueba', { request_id: 'r1', [nombre]: HOSTIL });
+    });
+
+    assert.equal(
+      texto.includes(HOSTIL),
+      false,
+      'El campo `' + nombre + '` dejo pasar texto libre con PII. Todo campo ' +
+        'de la lista blanca debe validar contra un dominio cerrado.'
+    );
+    for (const fragmento of ['juan.perez@ejemplo.com', '1234-5678', 'dolor de muela']) {
+      assert.equal(
+        texto.includes(fragmento),
+        false,
+        'El campo `' + nombre + '` filtro: ' + fragmento
+      );
+    }
+  }
 });

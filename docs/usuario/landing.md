@@ -39,24 +39,32 @@ Cuando alguien completa el formulario y toca **Enviar Solicitud**:
 
 1. El botón se bloquea al instante y pasa a decir **"Enviando
    solicitud..."**, con un indicador de que el sistema está trabajando.
-   El envío tarda unos segundos porque, además de guardar la solicitud,
-   el sistema avisa a la clínica y le confirma la recepción al paciente.
+   Tarda unos segundos porque, además de guardar la solicitud, el sistema
+   avisa a la clínica y le confirma la recepción a la persona.
 2. Volver a tocar el botón, o apretar Enter otra vez, **no genera una
-   segunda solicitud**. Antes sí podía pasar: como el proceso tarda,
-   parecía que no había ocurrido nada.
-3. Si todo sale bien aparece un cartel de confirmación: *"Solicitud
-   enviada — Recibimos tu solicitud correctamente. Tu turno todavía no
-   está confirmado. Nos comunicaremos con vos para coordinarlo."* Se
-   cierra con el botón **Entendido** o con la tecla `Escape`, y el
-   formulario queda limpio.
-4. Si algo falla aparece un mensaje en rojo encima del botón, **los datos
-   escritos se conservan** y se puede reintentar sin volver a tipear
-   nada.
+   segunda solicitud**.
+3. Al terminar aparece uno de tres carteles, según lo que haya pasado.
 
-El cartel de confirmación **no dice que se haya enviado un correo**, y es
-a propósito: el sitio confirma que recibió la solicitud, que es lo único
-que puede asegurar en ese momento. Los correos se envían inmediatamente
-después y, si uno fallara, la solicitud igual quedó registrada y la
-clínica la ve.
+| Situación | Cartel | Qué pasa con el formulario |
+|---|---|---|
+| Todo salió bien | **Solicitud enviada** | se limpia |
+| La solicitud se guardó pero falló algún correo | **Solicitud registrada** | se limpia |
+| La solicitud no se pudo guardar | **No pudimos registrar tu solicitud** | **se conservan los datos** para reintentar |
+
+El cartel se cierra con **Entendido** o con `Escape`, y la persona se
+queda en la misma página.
+
+En el segundo caso el mensaje dice explícitamente **"No es necesario que
+vuelvas a enviar el formulario"**: la solicitud ya está guardada y
+reenviarla crearía una duplicada. Esas solicitudes quedan marcadas para
+revisión — ver
+[Solicitudes que necesitan revisión](estado-comunicacion-leads.md).
+
+Solo en el tercer caso se invita a reintentar, porque ahí no quedó nada
+guardado.
+
+**Ningún cartel dice que se haya enviado un correo**, y es a propósito: el
+sitio confirma lo único que puede asegurar en ese momento, que recibió la
+solicitud.
 
 Los mensajes de error nunca muestran detalles técnicos.

@@ -69,26 +69,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Envio del formulario. Reescrito en el punto 16 por tres problemas
-    // observados en pruebas reales:
+    // Envio del formulario.
     //
-    // 1. El guard de doble envio estaba invertido. Ponia `disabled = true`
-    //    ANTES de comprobar `dataset.submitting` y, al detectar un segundo
-    //    submit, REHABILITABA el boton y restauraba el texto con la
-    //    request todavia en vuelo.
-    // 2. El unico feedback era reescribir el `textContent` del boton, asi
-    //    que durante los segundos que tardan el INSERT y los dos envios
-    //    SMTP la pagina parecia trabada.
-    // 3. El mensaje de exito, tambien dentro del boton, pasaba
-    //    desapercibido.
+    // Tres resultados terminales, no dos, y esa es la correccion central
+    // de esta version: un 201 significa "el lead quedo registrado", NO
+    // que las dos notificaciones hayan salido. El backend ahora lo dice
+    // en la respuesta (`comunicacion_completa`), y aca se traduce a tres
+    // mensajes distintos:
     //
-    // Ahora el estado vive en una variable explicita (`enviando`), no en
-    // el atributo `disabled` ni en un `dataset`: el DOM refleja el estado,
-    // no lo define.
+    //   exito   -> lead registrado y ambos correos enviados
+    //   parcial -> lead registrado, alguna notificacion sin completar
+    //   error   -> el lead NO se pudo registrar
+    //
+    // La diferencia que importa: en `parcial` el lead YA existe, asi que
+    // el mensaje dice explicitamente que no hace falta reenviar. Invitar
+    // a reenviar ahi generaria un duplicado.
     const leadForm = document.getElementById('leadForm');
     const botonEnvio = document.getElementById('submitLead');
     const etiquetaEnvio = document.getElementById('submitLeadLabel');
-    const cajaError = document.getElementById('formError');
 
     if (leadForm && botonEnvio && etiquetaEnvio) {
         const TEXTO_INICIAL = etiquetaEnvio.textContent;
@@ -98,7 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // `aria-busy` son su reflejo en el DOM, no el estado en si.
         let enviando = false;
 
-        const modal = document.getElementById('modalExito');
+        const modal = document.getElementById('modalResultado');
+        const cajaModal = document.getElementById('modalCaja');
         let focoPrevioAlModal = null;
 
         function bloquearEnvio() {
@@ -117,20 +116,28 @@ document.addEventListener('DOMContentLoaded', () => {
             etiquetaEnvio.textContent = TEXTO_INICIAL;
         }
 
-        function mostrarError(mensaje) {
-            if (!cajaError) return;
-            cajaError.textContent = mensaje;
-            cajaError.hidden = false;
-        }
-
-        function limpiarError() {
-            if (!cajaError) return;
-            cajaError.textContent = '';
-            cajaError.hidden = true;
-        }
-
-        function abrirModal() {
+        /**
+         * Muestra una de las tres variantes del dialogo.
+         * @param {'exito'|'parcial'|'error'} resultado
+         */
+        function mostrarResultado(resultado) {
             if (!modal) return;
+
+            let visible = null;
+            modal.querySelectorAll('.modal__variante').forEach((variante) => {
+                const corresponde = variante.dataset.resultado === resultado;
+                variante.hidden = !corresponde;
+                if (corresponde) visible = variante;
+            });
+            if (!visible) return;
+
+            // El nombre accesible del dialogo tiene que ser el titulo de
+            // la variante que se esta mostrando, no uno fijo.
+            const titulo = visible.querySelector('.modal__titulo');
+            if (cajaModal && titulo && titulo.id) {
+                cajaModal.setAttribute('aria-labelledby', titulo.id);
+            }
+
             focoPrevioAlModal = document.activeElement;
             modal.hidden = false;
             // Bloqueo de scroll del fondo mientras el dialogo esta
@@ -138,7 +145,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // `body.con-modal`, solo existe mientras el modal esta
             // visible, y se quita al cerrarlo.
             document.body.classList.add('con-modal');
-            const cerrar = document.getElementById('modalExitoCerrar');
+
+            const cerrar = document.getElementById('modalCerrar');
             if (cerrar) cerrar.focus();
         }
 
@@ -247,7 +255,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 version_politica_privacidad: POLITICA_PRIVACIDAD_VERSION,
             };
 
-            limpiarError();
             bloquearEnvio();
 
             fetch('/api/leads', {
@@ -258,40 +265,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(leadPayload),
             })
                 .then((response) => {
-                    if (response.status === 429) {
-                        throw new Error('rate_limit');
-                    }
                     // Los dos caminos de exito del endpoint responden 201,
-                    // incluido el de idempotencia. Cualquier otra cosa es
-                    // un fallo: no se resetea el formulario.
+                    // incluido el de idempotencia. Cualquier otra cosa
+                    // significa que el lead NO quedo registrado.
                     if (response.status !== 201) {
-                        throw new Error('connection');
+                        throw new Error('registro_fallido');
                     }
-                    // El cuerpo NO se lee. Nada de la UI depende del `id`
-                    // que devuelve el endpoint, y parsearlo solo agregaba
-                    // una rama ambigua: con `json()` fallido habia que
-                    // decidir si un 201 confirmado cuenta como exito.
-                    // Sin parseo no hay ambiguedad: manda el status.
+                    // Aca SI se lee el cuerpo, y solo para distinguir
+                    // exito completo de parcial. Si viniera ilegible se
+                    // asume lo conservador: parcial, que le dice al
+                    // usuario que no reenvie. El lead esta registrado.
+                    return response.json().catch(() => ({}));
                 })
-                .then(() => {
-                    // Recien aca, con el 201 confirmado, se descarta lo
-                    // que el usuario escribio.
+                .then((datos) => {
+                    const completa = datos && datos.comunicacion_completa === true;
+                    // El lead quedo registrado en los dos casos, asi que
+                    // en los dos se limpia el formulario: dejarlo lleno
+                    // invitaria a reenviar y duplicar.
                     leadForm.reset();
                     liberarEnvio();
-                    abrirModal();
+                    mostrarResultado(completa ? 'exito' : 'parcial');
                 })
-                .catch((error) => {
-                    // Ante error se conserva TODO lo escrito y se permite
-                    // reintentar. Nunca se muestra detalle tecnico:
-                    // ni request_id, ni codigos, ni errores de SMTP o
-                    // Supabase.
-                    mostrarError(
-                        error && error.message === 'rate_limit'
-                            ? 'Recibimos demasiados intentos desde esta conexión. Esperá unos minutos y volvé a intentarlo.'
-                            : 'No pudimos enviar tu solicitud. Revisá tu conexión e intentá nuevamente.'
-                    );
+                .catch(() => {
+                    // El lead NO se registro: se conserva TODO lo escrito
+                    // y se permite reintentar. Nunca se muestra detalle
+                    // tecnico: ni request_id, ni codigos, ni errores de
+                    // SMTP o Supabase.
                     liberarEnvio();
-                    botonEnvio.focus();
+                    mostrarResultado('error');
                 });
         });
     }

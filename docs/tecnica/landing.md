@@ -95,34 +95,78 @@ curso, sin girar.
 ### 3. La confirmación pasaba desapercibida
 
 El mensaje de éxito también se escribía dentro del botón. Ahora hay un
-diálogo (`#modalExito`) con `role="dialog"`, `aria-modal="true"` y
-`aria-labelledby`. Se abre **solo tras un 201 confirmado**, el foco entra
-al botón de cierre, `Escape` lo cierra, y al cerrarse el foco vuelve a
-donde estaba. No redirige: el usuario se queda en la misma página.
+diálogo (`#modalResultado`) con `role="dialog"`, `aria-modal="true"` y
+`aria-labelledby`. El foco entra al botón de cierre, `Escape` lo cierra,
+el `Tab` queda atrapado dentro, y al cerrarse el foco vuelve a donde
+estaba. No redirige.
 
-**El texto no afirma que se haya enviado ningún correo.** El frontend no
-puede saberlo: la respuesta del endpoint es `201 { id }`, y los dos
-envíos SMTP ocurren después y pueden fallar sin afectar ese 201. Decir
-"te enviamos un correo" sería afirmar algo que el sistema no confirmó.
-Hay un test que lo impide.
+### 4. El diálogo se veía al entrar al sitio
 
-### Éxito y error
+**Este fue un defecto que llegó a Production.** El atributo `hidden`
+estaba puesto en el HTML y `modal.hidden` era `true`, pero el diálogo se
+mostraba igual al cargar la página, sin haber enviado nada.
 
-| | Éxito (201) | Error |
-|---|---|---|
-| Formulario | se resetea | **se conserva todo** lo escrito |
-| Botón | vuelve a estado normal | vuelve a habilitarse, permite reintentar |
-| Mensaje | diálogo de confirmación | `#formError` con `role="alert"` |
+La causa es de cascada, no de JavaScript:
 
-El reset ocurre **solo** con `status === 201`. Los dos caminos de éxito
-del endpoint —incluido el de idempotencia, que devuelve el lead ya
-existente— responden 201, así que la condición no deja fuera ningún caso
-legítimo. Cualquier otro status se trata como fallo y no descarta lo que
-la persona escribió.
+```
+[hidden] { display: none }   <- hoja del NAVEGADOR (user agent)
+.modal   { display: flex }   <- hoja del SITIO (autor)
+```
 
-El mensaje de error nunca muestra detalle técnico: ni `request_id`, ni
-códigos internos, ni errores de SMTP o Supabase. Hay un test que verifica
-que ninguna de esas cadenas llegue al texto visible.
+**Cualquier regla de autor le gana a la del agente de usuario**, sin
+importar la especificidad. El `display: flex` anulaba el `hidden`.
+
+La corrección es la red de seguridad idiomática, en `style.css`:
+
+```css
+[hidden] {
+    display: none !important;
+}
+```
+
+Protege a cualquier elemento futuro que use `hidden`, no solo al diálogo.
+
+**Los tests de jsdom no podían verlo**: con el mismo HTML y el mismo CSS,
+jsdom devuelve `display: none`, porque su cascada no modela esa
+precedencia. Los tests comprobaban `modal.hidden === true` —que era
+cierto— mientras el navegador lo mostraba. El guard vive por eso en
+`tests/test_dialogo_resultado.py`, sobre el CSS, y la comprobación final
+se hizo en un navegador real.
+
+### Tres resultados terminales, un solo diálogo
+
+Un `201` significa "el lead quedó registrado", **no** que las dos
+notificaciones hayan salido. El backend lo informa en
+`comunicacion_completa`, y el frontend lo traduce a tres mensajes:
+
+| Resultado | Título | Formulario | Invita a reintentar |
+|---|---|---|---|
+| Éxito completo | Solicitud enviada | se limpia | no |
+| Éxito parcial | Solicitud registrada | se limpia | **no**, dice explícitamente que no hace falta |
+| Fallo de registro | No pudimos registrar tu solicitud | **se conserva** | sí |
+
+La diferencia crítica está en el éxito parcial: **el lead ya existe**, así
+que invitar a reenviar generaría un duplicado. Hay tests que lo prohíben
+en el HTML y en el comportamiento.
+
+Ante la duda se elige lo conservador: un `201` sin el campo, o con el
+cuerpo ilegible, se trata como **parcial**. El lead está registrado
+igual, y el mensaje que no invita a reenviar es el seguro.
+
+Los textos viven en el HTML, en tres `.modal__variante` que arrancan
+`hidden`; el script solo decide cuál se muestra y ajusta
+`aria-labelledby` al título de esa variante. Una sola infraestructura de
+diálogo para los tres casos: tres modales serían tres implementaciones de
+foco, `Escape` y cierre para mantener en paralelo.
+
+**Ningún mensaje afirma que se haya enviado un correo.** El frontend no
+puede saberlo: la respuesta dice si el envío salió, y eso no es lo mismo
+que haber llegado o haber sido leído.
+
+### El mensaje de error ya no vive en el botón
+
+Se eliminó la caja `#formError`. Los tres resultados terminales pasan por
+el mismo diálogo, que además captura el foco y se anuncia como tal.
 
 ### Bloqueo de scroll del fondo
 

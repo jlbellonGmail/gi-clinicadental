@@ -28,6 +28,20 @@
     box-sizing: border-box;
 }
 
+/* El `[hidden] { display: none }` del navegador es estilo de AGENTE DE
+   USUARIO, y cualquier regla de autor lo pisa sin importar la
+   especificidad. `.modal { display: flex }` lo anulaba: el dialogo de
+   confirmacion se veia al entrar al sitio, sin haber enviado nada.
+   Esta red de seguridad, con `!important`, es la forma idiomatica de
+   hacer que `hidden` signifique lo que dice, y protege a cualquier
+   elemento futuro que lo use.
+   No se detecta con jsdom: su cascada devuelve `display: none` igual,
+   asi que el guard que lo vigila es estructural
+   (`test_el_atributo_hidden_gana_a_las_reglas_de_autor`). */
+[hidden] {
+    display: none !important;
+}
+
 body {
     font-family: 'Inter', sans-serif;
     color: var(--text);
@@ -592,19 +606,10 @@ footer {
     cursor: not-allowed;
 }
 
-.form-error {
-    /* #b3261e sobre #fdecea da 5.9:1: por encima del minimo AA. */
-    color: #b3261e;
-    background-color: #fdecea;
-    border-left: 4px solid #b3261e;
-    border-radius: 8px;
-    padding: 12px 14px;
-    margin-bottom: 16px;
-    font-size: 0.95rem;
-    line-height: 1.5;
-}
-
-/* --- Modal de confirmacion --- */
+/* --- Dialogo de resultado ---
+   Una sola infraestructura para los tres estados terminales: exito
+   completo, exito parcial y error de registro. Lo unico que cambia es
+   cual `.modal__variante` esta visible. --- */
 
 .modal {
     position: fixed;
