@@ -41,10 +41,14 @@ En el panel de **Supabase**, sección **SQL Editor**:
 ```sql
 select id, fecha_creacion, nombre, email, servicio,
        notificacion_clinica_enviada, confirmacion_paciente_enviada
-from leads
+from public.leads
 where estado_comunicacion in ('requiere_revision', 'pendiente')
+  and estado <> 'descartado'
 order by fecha_creacion desc;
 ```
+
+Las solicitudes ya **descartadas** no aparecen: si la clínica cerró ese
+caso, no hace falta perseguirlo aunque su correo haya fallado.
 
 Las dos últimas columnas dicen qué correo faltó:
 
@@ -59,7 +63,7 @@ Las dos últimas columnas dicen qué correo faltó:
 Cuando ya se contactó a la persona, marcá esa solicitud como resuelta:
 
 ```sql
-update leads
+update public.leads
 set estado_comunicacion = 'resuelta_manual',
     fecha_actualizacion = now()
 where id = 'PEGAR-ACA-EL-ID-DE-LA-FILA';

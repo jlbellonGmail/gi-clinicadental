@@ -86,8 +86,9 @@ Desde el SQL Editor de Supabase, con `service_role`:
 ```sql
 select id, fecha_creacion, nombre, email, servicio,
        notificacion_clinica_enviada, confirmacion_paciente_enviada
-from leads
+from public.leads
 where estado_comunicacion = 'requiere_revision'
+  and estado <> 'descartado'
 order by fecha_creacion desc;
 ```
 
@@ -95,16 +96,35 @@ Los dos flags dicen **cuál** de los dos correos faltó: si
 `notificacion_clinica_enviada` es `false`, la clínica nunca se enteró por
 correo y este listado es la única forma de verlo.
 
-Hay un índice parcial (`leads_requieren_revision_idx`) para esta consulta.
-Es parcial y no total porque `requiere_revision` debería ser una minoría
-muy chica de las filas.
+Hay un índice parcial (`leads_requieren_revision_idx`) con **exactamente
+este predicado**. Es parcial y no total porque `requiere_revision` debería
+ser una minoría muy chica de las filas, y hay un test que verifica que la
+consulta documentada y el índice no diverjan: si divergen, el índice deja
+de servir.
+
+### Por qué se excluyen los `descartado`
+
+Un lead que la clínica ya descartó no necesita que nadie lo persiga,
+aunque su notificación haya fallado.
+
+La exclusión vive **en la consulta y en el índice, no en el dato**. El
+`estado_comunicacion` de ese lead sigue diciendo `requiere_revision`,
+porque eso es lo que realmente pasó con su notificación. Sobrescribirlo
+con `resuelta_manual` durante el backfill habría afirmado que alguien
+gestionó esa comunicación —lo que no es cierto— y habría borrado la
+información.
+
+Así los dos ejes siguen siendo independientes: `estado` dice dónde está
+comercialmente, `estado_comunicacion` dice qué pasó con los correos, y la
+cola operativa —que es una tercera cosa: qué hay que hacer hoy— se arma
+combinando los dos.
 
 ### Marcar uno como resuelto
 
 Cuando alguien ya se comunicó con la persona:
 
 ```sql
-update leads
+update public.leads
 set estado_comunicacion = 'resuelta_manual',
     fecha_actualizacion = now()
 where id = '<uuid del lead>';
@@ -130,6 +150,33 @@ Para este MVP alcanza con persistencia correcta, un estado explícito, una
 consulta segura y un procedimiento documentado. Construir una aplicación
 administrativa ahora sería trabajo grande para un volumen que todavía no
 existe, y la clínica ya entra al panel de Supabase.
+
+## El backfill de los leads históricos
+
+La columna se agrega con `default 'pendiente'` para poder declararla
+`not null`, pero dejarla así sería mentir: `pendiente` significa "el
+proceso de notificaciones todavía no terminó", y en una fila de hace
+semanas terminó hace tiempo. Su resultado ya se conoce — está en los dos
+flags.
+
+Por eso la migración reclasifica las filas existentes:
+
+| Condición | Estado asignado |
+|---|---|
+| `notificacion_clinica_enviada is true` **y** `confirmacion_paciente_enviada is true` | `completa` |
+| cualquier otra combinación | `requiere_revision` |
+
+Es deliberadamente conservador. Se usa `is true` y no `= false`, así que
+un flag en `null` cae en `requiere_revision` junto con los `false`: un
+`null` no es una notificación enviada, y preferimos que alguien mire de
+más antes que dejar invisible un lead cuya notificación quizá falló.
+
+**El backfill solo toca las filas que siguen en `pendiente`.** Eso lo hace
+reejecutable sin daño: en una segunda corrida, las filas ya clasificadas
+—incluidas las que la clínica marcó `resuelta_manual`— quedan intactas.
+
+Después de la migración, `pendiente` vuelve a significar lo que dice: un
+lead nuevo cuyo proceso de notificaciones todavía no terminó.
 
 ## Cuándo se marca `requiere_revision`
 
@@ -182,7 +229,8 @@ Una consulta que los incluya:
 
 ```sql
 select id, fecha_creacion, estado_comunicacion
-from leads
+from public.leads
 where estado_comunicacion in ('requiere_revision', 'pendiente')
+  and estado <> 'descartado'
 order by fecha_creacion desc;
 ```
