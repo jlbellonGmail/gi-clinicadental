@@ -1033,3 +1033,71 @@ una línea.
 **El MVP no está cerrado y no se afirmará que lo está hasta que las tres
 señales existan: `[x]` en `ROADMAP.md`, tag `v1.0.0` publicado por el
 humano, y evidencia completa en este directorio.**
+
+## HITL 2: aprobado, y qué quedó demostrado
+
+**Fecha**: 2026-09-07. Las tres comprobaciones de la sección anterior las
+ejecutó el humano, que es quien tiene acceso a Supabase y a Vercel.
+
+### 1. El lead `V14-MTREJ5YZ`: verificado
+
+`notificacion_clinica_enviada = true`, `confirmacion_paciente_enviada =
+true`, `estado_comunicacion = completa`. Coincide con lo que el frontend
+había mostrado —la variante `exito`—, que es lo que esa variante afirma
+por construcción: el endpoint devolvió `comunicacion_completa: true`.
+
+El humano hizo además una prueba con una casilla real distinta de la de
+las pruebas sintéticas: **la confirmación al paciente llegó**, y **la
+notificación a la clínica llegó a la casilla institucional**. Es la
+comprobación de punta a punta del circuito de correo que ninguna medición
+desde el navegador podía dar.
+
+### 2. Los logs de Vercel: NO verificados, y así queda
+
+Los Runtime Logs de esa request **ya no estaban disponibles**: el plan
+Hobby los retiene una hora. El humano decidió **no repetir la prueba solo
+para reconstruirlos**, y es la decisión correcta: repetirla generaría un
+lead y dos correos más para responder una pregunta de diagnóstico que no
+condiciona el cierre.
+
+Esto deja **una sola cosa sin demostrar**: si en la validación C hubo un
+reintento SMTP. Se anota como no verificada, no como verificada. Lo que sí
+está demostrado es lo que importaba —los dos correos salieron y ambos
+llegaron—, y la política vigente acota el peor caso: ante un fallo
+ambiguo no se reintenta y el lead queda en `requiere_revision`.
+
+**Consecuencia operativa, no cosmética**: con retención de una hora, un
+incidente de correo que se detecte al día siguiente **no tendrá logs**. La
+fuente de verdad para operar no son los logs sino `estado_comunicacion` y
+los dos flags en la base, que son permanentes. Por eso la cola operativa
+se definió sobre la base y no sobre el log.
+
+### 3. Los leads sintéticos: descartados
+
+Incluidos los dos `nuevo + requiere_revision + true/false` que **no se
+tocaron desde esta sesión**, precisamente porque no se podía demostrar sin
+leer la base que fueran sintéticos. El humano los confirmó como pruebas y
+los descartó él. Verificación final: **`estado <> 'descartado'` → 0
+filas**.
+
+Se hace constar que esa confirmación es humana y no derivada de la
+evidencia de `runs/`: desde acá solo se pudo acotar el discriminador —la
+casilla controlada con plus-addressing—, no aplicarlo.
+
+### El cierre
+
+Las tres señales del párrafo anterior existen ahora: `[x]` en
+`ROADMAP.md`, tag `v1.0.0` publicado sobre `5f0fbe1`, y esta evidencia.
+
+| | |
+|---|---|
+| Tag | **`v1.0.0`** → `5f0fbe194d4363d8e5b5b1143b96b99740434eb3` |
+| Deployment validado | `6312453790`, Production, success |
+| Auditorías | código **APROBADA** (`audit-7-final`), evidencia **APROBADA** (`audit-2-intento-11`) |
+| Suites | `npm test` 272/272 · `pytest` 79/79 · `mkdocs --strict` OK |
+
+**Lo que este cierre NO afirma**: que el MVP esté probado bajo carga, que
+el rate limit funcione en Production —es en memoria y por instancia, se
+excluyó con motivo—, ni que hubiera o no un reintento SMTP en la
+validación C. Cerrar un MVP no es declararlo completo; es declarar que lo
+que se prometió para el MVP está demostrado.
