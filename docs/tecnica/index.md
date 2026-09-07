@@ -69,6 +69,7 @@ hide:
 - [Pipeline de despliegue Vercel](pipeline-despliegue-vercel.md)
 - [Observabilidad y operacion](observabilidad-y-operacion.md)
 - [Estado de comunicacion de los leads](estado-comunicacion-leads.md)
+- [Validación del MVP en producción](validacion-mvp-produccion.md)
 
 <!-- FEATURE_LINKS_END -->
 
