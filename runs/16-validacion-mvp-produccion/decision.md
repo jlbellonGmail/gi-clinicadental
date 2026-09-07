@@ -871,67 +871,164 @@ con la ejecución 3 de OpenCode, que emitió `approved` **antes** de
 completar el análisis — y es exactamente por eso que aquel informe
 truncado no se usó.
 
-#### Resultado
+#### Segunda ampliación de alcance: diálogo, éxito parcial y estado operativo
 
-**Pendiente de HITL 2.** Estado al cierre de la parte automatizable,
-actualizado tras la ampliación de alcance del envío del formulario:
+Después de que `audit-2` aprobara la evidencia sobre `4e86134`, el humano
+reportó un **bloqueante** y amplió el alcance por segunda vez.
+
+### El bloqueante: el diálogo se veía al entrar al sitio
+
+Reproducido en Production antes de tocar nada. El atributo `hidden`
+estaba puesto y `modal.hidden` era `true`, pero el `display` computado era
+`flex`.
+
+**La causa era de cascada, no de JavaScript:**
+
+```
+[hidden] { display: none }   <- hoja del NAVEGADOR (user agent)
+.modal   { display: flex }   <- hoja del SITIO (autor)
+```
+
+Cualquier regla de autor le gana a la del agente de usuario, sin importar
+la especificidad. Corregido con `[hidden] { display: none !important }`.
+
+**Lo grave es que los tests decían que estaba bien.** Comprobaban
+`modal.hidden === true`, que era cierto. jsdom devuelve `display: none`
+con el mismo CSS porque su cascada no modela esa precedencia. Es la
+quinta vez en esta etapa que un guard no ve su defecto, y la más
+instructiva: los cuatro anteriores tenían errores de implementación;
+**éste era correcto y aun así ciego**, porque corría en el motor
+equivocado. El guard vive ahora sobre el CSS.
+
+### Tres resultados terminales, no dos
+
+Un `201` significa "el lead quedó registrado", **no** que las dos
+notificaciones hayan salido. El endpoint lo informa en
+`comunicacion_completa`, y el frontend lo traduce a tres mensajes con una
+sola infraestructura de diálogo. La regla crítica: en el parcial el lead
+**ya existe**, así que el mensaje dice explícitamente que no hace falta
+reenviar. Ante la duda se elige lo conservador: parcial.
+
+### Estado operativo: dos preguntas, no una
+
+`audit-4` encontró que el estado podía quedar `completa` con la base
+inconsistente: si un correo salía pero su `UPDATE` de flag fallaba, la
+consulta operativa **no encontraba ese lead**. Ahora `completa` exige los
+dos envíos **y** los dos flags persistidos.
+
+### SMTP: la pregunta no era si el fallo fue pasajero
+
+La versión anterior reintentaba `ETIMEDOUT`. Está mal: ese timeout puede
+ocurrir *después* de que el servidor aceptó el mensaje, y reintentar manda
+el correo dos veces. Ahora solo se reintenta lo demostrablemente no
+entregado; lo ambiguo queda en `requiere_revision`.
+
+Esto revierte una decisión anterior de esta misma etapa —"no pool, no
+cambios de timeout"— que quedó levantada cuando el humano pidió resolver
+la confiabilidad. Se hace constar en vez de tratarlo como si nunca se
+hubiera decidido lo contrario.
+
+### La migración, corregida por revisión humana
+
+El humano revisó el SQL **antes** de aplicarlo y encontró dos defectos que
+ninguna herramienta automática miraba:
+
+- **faltaba el backfill**: las filas históricas quedaban todas en
+  `pendiente`, que significa "el proceso todavía no terminó", cuando su
+  resultado ya se conocía por los flags;
+- la comprobación sobre `pg_constraint` buscaba **solo por nombre**, lo
+  que daría un falso positivo con un constraint homónimo de otra tabla.
+
+Aplicada por el humano, con backfill verificado: **5 filas a `completa`,
+6 a `requiere_revision`, ninguna en `pendiente`**.
+
+Sobre los `descartado`: la exclusión vive en la **cola operativa**
+—consulta e índice parcial—, no en el dato. Un descartado con la
+notificación fallida conserva `requiere_revision` porque eso es lo que
+realmente pasó; marcarlo `resuelta_manual` afirmaría que alguien gestionó
+esa comunicación, que es falso, y borraría la información.
+
+### Los tests no deterministas: la causa no era la que dije
+
+Había atribuido las fallas de `test_local_reconciler_scripts.py` a "la
+máquina cargada". **Atribución incompleta: la suite se cargaba a sí
+misma.** Varios de esos tests dejan el reconciliador corriendo a
+propósito, y el teardown lo mataba **sin verificar**, así que los procesos
+sobrevivían y se acumulaban entre tests.
+
+Corregido: el teardown espera a que mueran, y barre huérfanos por línea de
+comandos acotado al `tmp_path` del test. Acelerar el sondeo destapó además
+una carrera latente —un test afirmaba que el `.log` existía sin
+esperarlo—, que también se corrigió.
+
+### Un error de empaquetado que costó una ronda de auditoría
+
+`audit-6` rechazó en parte porque el test de la migración no encontraba su
+documentación. Era cierto **dentro del directorio que le entregué**: al
+armarlo aplané la ruta a `docs/` en vez de `docs/tecnica/`. En el árbol
+real el archivo existe y el módulo pasa 10/10.
+
+El auditor razonó bien sobre un árbol que armé mal. Desde entonces el
+directorio de auditoría se extrae con `git archive`, conservando la
+estructura real.
+
+## Resultado
+
+**Pendiente de HITL 2.** Estado real al cierre de todo lo automatizable:
 
 | | |
 |---|---|
-| Preflight | P1–P8 aprobados (`test-report-1.md`) |
-| `audit-1` | **APROBADA** sobre `5c94dcf` (`audit-1-intento-9.md`). La serie tiene **cinco rechazos**: `intento-4` (máscara global de desborde) e `intentos 5 a 8` (contraste y solidez de los guards) |
-| `audit-3` (envío del formulario) | **APROBADA** sobre `3c66c8a` (`audit-3-envio-formulario-intento-3.md`), tras dos rechazos |
-| `main` | **`109d0afe75803f0e6f8e3e7ae40127d66cee04ef`** (PR #42) |
-| Deployment | **`6298664005`**, Production, **success** |
-| V1–V11 | validadas (`test-report-2.md`, `test-report-3.md`) |
-| V12 | corregida y medida; **falta la comprobación en teléfono real** |
-| Envío del formulario | corregido, auditado y **validado con un envío real en Production** (`test-report-6.md`) |
-| Suites | `npm test` **248/248**, `pytest` **60/60**, `mkdocs --strict` OK |
-| Verificación en negativo | **34 defectos en rojo, 7 cambios inocuos en verde** |
+| `main` | **`5f0fbe194d4363d8e5b5b1143b96b99740434eb3`** (PR #49) |
+| Deployment | **`6312453790`**, Production, **success** |
+| Migración | **aplicada** por el humano; backfill verificado, 0 filas en `pendiente` |
+| Suites | `npm test` **272/272** · `pytest` **79/79 verde completa** · `mkdocs --strict` OK |
+| Verificación en negativo | **28 defectos en rojo, 4 cambios inocuos en verde** |
 | Tags | **ninguno** |
 | `ROADMAP.md` | `[ ]` |
 | Feature | sin mergear |
-| `audit-2` | **APROBADA** sobre `109d0af` (`audit-2-intento-6.md`), tras dos rechazos |
 
-### Veredictos de la serie `audit-1`, uno por uno
+### Auditorías independientes, todas persistidas literalmente
 
-| Artefacto | SHA | Veredicto |
+| Serie | Alcance | Veredicto final |
 |---|---|---|
-| `audit-1.md` | `26e2a68` | approved |
-| `audit-1-intento-2.md` | `8611e96` | approved |
-| `audit-1-intento-3.md` | `1991211` | approved |
-| `audit-1-intento-4.md` | `689f480` | **rejected** |
-| `audit-1-contingencia-codex.md` | `e783b83` | APROBADA |
-| `audit-1-intento-5.md` | `6d4f90d` | **NO APROBADA** |
-| `audit-1-intento-6.md` | `5492cd4` | **NO APROBADA** |
-| `audit-1-intento-7.md` | `653c0ce` | **NO APROBADA** |
-| `audit-1-intento-8.md` | `8451815` | **NO APROBADA** |
-| `audit-1-intento-9.md` | `5c94dcf` | **APROBADA** |
+| `audit-1` (9 intentos + contingencia) | responsive y contraste | **APROBADA** sobre `5c94dcf`, tras cinco rechazos |
+| `audit-3` (3 intentos) | envío del formulario | **APROBADA** sobre `3c66c8a`, tras dos rechazos |
+| `audit-4` / `audit-5` | diálogo, éxito parcial, estado | **APROBADA** sobre `a64c6e9`, tras un rechazo |
+| `audit-6` / `audit-7` | SHA final | **APROBADA** sobre `5f0fbe1`, tras un rechazo |
+| `audit-2` (serie) | la evidencia | ver el último intento de la serie |
 
-Cinco rechazos en total. Una versión anterior de este documento decía
-"cuatro": contaba solo la ronda de contraste y se dejaba fuera el
-`intento-4`, que rechazó la máscara global de desborde. Lo señaló
-`audit-2-intento-5`.
+### La validación C
 
-Un `audit-2` anterior aprobó sobre `4e86134` (`audit-2-intento-3.md`).
-**Ese veredicto no cubre el árbol actual**: después llegó la ampliación de
-alcance. El `audit-2` válido para el HITL 2 es el último de la serie,
-sobre `109d0af`.
+Se hizo sobre el deployment de `571e999`. El release posterior (`5f0fbe1`)
+toca **solo `tests/`**: se comprobó **hash a hash** que `index.html`,
+`script.js`, `style.css`, `api/leads.js`, `api/_lib/mailer.js` y
+`api/_lib/logger.js` son idénticos. La validación aplica sin
+extrapolación.
 
-### Las tres comprobaciones humanas que faltan
+Resultado, en `test-report-8.md`: modal cerrado al cargar y tras refresh;
+feedback en 10 ms; **diez clicks y tres Enter → una sola request**; 201
+con la variante `exito`; formulario reseteado; `Escape` y **Entendido**
+cierran; el refresh posterior no reabre; 8 anchos entre 320 y 1440 sin
+desbordes ni scroll horizontal.
 
-1. **V12 en un teléfono real.** Es la que falló dos veces y la única que
-   esta cadena de evidencia no puede sustituir. Se le presentaron al
-   humano trece comprobaciones concretas y respondió *"si todo está
-   correcto, adelante"* sin responderlas: **no se registra como
-   validada**.
-2. **Los flags SMTP del lead `V13-MTQDI8RT`**, y si los 13,8 s del envío
-   real incluyeron un reintento. Requiere los logs de Vercel o los flags
-   en Supabase, inaccesibles desde esta sesión.
-3. **Descartar las seis filas sintéticas** (`estado='descartado'`).
+### Las comprobaciones humanas que faltan
 
-Falta además: decisión de HITL 2, tag emitido por el humano y
-confirmación del cierre en `ROADMAP.md`.
+1. **Los flags y el `estado_comunicacion` del lead `V14-MTREJ5YZ`** en
+   Supabase, y **los logs de esa request** en Vercel. Ni la CLI de Vercel
+   ni la de Supabase están disponibles en la sesión — comprobado, no
+   supuesto.
+2. **El descarte de los leads sintéticos** (`estado = 'descartado'`).
+3. **Los dos leads `nuevo + requiere_revision + true/false`**, que **no se
+   tocaron**. Su firma coincide con el `ETIMEDOUT` documentado en el Anexo
+   H, y todos los envíos sintéticos usaron la casilla controlada del
+   humano con plus-addressing; pero confirmar que esas dos filas concretas
+   coinciden **requiere leer la base**, así que quedan para resolución
+   humana.
+
+Sobre el reintento SMTP en la validación C: **no se afirma ni se descarta**
+que haya ocurrido. Los 15,0 s frente a los 13,8 s del envío anterior no
+prueban nada, y desde el navegador no se distingue. El log lo resuelve en
+una línea.
 
 **El MVP no está cerrado y no se afirmará que lo está hasta que las tres
 señales existan: `[x]` en `ROADMAP.md`, tag `v1.0.0` publicado por el
