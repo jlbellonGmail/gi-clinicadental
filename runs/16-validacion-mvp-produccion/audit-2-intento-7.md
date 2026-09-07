@@ -2,7 +2,7 @@
 
 > **Procedencia.** Informe de **Codex CLI** en modo `-s read-only`, sobre
 > el árbol completo del commit
-> **`5f0fbe194d4363d8e5b5b1143b96b99740434eb3`** más los **35** artefactos de
+> **`5f0fbe194d4363d8e5b5b1143b96b99740434eb3`** más los **37** artefactos de
 > `runs/16-validacion-mvp-produccion/`. (Una versión anterior de esta
 > cabecera decía "48": era un conteo mío equivocado, señalado por
 > `audit-2-intento-10.md`. El texto del auditor no se toca.) Claude Code lo persiste **literalmente**.
