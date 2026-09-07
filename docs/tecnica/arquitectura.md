@@ -65,6 +65,51 @@ estático — HTML/CSS/JS sin build — o declarativo — SQL, `.env.example`).
   del repo más allá de lo estrictamente necesario
   (`@supabase/supabase-js`).
 
+### Revisión (punto 16): se suma `jsdom`, y solo como dependencia de desarrollo
+
+La decisión de arriba se mantiene para el **runner**: se sigue usando
+`node --test`, no se sumó Jest, Vitest ni Mocha. Lo que cambia es que
+aparece la primera dependencia de *testing* del repo, y conviene decirlo
+explícitamente en vez de colarla en un `package.json`.
+
+**Por qué.** El punto 16 corrige tres defectos del envío del formulario
+—doble submit, falta de feedback y confirmación poco visible— y los tres
+son comportamientos del DOM. Hasta ese momento `script.js` tenía **cero
+cobertura**: los 213 tests eran todos de backend, y los tres defectos se
+encontraron usando el sitio a mano. El guard de doble envío, además,
+estaba **invertido** desde antes y nadie lo notó.
+
+Las alternativas que se descartaron:
+
+- **No testear el frontend.** Es lo que había, y es exactamente cómo
+  llegó a Production un guard invertido.
+- **Extraer la lógica a un módulo puro con una vista inyectada.** Testea
+  la máquina de estados sin DOM, pero no verifica el cableado real: si
+  el `id` del botón cambia en `index.html`, el test sigue verde.
+- **Verificar solo en un navegador.** No es reproducible en CI.
+
+`jsdom` va en `devDependencies`: **no se despliega**. El bundle de las
+funciones serverless no cambia, y `script.js` sigue siendo JavaScript
+plano sin proceso de build. `script.test.js` monta el `index.html` real
+del repositorio, así que un cambio de markup que rompa el cableado hace
+fallar los tests.
+
+**Límite declarado**: jsdom no pinta. Verifica estado, atributos y
+llamadas —no el aspecto visual—, y el layout se sigue validando por
+separado con mediciones en viewport real.
+
+## Decisión: `maxDuration` explícito para `api/leads.js`
+
+`vercel.json` fija `maxDuration: 30` para esa función. Antes no declaraba
+ninguno y quedaba en el valor por defecto de la plataforma.
+
+El motivo es que la ruta larga de la request —INSERT en Supabase, correo
+a la clínica, UPDATE del flag, correo al paciente, UPDATE final— ahora
+puede incluir **un reintento acotado** de cada envío SMTP. Sin un margen
+explícito, ese reintento podía chocar contra el límite por defecto y
+convertir un fallo de correo recuperable en un 504 de la request entera,
+que es peor: el lead ya está insertado.
+
 ## Decisión: runtime Node.js asumido ≥18 (CI fija Node 20)
 
 - No existía ninguna declaración previa en el repo sobre la versión de

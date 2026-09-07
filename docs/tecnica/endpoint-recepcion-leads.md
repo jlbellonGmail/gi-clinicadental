@@ -284,3 +284,28 @@ tests de inserción usan un cliente Supabase falso inyectado
 caso de éxito como el fallo (`error` de Postgres) sin red real. Queda
 como verificación pendiente en Preview/Production, igual que la
 migración de la feature `02`.
+
+## Ampliación del contrato de respuesta (punto 16)
+
+El `201` pasó de `{ id }` a:
+
+```json
+{ "id": "...", "comunicacion_completa": true, "requiere_revision": false }
+```
+
+**Por qué.** Un `201` significa que el lead quedó registrado, no que las
+dos notificaciones hayan salido. Con solo `id`, el frontend no podía
+distinguir un éxito completo de uno parcial, y terminaba diciendo
+"Solicitud enviada" también cuando algún correo había fallado.
+
+Los dos campos se derivan **en memoria** de los flags de envío, no se
+releen de la base: el contrato no depende de que el `UPDATE` de
+`estado_comunicacion` salga bien.
+
+**No se expone** nada de SMTP, ni el proveedor, ni códigos, ni motivos, ni
+cuál de los dos envíos falló. El frontend no lo necesita, y hay un test
+que verifica que esas palabras no aparezcan en el cuerpo serializado.
+
+El camino de idempotencia devuelve el estado **real del lead que ya
+existe**, derivado de sus dos flags: no reenvía correos y no afirma una
+comunicación completa que quizá no ocurrió.

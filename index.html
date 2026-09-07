@@ -201,7 +201,10 @@
                                         y entiendo que este sitio es una demostración técnica.</span>
                                 </label>
                             </div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%;">Enviar Solicitud</button>
+                            <button type="submit" class="btn btn-primary form-submit" id="submitLead">
+                                <span class="form-submit__spinner" aria-hidden="true"></span>
+                                <span class="form-submit__label" id="submitLeadLabel">Enviar Solicitud</span>
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -250,6 +253,67 @@
             </div>
         </div>
     </footer>
+
+    <!-- Dialogo de resultado. UNA sola infraestructura para los tres
+         estados terminales; lo unico que cambia es cual de las tres
+         variantes de contenido esta visible.
+
+         Arranca cerrado por el atributo `hidden` del HTML, sin depender de
+         que JavaScript llegue a ejecutarse. Eso importa: con `.modal
+         { display: flex }` como unica regla, el `[hidden]` del navegador
+         quedaba pisado y el dialogo se veia al entrar al sitio. La red de
+         seguridad `[hidden] { display: none !important }` de style.css lo
+         corrige.
+
+         Los textos viven en el HTML, no en cadenas de JavaScript: son
+         contenido revisable, y el de exito parcial es literal por pedido
+         expreso. -->
+    <div class="modal" id="modalResultado" hidden>
+        <div class="modal__fondo" data-cerrar-modal></div>
+        <div class="modal__caja" role="dialog" aria-modal="true"
+             aria-labelledby="tituloExito" id="modalCaja">
+
+            <!-- CASO A: lead registrado y los dos correos enviados. -->
+            <div class="modal__variante" id="varianteExito" data-resultado="exito" hidden>
+                <h2 class="modal__titulo" id="tituloExito">Solicitud enviada</h2>
+                <div class="modal__texto">
+                    <p>Recibimos tu solicitud correctamente.</p>
+                    <p>Tu turno todavía no está confirmado. Nos comunicaremos con vos
+                       para coordinarlo.</p>
+                </div>
+            </div>
+
+            <!-- CASO B: el lead quedo registrado, pero alguna notificacion
+                 no pudo completarse. Dice explicitamente que NO hace falta
+                 reenviar: el lead ya existe y reenviar lo duplicaria. -->
+            <div class="modal__variante" id="varianteParcial" data-resultado="parcial" hidden>
+                <h2 class="modal__titulo" id="tituloParcial">Solicitud registrada</h2>
+                <div class="modal__texto">
+                    <p>Recibimos tus datos correctamente.</p>
+                    <p>Tuvimos un inconveniente al completar las notificaciones, pero tu
+                       solicitud quedó registrada.</p>
+                    <p>Nuestro equipo revisará tu solicitud y se comunicará con vos por
+                       alguno de los medios informados para completar la gestión.</p>
+                    <p>No es necesario que vuelvas a enviar el formulario.</p>
+                    <p>Tu turno todavía no está confirmado.</p>
+                </div>
+            </div>
+
+            <!-- CASO C: el lead NO se pudo registrar. Es el unico caso en
+                 el que se invita a reintentar, porque no hay nada guardado
+                 que se pueda duplicar. -->
+            <div class="modal__variante" id="varianteError" data-resultado="error" hidden>
+                <h2 class="modal__titulo" id="tituloError">No pudimos registrar tu solicitud</h2>
+                <div class="modal__texto">
+                    <p>No pudimos registrar tu solicitud en este momento. Intentá
+                       nuevamente en unos minutos.</p>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-primary modal__accion" id="modalCerrar"
+                    data-cerrar-modal>Entendido</button>
+        </div>
+    </div>
 
     <script src="script.js"></script>
     <style>

@@ -128,16 +128,73 @@ def kill_pid(pid: int) -> None:
     run(["taskkill", "/PID", str(pid), "/T", "/F"], Path(os.getcwd()), check=False)
 
 
-def wait_until(predicate, timeout_seconds: float, message: str):
+# Estas esperas son de reloj sobre un proceso PowerShell externo, asi que
+# dependen de lo cargada que este la maquina. Con los valores originales
+# -60s y 90s, sondeando cada segundo- la suite fallaba de forma no
+# determinista al correr en paralelo con otras cosas: un test distinto en
+# cada corrida, y verde en aislamiento y en CI.
+#
+# Se corrige en tres frentes, ninguno de los cuales afloja lo que el test
+# comprueba:
+#
+# 1. Sondeo mucho mas fino. Con `sleep(1)` se perdia hasta un segundo por
+#    comprobacion, y `process_alive()` lanza un PowerShell propio que en
+#    una maquina cargada tarda cientos de milisegundos: el "timeout" se
+#    consumia en gran parte midiendo, no esperando.
+# 2. Margen mas amplio, y configurable por entorno. No es aflojar el
+#    criterio: el test sigue exigiendo exactamente el mismo resultado, solo
+#    deja de exigir que la maquina este ociosa.
+# 3. Diagnostico al fallar. Antes el mensaje era mudo -"no termino en
+#    90s"- y no habia forma de saber si el reconciliador habia arrancado,
+#    fallado o simplemente ido lento. Ahora se adjunta la cola de sus dos
+#    logs.
+POLL_INTERVAL_SECONDS = 0.2
+
+# Multiplicador global, para poder darle mas aire en una maquina cargada
+# sin editar el test: `RECONCILER_TIMEOUT_FACTOR=3 pytest ...`
+TIMEOUT_FACTOR = float(os.environ.get("RECONCILER_TIMEOUT_FACTOR", "1") or "1")
+
+ARRANQUE_TIMEOUT_SECONDS = 120.0 * TIMEOUT_FACTOR
+FIN_TIMEOUT_SECONDS = 180.0 * TIMEOUT_FACTOR
+
+
+def log_paths(main: Path, slug: str) -> list[Path]:
+    return [state_dir(main) / f"{slug}.log", state_dir(main) / f"{slug}.err.log"]
+
+
+def diagnostico(main: Path, slug: str) -> str:
+    """Cola de los logs del reconciliador, para que el fallo se pueda leer.
+
+    Un timeout sin contexto no dice si el proceso arranco, si murio o si
+    solo fue lento, y esa diferencia es justamente la que importa.
+    """
+    partes = []
+    lock = lock_path(main, slug)
+    partes.append(f"lock={'existe' if lock.exists() else 'ausente'}")
+    for ruta in log_paths(main, slug):
+        if not ruta.exists():
+            partes.append("\n--- " + ruta.name + ": no existe ---")
+            continue
+        texto = ruta.read_text(encoding="utf-8", errors="replace").strip()
+        cola = "\n".join(texto.splitlines()[-20:]) or "(vacio)"
+        partes.append("\n--- " + ruta.name + " ---\n" + cola)
+    return "".join(partes)
+
+
+def wait_until(predicate, timeout_seconds: float, message):
+    """`message` puede ser un callable, para calcular el diagnostico recien
+    cuando hace falta y no en cada corrida exitosa."""
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         if predicate():
             return
-        time.sleep(1)
-    raise AssertionError(message)
+        time.sleep(POLL_INTERVAL_SECONDS)
+    raise AssertionError(message() if callable(message) else message)
 
 
-def wait_for_reconciler_running(main: Path, slug: str, timeout_seconds: float = 60.0) -> int:
+def wait_for_reconciler_running(
+    main: Path, slug: str, timeout_seconds: float = ARRANQUE_TIMEOUT_SECONDS
+) -> int:
     lock = lock_path(main, slug)
 
     def started() -> bool:
@@ -149,17 +206,25 @@ def wait_for_reconciler_running(main: Path, slug: str, timeout_seconds: float = 
     wait_until(
         started,
         timeout_seconds,
-        f"El reconciliador de {slug} no arranco en {timeout_seconds}s (log/lock ausentes).",
+        lambda: (
+            f"El reconciliador de {slug} no arranco en {timeout_seconds}s.\n"
+            + diagnostico(main, slug)
+        ),
     )
     return int(lock.read_text(encoding="ascii", errors="replace").strip())
 
 
-def wait_for_reconciler_finished(main: Path, slug: str, timeout_seconds: float = 90.0) -> None:
+def wait_for_reconciler_finished(
+    main: Path, slug: str, timeout_seconds: float = FIN_TIMEOUT_SECONDS
+) -> None:
     lock = lock_path(main, slug)
     wait_until(
         lambda: not lock.exists(),
         timeout_seconds,
-        f"El reconciliador de {slug} no termino en {timeout_seconds}s.",
+        lambda: (
+            f"El reconciliador de {slug} no termino en {timeout_seconds}s.\n"
+            + diagnostico(main, slug)
+        ),
     )
 
 
@@ -172,13 +237,91 @@ def find_lock_pids(tmp_path: Path) -> list[int]:
     return pids
 
 
+def procesos_que_referencian(tmp_path: Path) -> list[int]:
+    """PIDs cuya linea de comandos menciona este directorio temporal.
+
+    Acotado al `tmp_path` del test que lo llama: no puede alcanzar a un
+    proceso ajeno. Sirve para detectar hijos que sobrevivieron a la muerte
+    del padre y que ya no figuran en ningun lock.
+    """
+    ruta = str(tmp_path).replace("'", "''")
+    consulta = (
+        "Get-CimInstance Win32_Process | "
+        "Where-Object { $_.CommandLine -like '*" + ruta + "*' } | "
+        "ForEach-Object { \"$($_.ProcessId)|$($_.CommandLine)\" }"
+    )
+    resultado = run(
+        [powershell(), "-NoProfile", "-Command", consulta],
+        Path(os.getcwd()),
+        check=False,
+    )
+
+    pids = []
+    for linea in resultado.stdout.splitlines():
+        pid, _, cmdline = linea.partition("|")
+        if not pid.strip().isdigit():
+            continue
+        # La consulta lleva la ruta en su PROPIA linea de comandos, asi que
+        # se encuentra a si misma. Sin este filtro el barrido mataba su
+        # propio PowerShell -y con el, la maquinaria de `run()`-.
+        if "Get-CimInstance" in cmdline:
+            continue
+        if int(pid) == os.getpid():
+            continue
+        pids.append(int(pid))
+    return pids
+
+
 @pytest.fixture
 def cleanup_reconcilers(tmp_path):
+    """Deja la máquina como la encontró antes de pasar al siguiente test.
+
+    Varios de estos tests dejan el reconciliador **corriendo** a propósito:
+    solo verifican que arrancó. Antes el teardown lo mataba y seguía sin
+    comprobar nada, así que un proceso que tardaba en morir —o sus hijos:
+    `cmd.exe` lanza un `powershell.exe` que hace `git fetch` en bucle—
+    sobrevivía al test y se acumulaba con los de los siguientes.
+
+    Eso explicaba la rareza que se veía: cada test pasaba en segundos por
+    separado, y el módulo completo fallaba de forma no determinista, en un
+    test distinto cada vez. No era la máquina cargada por casualidad: la
+    cargaba la propia suite.
+
+    Ahora el teardown **espera a que los procesos estén realmente
+    muertos**, con un margen acotado.
+    """
     try:
         yield
     finally:
-        for pid in find_lock_pids(tmp_path):
+        pids = find_lock_pids(tmp_path)
+        for pid in pids:
             kill_pid(pid)
+        for pid in pids:
+            wait_until(
+                lambda pid=pid: not process_alive(pid),
+                30.0,
+                "El reconciliador " + str(pid) + " sigue vivo tras taskkill /T /F; "
+                "dejarlo correr contamina los tests siguientes.",
+            )
+
+        # Barrido final. Lo anterior solo alcanza a los procesos que
+        # todavia figuran en un lock, y un hijo puede sobrevivir despues de
+        # que el lock desaparecio -lo señalo `audit-6-final.md`-. Este
+        # barrido busca por linea de comandos cualquier proceso que siga
+        # referenciando el directorio temporal de ESTE test, sin tocar
+        # nada de fuera.
+        for pid in procesos_que_referencian(tmp_path):
+            kill_pid(pid)
+        wait_until(
+            lambda: not procesos_que_referencian(tmp_path),
+            30.0,
+            lambda: (
+                "Quedaron procesos vivos referenciando "
+                + str(tmp_path)
+                + ": "
+                + str(procesos_que_referencian(tmp_path))
+            ),
+        )
 
 
 def make_worktree(main: Path, tmp_path: Path, name: str, slug: str) -> Path:
@@ -211,7 +354,15 @@ def test_start_reconciler_from_linked_worktree(tmp_path, cleanup_reconcilers):
     result = start_reconciler(worktree, SLUG)
     assert result.returncode == 0, result.stdout + result.stderr
     wait_for_reconciler_running(main, SLUG)
-    assert (state_dir(main) / f"{SLUG}.log").exists()
+    # El lock aparece antes que el log: el reconciliador lo escribe recien
+    # cuando arranca a trabajar. Afirmarlo sin esperar era una carrera
+    # latente que el sondeo mas fino destapo. El test hermano
+    # -`test_start_reconciler_in_main_checkout`- ya esperaba asi.
+    wait_until(
+        lambda: (state_dir(main) / f"{SLUG}.log").exists(),
+        30,
+        lambda: "El reconciliador no escribio su log.\n" + diagnostico(main, SLUG),
+    )
     assert not (worktree / ".git" / "feature-reconcilers").exists()
 
 

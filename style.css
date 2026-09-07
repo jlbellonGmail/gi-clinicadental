@@ -14,12 +14,32 @@
     --radius: 16px;
     --transition: all 0.3s ease;
     --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    /* Superficie del hero. Mas oscura que --gradient-primary a proposito:
+       sobre #0ca9a9 el texto blanco da 2.89:1, por debajo del minimo AA.
+       Con este gradiente el blanco queda entre 5.02:1 y 7.37:1. */
+    --gradient-hero: linear-gradient(135deg, #0a7c7c 0%, #066060 100%);
+    --primary-deep: #076e6e;
+    --accent-soft: #ffd9bd;
 }
 
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+/* El `[hidden] { display: none }` del navegador es estilo de AGENTE DE
+   USUARIO, y cualquier regla de autor lo pisa sin importar la
+   especificidad. `.modal { display: flex }` lo anulaba: el dialogo de
+   confirmacion se veia al entrar al sitio, sin haber enviado nada.
+   Esta red de seguridad, con `!important`, es la forma idiomatica de
+   hacer que `hidden` signifique lo que dice, y protege a cualquier
+   elemento futuro que lo use.
+   No se detecta con jsdom: su cascada devuelve `display: none` igual,
+   asi que el guard que lo vigila es estructural
+   (`test_el_atributo_hidden_gana_a_las_reglas_de_autor`). */
+[hidden] {
+    display: none !important;
 }
 
 body {
@@ -204,7 +224,7 @@ header {
     height: 100vh;
     display: flex;
     align-items: center;
-    background: var(--gradient-primary);
+    background: var(--gradient-hero);
     position: relative;
     padding-top: 80px;
     overflow: hidden;
@@ -221,15 +241,61 @@ header {
     font-size: 3.5rem;
     line-height: 1.1;
     margin-bottom: 24px;
-    background: linear-gradient(to right, var(--secondary), var(--primary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
 }
 
+/* El color va scopeado a `.hero`, no en la regla de arriba: `.hero-content`
+   se reutiliza en la seccion de equipo, sobre fondo claro, y un blanco
+   global ahi seria invisible.
+   Antes: gradiente gris-oscuro -> teal recortado al texto, sobre un fondo
+   teal. El extremo derecho quedaba teal sobre teal: 1.00:1, literalmente
+   invisible. Blanco solido sobre el hero: 5.02-7.37:1. */
+.hero .hero-content h1 {
+    color: var(--white);
+}
+
+/* Scopeada a `.hero`: `.hero-content` se reutiliza en la seccion de
+   equipo, sobre fondo claro. El durazno solo funciona sobre la superficie
+   oscura del hero. */
+.hero .hero-content h1 .accent {
+    color: var(--accent-soft);
+}
+
+/* Sin scope a proposito: este es el color del reuso sobre fondo claro
+   (seccion de equipo). El hero lo pisa en la regla scopeada de abajo. */
 .hero-content p {
     font-size: 1.2rem;
     color: var(--text-muted);
     margin-bottom: 32px;
+}
+
+/* Contenido sobre la superficie del hero. Scopeado a `.hero` para no
+   tocar `.hero-content` cuando se reutiliza sobre fondo claro (seccion
+   de equipo). */
+.hero .hero-content p {
+    color: #eaf6f6;
+}
+
+/* Los CTA eran teal sobre teal: el primario se fundia con el fondo y el
+   secundario -borde y texto teal- quedaba en 1.00:1, invisible. */
+.hero .btn-primary {
+    background-color: var(--white);
+    color: var(--primary-deep);
+}
+
+.hero .btn-primary:hover {
+    background-color: var(--accent-soft);
+    color: var(--primary-deep);
+}
+
+.hero .btn-outline {
+    border-color: var(--white);
+    color: var(--white);
+    background: transparent;
+}
+
+.hero .btn-outline:hover {
+    background-color: var(--white);
+    color: var(--primary-deep);
 }
 
 .hero-btns {
@@ -253,7 +319,10 @@ header {
 
 .services-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    /* `min(280px, 100%)` en vez de `280px` a secas: por debajo de ~340 px
+       de viewport el minimo fijo era mas ancho que la columna disponible
+       y las tarjetas desbordaban 3 px a 320 px. */
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
     gap: 30px;
 }
 
@@ -480,17 +549,149 @@ footer {
    El desborde se corrige en su causa -la barra no cabia- y NO con
    overflow-x:hidden, que solo lo habria escondido.
    --------------------------------------------------------------- */
+/* ---------------------------------------------------------------------
+   Envio del formulario: estado de carga, error y confirmacion.
+   Punto 16. Antes el unico feedback era reescribir el textContent del
+   boton: el usuario no veia que el sistema estaba trabajando durante los
+   segundos que tardan el INSERT y los dos envios SMTP, y el mensaje de
+   exito pasaba desapercibido.
+   --------------------------------------------------------------------- */
+
+.form-submit {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* El spinner ocupa lugar solo mientras se envia, para que el boton no
+   cambie de ancho al aparecer. */
+.form-submit__spinner {
+    display: none;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: girar 0.7s linear infinite;
+}
+
+.form-submit[aria-busy="true"] .form-submit__spinner {
+    display: block;
+}
+
+@keyframes girar {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Respeta a quien pidio menos movimiento: el spinner sigue indicando
+   trabajo en curso, sin girar. */
+@media (prefers-reduced-motion: reduce) {
+    .form-submit__spinner {
+        animation: none;
+        border-top-color: currentColor;
+        opacity: 0.6;
+    }
+}
+
+/* `aria-disabled` en vez de `disabled` a secas: el boton sigue siendo
+   enfocable y un lector de pantalla anuncia el estado, en vez de que el
+   foco se pierda en el aire. */
+.form-submit[aria-disabled="true"] {
+    opacity: 0.75;
+    cursor: not-allowed;
+}
+
+/* --- Dialogo de resultado ---
+   Una sola infraestructura para los tres estados terminales: exito
+   completo, exito parcial y error de registro. Lo unico que cambia es
+   cual `.modal__variante` esta visible. --- */
+
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal__fondo {
+    position: absolute;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.55);
+}
+
+.modal__caja {
+    position: relative;
+    width: 100%;
+    /* `min()` en vez de un ancho fijo: a 320 px un `max-width: 440px`
+       sumado al padding del contenedor desbordaria. */
+    max-width: min(440px, 100%);
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    background-color: var(--white);
+    color: var(--text);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    padding: 32px 28px;
+    text-align: center;
+}
+
+.modal__titulo {
+    font-size: 1.5rem;
+    line-height: 1.25;
+    margin-bottom: 12px;
+    color: var(--primary-deep);
+}
+
+.modal__texto p {
+    color: var(--text);
+    margin-bottom: 12px;
+}
+
+.modal__texto p:last-child {
+    margin-bottom: 0;
+}
+
+.modal__accion {
+    margin-top: 24px;
+    width: 100%;
+}
+
+
+/* Bloqueo de scroll del fondo mientras el dialogo esta abierto. NO es una
+   mascara de desborde: va sobre `body.con-modal` -no sobre `body` a
+   secas-, solo existe mientras el modal esta visible y script.js la quita
+   al cerrarlo. El criterio del punto 16 prohibe ocultar el desborde, no
+   bloquear el scroll de fondo de un dialogo modal. */
+body.con-modal {
+    overflow: hidden;
+}
+
 @media (max-width: 768px) {
     /* El header pasa a dos filas: barra (logo + hamburguesa) y, al
        abrir, los paneles a ancho completo. `flex-wrap` evita
        posicionamiento absoluto y numeros magicos dependientes de la
        cantidad de enlaces. */
-    .has-mobile-nav .header-container {
-        flex-wrap: wrap;
+    /* Altura compacta para TODAS las cabeceras en movil, no solo la que
+       tiene menu: si no, la pagina legal se quedaba en 80px y la
+       composicion superior no era consistente entre paginas. */
+    .header-container {
         height: auto;
         min-height: 68px;
         padding-top: 8px;
         padding-bottom: 8px;
+        gap: 12px;
+    }
+
+    .has-mobile-nav .header-container {
+        flex-wrap: wrap;
     }
 
     .has-mobile-nav .nav-toggle {
@@ -540,6 +741,11 @@ footer {
         flex-direction: column;
         align-items: stretch;
         gap: 12px;
+        /* Apilados a ancho completo en telefono, pero con tope: sin el, a
+           768 px los botones quedaban como cintas de 705 px. A 430 px de
+           viewport el contenedor mide 367 px, por debajo del tope, asi que
+           ningun ancho de telefono se ve afectado. */
+        max-width: 420px;
     }
 
     .hero-btns .btn {
@@ -556,4 +762,83 @@ footer {
     .section {
         padding: 64px 0;
     }
+
+    /* --- Branding y cabecera --------------------------------------- */
+    /* A 320-360px el logo a 1.5rem mas el icono a 1.8rem empujaban al
+       boton hamburguesa contra el borde. */
+    .logo {
+        /* Fluido y sin envolver: a 320 px, con 1.15rem fijo, "Sonrie mas"
+           caia a dos lineas y estiraba el header a 75 px. */
+        font-size: clamp(1rem, 4.2vw, 1.15rem);
+        gap: 8px;
+        white-space: nowrap;
+    }
+
+    .logo i {
+        font-size: 1.35rem;
+    }
+
+    /* Boton de accion directo en el header, sin `.header-cta`: es el
+       "Volver al inicio" de la politica de privacidad. A tamaño de
+       escritorio competia visualmente con el titulo de la pagina. */
+    .header-container > .btn {
+        padding: 9px 14px;
+        font-size: 0.85rem;
+        border-width: 1px;
+        white-space: nowrap;
+    }
+
+    /* --- Hero ------------------------------------------------------- */
+    /* `min-height: 100vh` en movil pelea con la barra dinamica del
+       navegador y puede recortar contenido. La altura la marca el
+       contenido. */
+    .hero {
+        min-height: auto;
+    }
+
+    .hero-content h1 {
+        margin-bottom: 16px;
+    }
+
+    .hero .hero-content p {
+        font-size: 1.05rem;
+        margin-bottom: 28px;
+    }
+
+    .hero-grid {
+        gap: 32px;
+    }
+
+    /* --- Paginas legales -------------------------------------------- */
+    .legal-content h1 {
+        font-size: 1.6rem;
+        line-height: 1.25;
+    }
+
+    .legal-content .legal-version {
+        margin-bottom: 24px;
+    }
+
+    .legal-content h2 {
+        font-size: 1.15rem;
+    }
+
+    .legal-content section {
+        margin-bottom: 28px;
+    }
+
+    /* Confirmacion de envio: la caja se acerca a los bordes y el titulo
+       baja, igual que el resto de la tipografia en movil. */
+    .modal {
+        padding: 16px;
+    }
+
+    .modal__caja {
+        padding: 24px 20px;
+    }
+
+    .modal__titulo {
+        font-size: 1.3rem;
+    }
 }
+

@@ -69,11 +69,171 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Form Handling
+    // Envio del formulario.
+    //
+    // Tres resultados terminales, no dos, y esa es la correccion central
+    // de esta version: un 201 significa "el lead quedo registrado", NO
+    // que las dos notificaciones hayan salido. El backend ahora lo dice
+    // en la respuesta (`comunicacion_completa`), y aca se traduce a tres
+    // mensajes distintos:
+    //
+    //   exito   -> lead registrado y ambos correos enviados
+    //   parcial -> lead registrado, alguna notificacion sin completar
+    //   error   -> el lead NO se pudo registrar
+    //
+    // La diferencia que importa: en `parcial` el lead YA existe, asi que
+    // el mensaje dice explicitamente que no hace falta reenviar. Invitar
+    // a reenviar ahi generaria un duplicado.
     const leadForm = document.getElementById('leadForm');
-    if (leadForm) {
+    const botonEnvio = document.getElementById('submitLead');
+    const etiquetaEnvio = document.getElementById('submitLeadLabel');
+
+    if (leadForm && botonEnvio && etiquetaEnvio) {
+        const TEXTO_INICIAL = etiquetaEnvio.textContent;
+        const TEXTO_ENVIANDO = 'Enviando solicitud...';
+
+        // La fuente de verdad del estado de envio. `disabled` y
+        // `aria-busy` son su reflejo en el DOM, no el estado en si.
+        let enviando = false;
+
+        const modal = document.getElementById('modalResultado');
+        const cajaModal = document.getElementById('modalCaja');
+        let focoPrevioAlModal = null;
+
+        function bloquearEnvio() {
+            enviando = true;
+            botonEnvio.disabled = true;
+            botonEnvio.setAttribute('aria-busy', 'true');
+            botonEnvio.setAttribute('aria-disabled', 'true');
+            etiquetaEnvio.textContent = TEXTO_ENVIANDO;
+        }
+
+        function liberarEnvio() {
+            enviando = false;
+            botonEnvio.disabled = false;
+            botonEnvio.removeAttribute('aria-busy');
+            botonEnvio.removeAttribute('aria-disabled');
+            etiquetaEnvio.textContent = TEXTO_INICIAL;
+        }
+
+        /**
+         * Muestra una de las tres variantes del dialogo.
+         * @param {'exito'|'parcial'|'error'} resultado
+         */
+        function mostrarResultado(resultado) {
+            if (!modal) return;
+
+            let visible = null;
+            modal.querySelectorAll('.modal__variante').forEach((variante) => {
+                const corresponde = variante.dataset.resultado === resultado;
+                variante.hidden = !corresponde;
+                if (corresponde) visible = variante;
+            });
+            if (!visible) return;
+
+            // El nombre accesible del dialogo tiene que ser el titulo de
+            // la variante que se esta mostrando, no uno fijo.
+            const titulo = visible.querySelector('.modal__titulo');
+            if (cajaModal && titulo && titulo.id) {
+                cajaModal.setAttribute('aria-labelledby', titulo.id);
+            }
+
+            focoPrevioAlModal = document.activeElement;
+            modal.hidden = false;
+            // Bloqueo de scroll del fondo mientras el dialogo esta
+            // abierto. NO es una mascara de desborde: va sobre
+            // `body.con-modal`, solo existe mientras el modal esta
+            // visible, y se quita al cerrarlo.
+            document.body.classList.add('con-modal');
+
+            const cerrar = document.getElementById('modalCerrar');
+            if (cerrar) cerrar.focus();
+        }
+
+        function cerrarModal() {
+            if (!modal || modal.hidden) return;
+            modal.hidden = true;
+            document.body.classList.remove('con-modal');
+            // Devolver el foco a donde estaba evita que un lector de
+            // pantalla quede al principio del documento.
+            if (focoPrevioAlModal && typeof focoPrevioAlModal.focus === 'function') {
+                focoPrevioAlModal.focus();
+            }
+            focoPrevioAlModal = null;
+        }
+
+        // Elementos que pueden recibir foco dentro del dialogo.
+        const ENFOCABLES = [
+            'a[href]',
+            'button:not([disabled])',
+            'input:not([disabled])',
+            'select:not([disabled])',
+            'textarea:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])',
+        ].join(', ');
+
+        if (modal) {
+            modal.querySelectorAll('[data-cerrar-modal]').forEach((elemento) => {
+                elemento.addEventListener('click', cerrarModal);
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (modal.hidden) return;
+
+                if (e.key === 'Escape') {
+                    cerrarModal();
+                    return;
+                }
+
+                // Trampa de foco. Con `aria-modal="true"` el resto del
+                // documento se anuncia como inerte, pero el Tab del
+                // teclado igual se escapa si nadie lo retiene: el foco
+                // terminaba en la pagina de atras, que visualmente esta
+                // tapada.
+                if (e.key !== 'Tab') return;
+
+                const caja = modal.querySelector('.modal__caja');
+                const items = caja ? Array.from(caja.querySelectorAll(ENFOCABLES)) : [];
+                if (items.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
+
+                const primero = items[0];
+                const ultimo = items[items.length - 1];
+                const activo = document.activeElement;
+
+                if (!caja.contains(activo)) {
+                    e.preventDefault();
+                    primero.focus();
+                } else if (e.shiftKey && activo === primero) {
+                    e.preventDefault();
+                    ultimo.focus();
+                } else if (!e.shiftKey && activo === ultimo) {
+                    e.preventDefault();
+                    primero.focus();
+                }
+            });
+        }
+
+        // Segunda barrera, por si algun navegador dejara pasar el click
+        // sobre un boton ya deshabilitado. El guard real es el del submit.
+        botonEnvio.addEventListener('click', (e) => {
+            if (enviando) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
+
         leadForm.addEventListener('submit', (e) => {
             e.preventDefault();
+
+            // Guard central: cubre el click, el Enter y cualquier submit
+            // programatico. Sale sin tocar nada, para no pisar el estado
+            // del envio que ya esta en curso.
+            if (enviando) {
+                return;
+            }
 
             // Segunda capa explícita de validación del consentimiento:
             // el atributo `required` del checkbox #consent ya impide que
@@ -85,13 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const btn = leadForm.querySelector('button');
-            const originalText = btn.textContent;
-
-            // Payload listo para que la feature 08-conexion-frontend-api
-            // lo envíe con fetch('/api/leads', { method: 'POST', body:
-            // JSON.stringify(leadPayload) }); no se transmite todavía en
-            // esta feature.
             const leadPayload = {
                 nombre: document.getElementById('name').value.trim(),
                 email: document.getElementById('email').value.trim(),
@@ -102,72 +255,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 version_politica_privacidad: POLITICA_PRIVACIDAD_VERSION,
             };
 
-            btn.disabled = true;
-            btn.textContent = 'Enviando solicitud...';
-            btn.style.opacity = '0.7';
-            btn.style.backgroundColor = 'var(--primary)';
-
-            // Evitar solicitudes duplicadas
-            if (btn.dataset.submitting) {
-                btn.disabled = false;
-                btn.textContent = originalText;
-                btn.style.opacity = '1';
-                btn.style.backgroundColor = 'var(--primary)';
-                return;
-            }
-            btn.dataset.submitting = 'true';
+            bloquearEnvio();
 
             fetch('/api/leads', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(leadPayload)
+                body: JSON.stringify(leadPayload),
             })
-                .then(response => {
-                    if (!response.ok) {
-                        if (response.status === 429) {
-                            btn.textContent = 'Demasiados intentos, espere unos minutos';
-                            throw new Error('rate_limit');
-                        }
-                        throw new Error('connection');
+                .then((response) => {
+                    // Los dos caminos de exito del endpoint responden 201,
+                    // incluido el de idempotencia. Cualquier otra cosa
+                    // significa que el lead NO quedo registrado.
+                    if (response.status !== 201) {
+                        throw new Error('registro_fallido');
                     }
-                    return response.json();
+                    // Aca SI se lee el cuerpo, y solo para distinguir
+                    // exito completo de parcial. Si viniera ilegible se
+                    // asume lo conservador: parcial, que le dice al
+                    // usuario que no reenvie. El lead esta registrado.
+                    return response.json().catch(() => ({}));
                 })
-                .then((data) => {
-                    btn.textContent = 'Solicitud recibida. La clínica se comunicará para confirmar el turno';
+                .then((datos) => {
+                    const completa = datos && datos.comunicacion_completa === true;
+                    // El lead quedo registrado en los dos casos, asi que
+                    // en los dos se limpia el formulario: dejarlo lleno
+                    // invitaria a reenviar y duplicar.
                     leadForm.reset();
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.textContent = originalText;
-                        btn.style.opacity = '1';
-                        btn.style.backgroundColor = 'var(--primary)';
-                        delete btn.dataset.submitting;
-                    }, 3000);
+                    liberarEnvio();
+                    mostrarResultado(completa ? 'exito' : 'parcial');
                 })
-                .catch((error) => {
-                    // Mover foco al botón para que el usuario pueda volver a intentar
-                    btn.focus();
-
-                    if (error.message === 'rate_limit') {
-                        btn.textContent = 'Demasiados intentos, espere unos minutos';
-                        setTimeout(() => {
-                            btn.disabled = false;
-                            btn.textContent = originalText;
-                            btn.style.opacity = '1';
-                            btn.style.backgroundColor = 'var(--primary)';
-                            delete btn.dataset.submitting;
-                        }, 5000);
-                    } else {
-                        btn.textContent = 'Error en la conexión, intente más tarde';
-                        setTimeout(() => {
-                            btn.disabled = false;
-                            btn.textContent = originalText;
-                            btn.style.opacity = '1';
-                            btn.style.backgroundColor = 'var(--primary)';
-                            delete btn.dataset.submitting;
-                        }, 5000);
-                    }
+                .catch(() => {
+                    // Se conserva TODO lo escrito y se permite reintentar.
+                    // Nunca se muestra detalle tecnico: ni request_id, ni
+                    // codigos, ni errores de SMTP o Supabase.
+                    //
+                    // CASO AMBIGUO, declarado a proposito: si `fetch`
+                    // rechaza no hubo respuesta, y la request pudo haber
+                    // llegado e insertado el lead antes de perderse. No
+                    // hay forma de distinguirlo desde el navegador.
+                    //
+                    // Reintentar es seguro igualmente porque el formulario
+                    // conserva los datos y el endpoint es IDEMPOTENTE:
+                    // ante el mismo nombre y email dentro de su ventana
+                    // devuelve el lead que ya existe, sin insertar otro ni
+                    // reenviar correos. Es la segunda linea de defensa, y
+                    // es la que cubre este caso.
+                    //
+                    // Limite residual: pasada esa ventana, un reintento
+                    // sobre un lead que si se habia guardado crea un
+                    // duplicado. Queda documentado en
+                    // docs/tecnica/estado-comunicacion-leads.md.
+                    liberarEnvio();
+                    mostrarResultado('error');
                 });
         });
     }

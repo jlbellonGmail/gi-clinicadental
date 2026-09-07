@@ -64,6 +64,14 @@ function createTransporter() {
     },
     connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
     socketTimeout: SMTP_SOCKET_TIMEOUT_MS,
+    // Punto 16: los dos correos se envian uno detras del otro en la misma
+    // invocacion. Sin pool, cada `sendMail` abre su propia conexion TCP,
+    // negocia TLS y vuelve a autenticarse; el SEGUNDO envio fue el que
+    // dio ETIMEDOUT en Production. Con una sola conexion reutilizada, el
+    // segundo mensaje viaja por la sesion ya abierta y autenticada: menos
+    // trabajo y menos superficie de fallo, no mas.
+    pool: true,
+    maxConnections: 1,
   });
 
   return cachedTransporter;
@@ -245,4 +253,113 @@ function buildPatientConfirmationEmail(lead) {
   return { to, from, replyTo, subject, html, text };
 }
 
-module.exports = { createTransporter, buildClinicNotificationEmail, buildPatientConfirmationEmail };
+
+// Reintentar un envio de correo solo es seguro si se puede demostrar que
+// el servidor NO llego a aceptar el mensaje. Si no, el reintento duplica
+// el correo, y un paciente recibiendo dos confirmaciones es peor que una
+// notificacion que falta y queda marcada para revision.
+//
+// Por eso la lista es de fallos de CONEXION, no de "fallos pasajeros":
+// si la conexion nunca se establecio, no hubo DATA y no hay nada que
+// duplicar.
+const CODIGOS_ANTES_DE_ENVIAR = new Set([
+  'ECONNECTION', // no se pudo abrir la conexion
+  'EDNS', // no se resolvio el host
+  'EAI_AGAIN', // fallo temporal de DNS
+]);
+
+// `ETIMEDOUT` es AMBIGUO: puede ser un timeout al conectar -seguro- o un
+// timeout de socket despues de mandar el mensaje, cuando el servidor
+// quiza ya lo acepto y solo se perdio la respuesta. Nodemailer distingue
+// el primero marcando `command: 'CONN'`. Sin esa marca, no se reintenta.
+const COMANDO_DE_CONEXION = 'CONN';
+
+const REINTENTOS_POR_DEFECTO = 1;
+const ESPERA_ENTRE_INTENTOS_MS = 400;
+
+/**
+ * ¿Se puede reintentar este envio sin arriesgar un correo duplicado?
+ *
+ * Solo si el fallo ocurrio ANTES de entregar el mensaje:
+ *
+ * - error de conexion o de DNS: no hubo sesion SMTP;
+ * - `ETIMEDOUT` marcado como `command: 'CONN'`: expiro al conectar;
+ * - rechazo SMTP 4xx: el servidor respondio explicitamente que NO lo
+ *   acepta (RFC 5321), asi que no hay nada entregado que duplicar.
+ *
+ * Todo lo demas -incluidos `ETIMEDOUT` sin marca, `ESOCKET`,
+ * `ECONNRESET` y `EPIPE`- se considera ambiguo y NO se reintenta: el
+ * lead queda en `requiere_revision` para que alguien lo mire.
+ *
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function esSeguroReintentar(err) {
+  if (!err || typeof err !== 'object') {
+    return false;
+  }
+  if (CODIGOS_ANTES_DE_ENVIAR.has(err.code)) {
+    return true;
+  }
+  if (err.code === 'ETIMEDOUT' && err.command === COMANDO_DE_CONEXION) {
+    return true;
+  }
+  // Los 5xx son permanentes; los 4xx, rechazos temporarios explicitos.
+  const responseCode = Number(err.responseCode);
+  return Number.isInteger(responseCode) && responseCode >= 400 && responseCode < 500;
+}
+
+/**
+ * Envia un correo reintentando UNA vez, y solo si el reintento no puede
+ * duplicar el mensaje.
+ *
+ * Historia: en la validacion en Production el envio a la clinica salio
+ * bien y el del paciente dio `ETIMEDOUT`. Una version anterior de esta
+ * funcion lo reintentaba. Se corrigio: ese error no permite saber si el
+ * servidor habia aceptado el correo, y reintentarlo puede mandar dos.
+ * La prioridad, en orden, es: no perder el lead, no duplicar correos, y
+ * dejar la incidencia visible para operacion.
+ *
+ * El limite de un reintento es deliberado: esto corre dentro de una
+ * request HTTP con el usuario esperando, y un bucle convertiria un fallo
+ * de correo en un timeout de la request entera.
+ *
+ * @param {{ sendMail: (mailOptions: object) => Promise<unknown> }} transporter
+ * @param {object} mailOptions
+ * @param {{ reintentos?: number, esperaMs?: number, dormir?: (ms: number) => Promise<void> }} [opciones]
+ *   `dormir` se inyecta en los tests para no esperar de verdad.
+ * @returns {Promise<unknown>}
+ */
+async function enviarConReintento(transporter, mailOptions, opciones = {}) {
+  const reintentos = Number.isInteger(opciones.reintentos)
+    ? opciones.reintentos
+    : REINTENTOS_POR_DEFECTO;
+  const esperaMs = Number.isInteger(opciones.esperaMs)
+    ? opciones.esperaMs
+    : ESPERA_ENTRE_INTENTOS_MS;
+  const dormir =
+    typeof opciones.dormir === 'function'
+      ? opciones.dormir
+      : (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  let intento = 0;
+  for (;;) {
+    try {
+      return await transporter.sendMail(mailOptions);
+    } catch (err) {
+      if (intento >= reintentos || !esSeguroReintentar(err)) {
+        throw err;
+      }
+      intento += 1;
+      await dormir(esperaMs);
+    }
+  }
+}
+
+module.exports = {
+  createTransporter,
+  buildClinicNotificationEmail,
+  buildPatientConfirmationEmail,
+  enviarConReintento,
+  esSeguroReintentar,
+};
