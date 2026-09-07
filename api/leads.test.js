@@ -2,6 +2,15 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+
+// Contrato exacto del 201. Se declara una sola vez a proposito: si el
+// endpoint empieza a devolver un campo mas, hay que venir aca y decidirlo,
+// no descubrirlo en Production.
+// `comunicacion_completa` y `requiere_revision` se agregaron en el punto
+// 16: el frontend necesita distinguir exito completo de exito parcial, y
+// con solo `id` no podia. NO se expone nada de SMTP, proveedores ni
+// motivos: el frontend no los necesita.
+const CLAVES_201 = ['id', 'comunicacion_completa', 'requiere_revision'];
 const { Readable } = require('node:stream');
 
 const { createHandler } = require('./leads');
@@ -140,6 +149,19 @@ function makeFakeSupabaseClient({
     selectCalls,
     updateCalls,
     insertSelectCalls,
+    // El punto 16 agrego un UPDATE mas -`estado_comunicacion`-, asi que
+    // contar `updateCalls` a secas dejo de significar "UPDATE de flags".
+    // Estos dos getters mantienen esa distincion explicita en cada assert.
+    get flagUpdates() {
+      return updateCalls.filter(
+        (u) =>
+          'notificacion_clinica_enviada' in u.values ||
+          'confirmacion_paciente_enviada' in u.values
+      );
+    },
+    get estadoUpdates() {
+      return updateCalls.filter((u) => 'estado_comunicacion' in u.values);
+    },
     from(table) {
       return {
         insert(rows) {
@@ -900,7 +922,7 @@ test('datos validos + consentimiento true -> 201 con solo { id }', async () => {
   await handler(req, res);
 
   assert.equal(res.statusCode, 201);
-  assert.deepEqual(Object.keys(res.json), ['id']);
+  assert.deepEqual(Object.keys(res.json), CLAVES_201);
   assert.equal(typeof res.json.id, 'string');
 
   const call = supabaseClient.calls[0];
@@ -1814,8 +1836,8 @@ test('sendMail() exitoso -> se ejecuta UPDATE notificacion_clinica_enviada = tru
   // por defecto en newHandler(), asi que hay dos UPDATE independientes:
   // este test solo verifica el de notificacion_clinica_enviada.
   assert.equal(mailer.sentMails.length, 2);
-  assert.equal(supabaseClient.updateCalls.length, 2);
-  const updateCall = supabaseClient.updateCalls.find(
+  assert.equal(supabaseClient.flagUpdates.length, 2);
+  const updateCall = supabaseClient.flagUpdates.find(
     (call) => call.values.notificacion_clinica_enviada === true
   );
   assert.ok(updateCall, 'debe existir un UPDATE de notificacion_clinica_enviada');
@@ -1858,7 +1880,7 @@ test('sendMail() rechaza -> igual responde 201, sin UPDATE, sin insert adicional
   assert.equal(res.statusCode, 201);
   assert.equal(res.json.id, '88888888-8888-8888-8888-888888888888');
   assert.equal(supabaseClient.calls.length, 1, 'insert() debe seguir invocado exactamente una vez');
-  assert.equal(supabaseClient.updateCalls.length, 0, 'no debe ejecutarse el UPDATE del flag');
+  assert.equal(supabaseClient.flagUpdates.length, 0, 'no debe ejecutarse el UPDATE del flag');
 });
 
 test('mailerFactory lanza (config SMTP faltante/invalida) -> igual responde 201, sin UPDATE, sin insert adicional', async () => {
@@ -1875,7 +1897,7 @@ test('mailerFactory lanza (config SMTP faltante/invalida) -> igual responde 201,
   assert.equal(res.statusCode, 201);
   assert.equal(res.json.id, '99999999-9999-9999-9999-999999999999');
   assert.equal(supabaseClient.calls.length, 1);
-  assert.equal(supabaseClient.updateCalls.length, 0);
+  assert.equal(supabaseClient.flagUpdates.length, 0);
 });
 
 test('UPDATE del flag falla -> igual responde 201 con el mismo id, sin reintentar el insert', async () => {
@@ -1893,7 +1915,7 @@ test('UPDATE del flag falla -> igual responde 201 con el mismo id, sin reintenta
   assert.equal(res.json.id, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
   // Ambos envios (clinica + paciente) se consideraron exitosos.
   assert.equal(mailer.sentMails.length, 2, 'ambos envios de email se consideraron exitosos');
-  assert.equal(supabaseClient.updateCalls.length, 2, 'se intentaron ambos UPDATE, aunque hayan fallado');
+  assert.equal(supabaseClient.flagUpdates.length, 2, 'se intentaron ambos UPDATE, aunque hayan fallado');
   assert.equal(supabaseClient.calls.length, 1, 'no se reinserta el lead');
 });
 
@@ -1912,7 +1934,7 @@ test('el contrato de respuesta 201 { id } no cambia entre escenarios de email (e
     await handler(req, res);
 
     assert.equal(res.statusCode, 201, scenario.name);
-    assert.deepEqual(Object.keys(res.json), ['id'], scenario.name);
+    assert.deepEqual(Object.keys(res.json), CLAVES_201, scenario.name);
     assert.equal(typeof res.json.id, 'string', scenario.name);
   }
 
@@ -1928,7 +1950,7 @@ test('el contrato de respuesta 201 { id } no cambia entre escenarios de email (e
   const res = makeRes();
   await handler(req, res);
   assert.equal(res.statusCode, 201);
-  assert.deepEqual(Object.keys(res.json), ['id']);
+  assert.deepEqual(Object.keys(res.json), CLAVES_201);
 });
 
 // ---------------------------------------------------------------------
@@ -1954,7 +1976,7 @@ test('fallo de sendMail() no filtra credenciales SMTP en console.error, aunque e
     await handler(req, res);
 
     assert.equal(res.statusCode, 201);
-    assert.equal(supabaseClient.updateCalls.length, 0);
+    assert.equal(supabaseClient.flagUpdates.length, 0);
     const serialized = errorCalls.join('\n');
     assert.equal(serialized.includes('contrasena-secreta-xyz'), false);
     assert.equal(serialized.includes('dXNlcjpjb250cmFzZW5hLXNlY3JldGEteHl6'), false);
@@ -2063,7 +2085,7 @@ test('mailerFactory lanza (config SMTP faltante/invalida) -> ni la clinica ni el
   assert.equal(res.statusCode, 201);
   assert.equal(res.json.id, 'b0000000-0000-0000-0000-000000000012');
   assert.equal(mailer.sentMails.length, 0, 'sendMail() no debe invocarse en ningun escenario');
-  assert.equal(supabaseClient.updateCalls.length, 0);
+  assert.equal(supabaseClient.flagUpdates.length, 0);
 });
 
 // ---------------------------------------------------------------------
@@ -2083,8 +2105,8 @@ test('fallo en el envio a la clinica no impide el intento de envio al paciente (
   assert.equal(mailer.sentMails.length, 2, 'debe haber intentado ambos envios');
   assert.equal(mailer.sentMails[0].to, 'clinica@sonriemascorrientes.com');
   assert.equal(mailer.sentMails[1].to, 'paciente-13a@example.com');
-  assert.equal(supabaseClient.updateCalls.length, 1, 'solo el UPDATE del paciente debe ejecutarse');
-  assert.equal(supabaseClient.updateCalls[0].values.confirmacion_paciente_enviada, true);
+  assert.equal(supabaseClient.flagUpdates.length, 1, 'solo el UPDATE del paciente debe ejecutarse');
+  assert.equal(supabaseClient.flagUpdates[0].values.confirmacion_paciente_enviada, true);
 });
 
 test('fallo en el envio al paciente no afecta el resultado ya decidido del envio a la clinica (independencia)', async () => {
@@ -2098,8 +2120,8 @@ test('fallo en el envio al paciente no afecta el resultado ya decidido del envio
 
   assert.equal(res.statusCode, 201);
   assert.equal(mailer.sentMails.length, 2, 'debe haber intentado ambos envios');
-  assert.equal(supabaseClient.updateCalls.length, 1, 'solo el UPDATE de la clinica debe ejecutarse');
-  assert.equal(supabaseClient.updateCalls[0].values.notificacion_clinica_enviada, true);
+  assert.equal(supabaseClient.flagUpdates.length, 1, 'solo el UPDATE de la clinica debe ejecutarse');
+  assert.equal(supabaseClient.flagUpdates[0].values.notificacion_clinica_enviada, true);
 });
 
 // ---------------------------------------------------------------------
@@ -2116,8 +2138,8 @@ test('sendMail() al paciente exitoso -> UPDATE confirmacion_paciente_enviada = t
 
   assert.equal(res.statusCode, 201);
   assert.equal(mailer.sentMails.length, 2);
-  assert.equal(supabaseClient.updateCalls.length, 2, 'un UPDATE para la clinica y otro para el paciente');
-  const patientUpdate = supabaseClient.updateCalls.find(
+  assert.equal(supabaseClient.flagUpdates.length, 2, 'un UPDATE para la clinica y otro para el paciente');
+  const patientUpdate = supabaseClient.flagUpdates.find(
     (call) => call.values.confirmacion_paciente_enviada === true
   );
   assert.ok(patientUpdate, 'debe existir un UPDATE de confirmacion_paciente_enviada');
@@ -2158,7 +2180,7 @@ test('fallo en sendMail() al paciente se loguea con err.message (sin credenciale
     assert.equal(res.statusCode, 201);
     assert.equal(res.json.id, 'd0000000-0000-0000-0000-000000000015');
     assert.equal(mailer.sentMails.length, 2, 'ambos envios se intentaron');
-    const patientUpdate = supabaseClient.updateCalls.find(
+    const patientUpdate = supabaseClient.flagUpdates.find(
       (call) => 'confirmacion_paciente_enviada' in call.values
     );
     assert.equal(patientUpdate, undefined, 'no debe existir UPDATE de confirmacion_paciente_enviada');
@@ -2188,7 +2210,7 @@ test('UPDATE de confirmacion_paciente_enviada falla -> igual responde 201 con el
   assert.equal(res.statusCode, 201);
   assert.equal(res.json.id, 'e0000000-0000-0000-0000-000000000016');
   assert.equal(mailer.sentMails.length, 2, 'ambos envios se intentaron igual, aunque el UPDATE falle');
-  assert.equal(supabaseClient.updateCalls.length, 2, 'ambos UPDATE se intentaron, aunque fallen');
+  assert.equal(supabaseClient.flagUpdates.length, 2, 'ambos UPDATE se intentaron, aunque fallen');
 });
 
 // ---------------------------------------------------------------------
@@ -2241,7 +2263,7 @@ test('el contrato 201 { id } se mantiene en las 5 combinaciones de resultados de
     await handler(req, res);
 
     assert.equal(res.statusCode, 201, scenario.name);
-    assert.deepEqual(Object.keys(res.json), ['id'], scenario.name);
+    assert.deepEqual(Object.keys(res.json), CLAVES_201, scenario.name);
     assert.equal(typeof res.json.id, 'string', scenario.name);
   }
 
@@ -2257,7 +2279,7 @@ test('el contrato 201 { id } se mantiene en las 5 combinaciones de resultados de
   const res = makeRes();
   await handler(req, res);
   assert.equal(res.statusCode, 201);
-  assert.deepEqual(Object.keys(res.json), ['id']);
+  assert.deepEqual(Object.keys(res.json), CLAVES_201);
 });
 
 // ---------------------------------------------------------------------
@@ -2428,6 +2450,9 @@ test('f15: el flujo 201 completo emite la secuencia de eventos esperada', async 
     'supabase_insercion_ok',
     'smtp_clinica_ok',
     'smtp_paciente_ok',
+    // Punto 16: el estado operativo de la comunicacion se persiste
+    // despues de resolver los dos envios y antes de responder.
+    'estado_comunicacion_actualizado',
     'solicitud_finalizada',
   ]);
 
@@ -2743,6 +2768,9 @@ test('f15: ningun canal filtra PII ni secretos en un flujo 201 completo', async 
     'campo',
     'motivo',
     'flag',
+    // Punto 16. Es un enum cerrado de cuatro valores operativos, no un
+    // campo libre: no puede transportar PII.
+    'estado_comunicacion',
     'tipo',
     'codigo',
     'smtp_response_code',
@@ -2776,7 +2804,7 @@ test('f15: la superficie HTTP no cambia (sin request id en la respuesta)', async
   });
 
   assert.equal(res.statusCode, 201);
-  assert.deepEqual(Object.keys(res.json), ['id']);
+  assert.deepEqual(Object.keys(res.json), CLAVES_201);
   assert.deepEqual(Object.keys(res.headers), ['content-type']);
   const serializado = JSON.stringify(res.json) + JSON.stringify(res.headers);
   assert.equal(serializado.toLowerCase().includes('request'), false);
@@ -2793,7 +2821,7 @@ test('f15: la funcionalidad preexistente se preserva bajo instrumentacion', asyn
     assert.equal(res.json.id, 'f1500000-0000-0000-0000-00000000aaaa');
     assert.equal(supabaseClient.calls.length, 1, 'un unico insert');
     assert.equal(mailer.sentMails.length, 2, 'clinica y paciente');
-    assert.equal(supabaseClient.updateCalls.length, 2, 'ambos flags actualizados');
+    assert.equal(supabaseClient.flagUpdates.length, 2, 'ambos flags actualizados');
   });
 });
 
@@ -2978,4 +3006,207 @@ test('f16: un host que no es Supabase se ve en el log', async () => {
 
   const evento = eventos.find((e) => e.evento === 'supabase_duplicados_error');
   assert.equal(evento.supabase_host, 'gi-clinicadental.vercel.app');
+});
+
+// ---------------------------------------------------------------------
+// Punto 16: estado operativo de la comunicacion.
+//
+// El 201 dice que el lead quedo registrado, NO que las dos notificaciones
+// hayan salido. Estos tests fijan la diferencia, que es la que permite al
+// frontend no prometer de mas y a la clinica saber que revisar.
+// ---------------------------------------------------------------------
+
+test('f16: ambos envios OK -> estado_comunicacion completa y contrato completo', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: 'e0000000-0000-0000-0000-000000000001' });
+  const mailer = makeFakeMailer();
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'completo@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.comunicacion_completa, true);
+  assert.equal(res.json.requiere_revision, false);
+  assert.equal(supabaseClient.estadoUpdates.length, 1);
+  assert.equal(supabaseClient.estadoUpdates[0].values.estado_comunicacion, 'completa');
+  assert.equal(supabaseClient.flagUpdates.length, 2, 'los dos flags reflejan la realidad');
+});
+
+test('f16: clinica OK / paciente FAIL -> requiere_revision, el lead sigue ahi', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: 'e0000000-0000-0000-0000-000000000002' });
+  const mailer = makeSelectiveFailMailer({ failTo: ['paciente-parcial-a@example.com'] });
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'paciente-parcial-a@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201, 'el lead quedo registrado: no es un error para el usuario');
+  assert.equal(res.json.comunicacion_completa, false);
+  assert.equal(res.json.requiere_revision, true);
+  assert.equal(supabaseClient.estadoUpdates[0].values.estado_comunicacion, 'requiere_revision');
+  // Solo el flag de la clinica: los flags dicen la verdad de cada envio.
+  assert.equal(supabaseClient.flagUpdates.length, 1);
+  assert.equal(supabaseClient.flagUpdates[0].values.notificacion_clinica_enviada, true);
+  assert.equal(supabaseClient.calls.length, 1, 'no se reinserta ni se borra el lead');
+});
+
+test('f16: clinica FAIL / paciente OK -> requiere_revision, el lead sigue ahi', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: 'e0000000-0000-0000-0000-000000000003' });
+  const mailer = makeSelectiveFailMailer({ failTo: ['clinica@sonriemascorrientes.com'] });
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'paciente-parcial-b@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.comunicacion_completa, false);
+  assert.equal(res.json.requiere_revision, true);
+  assert.equal(supabaseClient.estadoUpdates[0].values.estado_comunicacion, 'requiere_revision');
+  assert.equal(supabaseClient.flagUpdates.length, 1);
+  assert.equal(supabaseClient.flagUpdates[0].values.confirmacion_paciente_enviada, true);
+  assert.equal(supabaseClient.calls.length, 1);
+});
+
+test('f16: ambos envios FAIL -> requiere_revision, ningun flag, el lead sigue ahi', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: 'e0000000-0000-0000-0000-000000000004' });
+  const mailer = makeFakeMailer({ fail: true });
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'ambos-fallan@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201, 'un fallo de correo NUNCA descarta el lead');
+  assert.equal(res.json.comunicacion_completa, false);
+  assert.equal(res.json.requiere_revision, true);
+  assert.equal(supabaseClient.estadoUpdates[0].values.estado_comunicacion, 'requiere_revision');
+  assert.equal(supabaseClient.flagUpdates.length, 0);
+  assert.equal(supabaseClient.calls.length, 1);
+});
+
+test('f16: sin configuracion SMTP -> requiere_revision, no se pierde el lead', async () => {
+  const supabaseClient = makeFakeSupabaseClient({ id: 'e0000000-0000-0000-0000-000000000005' });
+  const { handler } = newHandler({
+    supabaseClient,
+    mailerFactory: () => {
+      throw new Error('Configuracion SMTP incompleta');
+    },
+  });
+  const req = makeReq({ body: validPayload({ email: 'sin-smtp@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.requiere_revision, true);
+  assert.equal(supabaseClient.estadoUpdates[0].values.estado_comunicacion, 'requiere_revision');
+});
+
+test('f16: el estado se persiste sobre el lead recien insertado, no sobre otro', async () => {
+  const id = 'e0000000-0000-0000-0000-000000000006';
+  const supabaseClient = makeFakeSupabaseClient({ id });
+  const mailer = makeFakeMailer();
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'id-correcto@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(supabaseClient.estadoUpdates[0].column, 'id');
+  assert.equal(supabaseClient.estadoUpdates[0].value, id);
+  assert.equal(res.json.id, id);
+});
+
+test('f16: si el UPDATE del estado falla, la respuesta NO cambia', async () => {
+  // Migracion sin aplicar, por ejemplo. El dato critico es el lead, y ya
+  // esta insertado: el endpoint no puede romperse por esto.
+  const supabaseClient = makeFakeSupabaseClient({
+    id: 'e0000000-0000-0000-0000-000000000007',
+    failOnUpdate: true,
+  });
+  const mailer = makeFakeMailer();
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'update-falla@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.deepEqual(Object.keys(res.json), CLAVES_201);
+  assert.equal(res.json.comunicacion_completa, true, 'se deriva en memoria, no de la base');
+  assert.equal(supabaseClient.calls.length, 1, 'no se reintenta el insert');
+});
+
+test('f16: el duplicado informa el estado REAL del lead que ya existe', async () => {
+  const existingId = 'e0000000-0000-0000-0000-000000000008';
+  const supabaseClient = makeFakeSupabaseClient({
+    existingLeads: [
+      {
+        id: existingId,
+        notificacion_clinica_enviada: true,
+        confirmacion_paciente_enviada: false,
+      },
+    ],
+  });
+  const mailer = makeFakeMailer();
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'duplicado@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 201);
+  assert.equal(res.json.id, existingId);
+  assert.equal(
+    res.json.comunicacion_completa,
+    false,
+    'No se puede afirmar una comunicacion completa que no ocurrio'
+  );
+  assert.equal(res.json.requiere_revision, true);
+  assert.equal(mailer.sentMails.length, 0, 'el duplicado NO reenvia correos');
+  assert.equal(supabaseClient.calls.length, 0, 'ni inserta un lead nuevo');
+});
+
+test('f16: un duplicado con ambos envios OK informa comunicacion completa', async () => {
+  const existingId = 'e0000000-0000-0000-0000-000000000009';
+  const supabaseClient = makeFakeSupabaseClient({
+    existingLeads: [
+      {
+        id: existingId,
+        notificacion_clinica_enviada: true,
+        confirmacion_paciente_enviada: true,
+      },
+    ],
+  });
+  const mailer = makeFakeMailer();
+  const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+  const req = makeReq({ body: validPayload({ email: 'duplicado-ok@example.com' }) });
+  const res = makeRes();
+
+  await handler(req, res);
+
+  assert.equal(res.json.comunicacion_completa, true);
+  assert.equal(res.json.requiere_revision, false);
+});
+
+test('f16: el contrato 201 no expone nada de SMTP, proveedores ni motivos', async () => {
+  for (const mailer of [makeFakeMailer(), makeFakeMailer({ fail: true })]) {
+    const supabaseClient = makeFakeSupabaseClient({
+      id: 'e0000000-0000-0000-0000-00000000000a',
+    });
+    const { handler } = newHandler({ supabaseClient, mailer, mailerFactory: () => mailer });
+    const req = makeReq({ body: validPayload({ email: 'contrato@example.com' }) });
+    const res = makeRes();
+
+    await handler(req, res);
+
+    assert.deepEqual(Object.keys(res.json), CLAVES_201);
+    const serializado = JSON.stringify(res.json).toLowerCase();
+    for (const prohibido of ['smtp', 'supabase', 'nodemailer', 'ferozo', 'motivo', 'codigo']) {
+      assert.ok(!serializado.includes(prohibido), 'el contrato expone ' + prohibido);
+    }
+  }
 });

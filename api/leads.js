@@ -705,7 +705,12 @@ function createHandler(options = {}) {
         // la cadena directamente descarta esa informacion.
         const consultaDuplicados = supabase
           .from('leads')
-          .select('id')
+          // Se traen tambien los dos flags para que la respuesta del
+          // camino duplicado no mienta sobre el estado de comunicacion
+          // del lead que YA existe. No se pide `estado_comunicacion`: si
+          // la migracion todavia no se aplico, ese SELECT fallaria y
+          // tumbaria la deteccion de duplicados entera.
+          .select('id, notificacion_clinica_enviada, confirmacion_paciente_enviada')
           .ilike('email', escapeIlikeValue(email))
           .eq('nombre', nombre)
           .gte('fecha_creacion', duplicateWindowStartIso)
@@ -746,9 +751,21 @@ function createHandler(options = {}) {
       }
 
       if (Array.isArray(existingLeads) && existingLeads.length > 0 && existingLeads[0] && existingLeads[0].id) {
-        leadId = existingLeads[0].id;
+        const duplicado = existingLeads[0];
+        leadId = duplicado.id;
         log.info('duplicado_detectado', { lead_id: leadId });
-        respond(201, { id: existingLeads[0].id });
+        // No se reenvia ningun correo: el lead ya existe y sus envios ya
+        // se resolvieron -o fallaron- en la request original. La
+        // respuesta refleja el estado real de ESE lead, para no afirmar
+        // una comunicacion completa que quiza no ocurrio.
+        const completaDuplicado =
+          duplicado.notificacion_clinica_enviada === true &&
+          duplicado.confirmacion_paciente_enviada === true;
+        respond(201, {
+          id: duplicado.id,
+          comunicacion_completa: completaDuplicado,
+          requiere_revision: !completaDuplicado,
+        });
         return;
       }
 
@@ -811,6 +828,13 @@ function createHandler(options = {}) {
       // decidida, ni volver a tocar la logica de insercion ni el catch
       // generico de nivel superior (regla dura verificada por test, ver
       // spec de la f05 y criterios 15/16/18 de la f06).
+      // Visibles fuera del bloque de envio: la respuesta y el estado de
+      // comunicacion se derivan de estos dos. Si el transporter no se
+      // pudo construir, los dos quedan en false y el lead cae en
+      // `requiere_revision`, que es exactamente lo que corresponde.
+      let clinicSendSucceeded = false;
+      let patientSendSucceeded = false;
+
       let transporter = null;
       try {
         transporter = mailerFactory();
@@ -843,7 +867,6 @@ function createHandler(options = {}) {
         // Promise.allSettled, ver docs/tecnica/
         // confirmacion-automatica-paciente.md).
         const clinicMailOptions = buildClinicNotificationEmail(lead);
-        let clinicSendSucceeded = false;
         const inicioEnvioClinic = now();
         try {
           // Un reintento acotado si el fallo fue transitorio. Ver
@@ -907,7 +930,6 @@ function createHandler(options = {}) {
         // impidio llegar hasta aca, y un fallo aca no afecta el
         // resultado ya decidido del envio a la clinica (criterio 13/f06).
         const patientMailOptions = buildPatientConfirmationEmail(lead);
-        let patientSendSucceeded = false;
         const inicioEnvioPatient = now();
         try {
           // Este es el envio que dio ETIMEDOUT en la validacion real: es
@@ -965,7 +987,53 @@ function createHandler(options = {}) {
         }
       }
 
-      respond(201, { id: data.id });
+      // Estado operativo de la comunicacion. Se deriva de los dos flags,
+      // en memoria: no se relee de la base, asi que el contrato de la
+      // respuesta no depende de que este UPDATE salga bien.
+      const comunicacionCompleta = clinicSendSucceeded && patientSendSucceeded;
+      const estadoComunicacion = comunicacionCompleta ? 'completa' : 'requiere_revision';
+
+      // UPDATE deliberadamente NO fatal y separado de los flags: el dato
+      // critico es el lead, y ya esta insertado. Si la columna todavia no
+      // existe en la base -migracion sin aplicar- esto falla y se
+      // registra, pero ni la respuesta ni los flags se ven afectados.
+      try {
+        const { error: estadoError, status: estadoStatus } = await supabase
+          .from('leads')
+          .update({ estado_comunicacion: estadoComunicacion })
+          .eq('id', data.id);
+        if (estadoError) {
+          log.error(
+            'estado_comunicacion_error',
+            Object.assign(metadatosDeError('estado_comunicacion_error', estadoError), {
+              lead_id: leadId,
+              supabase_status_code: estadoStatus,
+            })
+          );
+        } else {
+          log.info('estado_comunicacion_actualizado', {
+            lead_id: leadId,
+            estado_comunicacion: estadoComunicacion,
+          });
+        }
+      } catch (estadoErr) {
+        log.error(
+          'estado_comunicacion_error',
+          Object.assign(metadatosDeError('estado_comunicacion_error', estadoErr), {
+            lead_id: leadId,
+          })
+        );
+      }
+
+      // Contrato minimo hacia el frontend: si la comunicacion quedo
+      // completa, y si el caso necesita revision humana. Nada de SMTP,
+      // proveedores, codigos ni motivos: el frontend no los necesita y
+      // exponerlos solo agregaria superficie.
+      respond(201, {
+        id: data.id,
+        comunicacion_completa: comunicacionCompleta,
+        requiere_revision: !comunicacionCompleta,
+      });
     } catch (err) {
       // Cualquier error no controlado (criterio 19/f03): 500 generico,
       // sin stack trace ni mensaje interno en la respuesta.

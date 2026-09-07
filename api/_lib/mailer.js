@@ -254,52 +254,75 @@ function buildPatientConfirmationEmail(lead) {
 }
 
 
-// Codigos de error de red/SMTP que describen un fallo pasajero: la
-// conexion se cayo o tardo, no que el mensaje sea invalido. Reintentar
-// un `EAUTH` o un rechazo 5xx no arreglaria nada y solo gastaria tiempo.
-const CODIGOS_TRANSITORIOS = new Set([
-  'ETIMEDOUT',
-  'ESOCKET',
-  'ECONNECTION',
-  'ECONNRESET',
-  'EPIPE',
-  'EAI_AGAIN',
-  'EDNS',
+// Reintentar un envio de correo solo es seguro si se puede demostrar que
+// el servidor NO llego a aceptar el mensaje. Si no, el reintento duplica
+// el correo, y un paciente recibiendo dos confirmaciones es peor que una
+// notificacion que falta y queda marcada para revision.
+//
+// Por eso la lista es de fallos de CONEXION, no de "fallos pasajeros":
+// si la conexion nunca se establecio, no hubo DATA y no hay nada que
+// duplicar.
+const CODIGOS_ANTES_DE_ENVIAR = new Set([
+  'ECONNECTION', // no se pudo abrir la conexion
+  'EDNS', // no se resolvio el host
+  'EAI_AGAIN', // fallo temporal de DNS
 ]);
+
+// `ETIMEDOUT` es AMBIGUO: puede ser un timeout al conectar -seguro- o un
+// timeout de socket despues de mandar el mensaje, cuando el servidor
+// quiza ya lo acepto y solo se perdio la respuesta. Nodemailer distingue
+// el primero marcando `command: 'CONN'`. Sin esa marca, no se reintenta.
+const COMANDO_DE_CONEXION = 'CONN';
 
 const REINTENTOS_POR_DEFECTO = 1;
 const ESPERA_ENTRE_INTENTOS_MS = 400;
 
 /**
- * ¿Este fallo de envio vale la pena reintentarlo?
+ * ¿Se puede reintentar este envio sin arriesgar un correo duplicado?
+ *
+ * Solo si el fallo ocurrio ANTES de entregar el mensaje:
+ *
+ * - error de conexion o de DNS: no hubo sesion SMTP;
+ * - `ETIMEDOUT` marcado como `command: 'CONN'`: expiro al conectar;
+ * - rechazo SMTP 4xx: el servidor respondio explicitamente que NO lo
+ *   acepta (RFC 5321), asi que no hay nada entregado que duplicar.
+ *
+ * Todo lo demas -incluidos `ETIMEDOUT` sin marca, `ESOCKET`,
+ * `ECONNRESET` y `EPIPE`- se considera ambiguo y NO se reintenta: el
+ * lead queda en `requiere_revision` para que alguien lo mire.
  *
  * @param {unknown} err
  * @returns {boolean}
  */
-function esFalloTransitorio(err) {
+function esSeguroReintentar(err) {
   if (!err || typeof err !== 'object') {
     return false;
   }
-  if (CODIGOS_TRANSITORIOS.has(err.code)) {
+  if (CODIGOS_ANTES_DE_ENVIAR.has(err.code)) {
     return true;
   }
-  // Los 4xx de SMTP son rechazos temporarios por definicion del
-  // protocolo (RFC 5321); los 5xx son permanentes.
+  if (err.code === 'ETIMEDOUT' && err.command === COMANDO_DE_CONEXION) {
+    return true;
+  }
+  // Los 5xx son permanentes; los 4xx, rechazos temporarios explicitos.
   const responseCode = Number(err.responseCode);
   return Number.isInteger(responseCode) && responseCode >= 400 && responseCode < 500;
 }
 
 /**
- * Envia un correo reintentando UNA vez si el fallo fue transitorio.
+ * Envia un correo reintentando UNA vez, y solo si el reintento no puede
+ * duplicar el mensaje.
  *
- * Origen: en la validacion en Production el envio a la clinica salio bien
- * y el del paciente dio `ETIMEDOUT`. El humano confirmo que fue pasajero
- * -el reintento manual funciono-, asi que la respuesta correcta es
- * reintentar acotadamente, no alargar los timeouts ni paralelizar.
+ * Historia: en la validacion en Production el envio a la clinica salio
+ * bien y el del paciente dio `ETIMEDOUT`. Una version anterior de esta
+ * funcion lo reintentaba. Se corrigio: ese error no permite saber si el
+ * servidor habia aceptado el correo, y reintentarlo puede mandar dos.
+ * La prioridad, en orden, es: no perder el lead, no duplicar correos, y
+ * dejar la incidencia visible para operacion.
  *
- * El limite es deliberado: un solo reintento. La funcion corre dentro de
- * una request HTTP con el usuario esperando, y un bucle de reintentos
- * convertiria un fallo de correo en un timeout de la request entera.
+ * El limite de un reintento es deliberado: esto corre dentro de una
+ * request HTTP con el usuario esperando, y un bucle convertiria un fallo
+ * de correo en un timeout de la request entera.
  *
  * @param {{ sendMail: (mailOptions: object) => Promise<unknown> }} transporter
  * @param {object} mailOptions
@@ -324,7 +347,7 @@ async function enviarConReintento(transporter, mailOptions, opciones = {}) {
     try {
       return await transporter.sendMail(mailOptions);
     } catch (err) {
-      if (intento >= reintentos || !esFalloTransitorio(err)) {
+      if (intento >= reintentos || !esSeguroReintentar(err)) {
         throw err;
       }
       intento += 1;
@@ -338,5 +361,5 @@ module.exports = {
   buildClinicNotificationEmail,
   buildPatientConfirmationEmail,
   enviarConReintento,
-  esFalloTransitorio,
+  esSeguroReintentar,
 };
