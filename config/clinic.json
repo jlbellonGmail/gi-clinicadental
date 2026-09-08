@@ -12,27 +12,27 @@
     "images": {
       "hero": {
         "src": "static/images/paciente-sonrisa.webp",
-        "alt": "Paciente sonriendo después de un tratamiento de implante de carga inmediata",
-        "width": 800,
-        "height": 600
+        "alt": "Paciente sonriendo, sentada en el sillón de un consultorio odontológico moderno y luminoso",
+        "width": 1448,
+        "height": 1086
       },
       "team": {
         "src": "static/images/equipo-dental.webp",
-        "alt": "Equipo de odontólogas y odontólogos trabajando con tecnología de punta",
-        "width": 800,
-        "height": 600
+        "alt": "Tres profesionales de odontología observando juntos una radiografía dental panorámica en un monitor",
+        "width": 1448,
+        "height": 1086
       },
       "interior": {
         "src": "static/images/interior-clinica.webp",
-        "alt": "Interior moderno de la clínica con tecnología CAD/CAM y escáner 3D",
-        "width": 800,
-        "height": 600
+        "alt": "Consultorio odontológico moderno y vacío, con sillón, lámpara de techo y ventanal al jardín",
+        "width": 1448,
+        "height": 1086
       },
       "social": {
-        "src": "static/images/paciente-sonrisa.webp",
-        "alt": "Paciente sonriendo después de un tratamiento de implante de carga inmediata",
-        "width": 800,
-        "height": 600
+        "src": "static/images/og-social.webp",
+        "alt": "Paciente sonriendo en el sillón de un consultorio odontológico luminoso, junto a un ventanal con vegetación",
+        "width": 1731,
+        "height": 909
       }
     }
   },

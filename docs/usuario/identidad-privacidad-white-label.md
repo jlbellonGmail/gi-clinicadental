@@ -119,27 +119,27 @@ la salida de escape para quien no encuentra su caso.
 
 ## Las imágenes
 
-### Qué hace falta
+### Las que están hoy
 
-Las imágenes actuales son **marcadores de posición**: figuras de color
-generadas con un script, no fotografía. Reemplazarlas requiere producir
-los archivos.
+Las cuatro son fotografía generada con IA, integradas en la v1.0.1.
+Comparten una misma estética -luz natural, blancos y acentos verde
+azulado- para que se lean como una sola sesión.
 
-| Clave | Archivo | Proporción | Tamaño | Dónde aparece |
-|---|---|---|---|---|
-| `hero` | `static/images/paciente-sonrisa.webp` | 4:3 | 1600 × 1200 px | Portada, arriba a la derecha |
-| `team` | `static/images/equipo-dental.webp` | 4:3 | 1600 × 1200 px | Sección "Tecnología de Punta, Trato Humano" |
-| `interior` | `static/images/interior-clinica.webp` | 4:3 | 1600 × 1200 px | Junto a los datos de contacto |
-| `social` | `static/images/og-social.webp` | **1.91:1** | 1200 × 630 px | La miniatura al compartir el link |
+| Clave | Archivo | Proporción | Dimensiones | Peso | Dónde aparece |
+|---|---|---|---|---|---|
+| `hero` | `static/images/paciente-sonrisa.webp` | 4:3 | 1448 × 1086 | 75 KB | Portada, arriba a la derecha |
+| `team` | `static/images/equipo-dental.webp` | 4:3 | 1448 × 1086 | 92 KB | Sección "Tecnología de Punta, Trato Humano" |
+| `interior` | `static/images/interior-clinica.webp` | 4:3 | 1448 × 1086 | 92 KB | Junto a los datos de contacto |
+| `social` | `static/images/og-social.webp` | **1.91:1** | 1731 × 909 | 63 KB | La miniatura al compartir el link |
 
-Formato **WebP**, calidad 80–85: por debajo de **250 KB** las tres de 4:3
-y de **300 KB** la social.
+Si las reemplazás: formato **WebP**, calidad 80–85, por debajo de
+**250 KB** las tres de 4:3 y de **300 KB** la social. Después hay que
+actualizar `width` y `height` en la configuración con las dimensiones
+reales del archivo nuevo.
 
 La imagen social **no es un recorte del hero**: se compone para 1.91:1, con
 el sujeto en un tercio y nada importante en los bordes, porque cada
 plataforma recorta distinto y algunas muestran un cuadrado central.
-Después de dejar los archivos, hay que actualizar `width` y `height` en
-la configuración con las dimensiones reales.
 
 ### Reglas que no se negocian
 

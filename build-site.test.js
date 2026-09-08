@@ -234,15 +234,9 @@ test('los metadatos sociales salen de la imagen social, en URL absoluta', () => 
   assert.ok(html.includes('<meta property="og:image:height" content="630">'));
 });
 
-// SE ACTIVA AL RECIBIR LOS ASSETS DEFINITIVOS.
-//
-// Hoy `brand.images.social` apunta al mismo archivo que el hero, que es
-// 4:3. La v1.0.1 aprueba una imagen dedicada en 1.91:1 porque las
-// plataformas recortan el 4:3 y la miniatura queda mal.
-//
-// Queda como test saltado y no como comentario: un `skip` aparece en cada
-// corrida de la suite; un TODO no lo ve nadie.
-test.skip('la imagen social es un archivo propio en 1.91:1, no el hero', () => {
+// Activado al integrar los assets definitivos: `brand.images.social` ya
+// es un archivo propio compuesto para 1.91:1, y no un recorte del hero.
+test('la imagen social es un archivo propio en 1.91:1, no el hero', () => {
   const config = leerConfig();
   const social = config.brand.images.social;
   const hero = config.brand.images.hero;

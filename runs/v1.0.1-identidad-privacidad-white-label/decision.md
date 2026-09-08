@@ -258,3 +258,68 @@ El guard que exige que la social sea un archivo propio en 1.91:1 quedó
 escrito y **saltado**, no comentado: un `test.skip` aparece en cada
 corrida de la suite y se activa al integrar los assets; un `TODO` no lo
 ve nadie. Es deuda declarada, con fecha de vencimiento visible.
+
+## Las imágenes definitivas: integradas
+
+Las cuatro fotografías entregadas por el humano están integradas. Detalle
+y mediciones en `test-report-2.md`; acá quedan las decisiones.
+
+### Recomprimir, no reescalar ni recortar
+
+Llegaban a ~1,2 MB cada una, contra un presupuesto aprobado de 250 KB (300
+la social). Se recomprimieron a WebP calidad 85, **sin tocar dimensiones
+ni encuadre**: 63–92 KB, con la calidad visualmente intacta.
+
+No se reescaló a las medidas "recomendadas" del inventario. Subir de 1448
+a 1600 px es inventar píxeles, y bajar la social de 1731 a 1200 es tirar
+detalle sin ganar nada. Lo que importaba era la **proporción**, y las
+cuatro la cumplen: 1.333 y 1.904.
+
+### Los `alt` se reescribieron, y no por estilo
+
+Los anteriores afirmaban "implante de carga inmediata", "tecnología de
+punta" y "tecnología CAD/CAM y escáner 3D". **Ninguna de esas cosas es
+visible en las fotos.** La regla de dominio de `AGENTS.md` prohíbe
+inventar información clínica no provista, y un texto alternativo es el
+único acceso que tiene a la imagen quien no puede verla: describir ahí un
+tratamiento que la foto no muestra es mentirle exactamente a esa persona.
+
+Los cuatro describen ahora lo que se ve.
+
+### Un defecto que me pertenece
+
+Al integrar apareció que las fotos se renderizaban **259 × 1086** en vez
+de 259 × 195. La causa la introduje en esta misma release: agregué los
+atributos `width`/`height` para reservar el espacio de la imagen sin
+agregar `height: auto` al CSS, así que el ancho cedía al contenedor y el
+alto se aplicaba literal.
+
+No lo vio ningún test —HTML válido, CSS válido, y jsdom no calcula
+layout—. Se encontró **abriendo el sitio y midiendo**, que es la cuarta
+vez en este proyecto que un defecto real aparece midiendo y no testeando.
+Quedan dos guards nuevos, verificados en negativo, que son el par
+obligatorio de esos atributos.
+
+### Los `.png` se van, y `create_images.py` se blinda
+
+Los tres PNG de relleno no los referenciaba nadie: el HTML usa
+`<img src="*.webp">` sin `<picture>`, así que nunca fueron un fallback
+real. Conservarlos ahora sería dejar como respaldo un rectángulo de color
+en lugar de la foto que acompaña.
+
+`create_images.py` se conserva —documenta la regla de no rasterizar
+marcas, y un test la verifica sobre ese archivo—, pero ahora **se niega a
+correr si `static/images/` ya tiene imágenes**. Sin esa guarda, ejecutarlo
+por distracción destruía los cuatro assets sin vuelta atrás, y el
+repositorio ya no tendría con qué recuperarlos.
+
+### La verificación visual quedó a medias, y se dice
+
+Hay dos capturas válidas del escritorio con la fotografía renderizada.
+Después la ventana de Chrome pasó a segundo plano, la composición se
+suspendió y las capturas siguientes salieron en blanco. Se comprobó que
+era la captura y no la página, midiendo el DOM con el diálogo abierto.
+
+La geometría está verificada por medición en las dos superficies y en
+ocho anchos. **Las fotos del diálogo y del móvil no están**, y eso se
+declara como pendiente en vez de presentarse como hecho.

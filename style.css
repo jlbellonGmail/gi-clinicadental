@@ -89,8 +89,14 @@ ul {
     list-style: none;
 }
 
+/* `height: auto` NO es decorativo y no se puede quitar: desde la v1.0.1
+   las imagenes llevan atributos `width`/`height` para reservar su espacio
+   y evitar que el layout salte al cargar. Sin `height: auto`, el alto del
+   atributo se aplica literal mientras el ancho cede al contenedor, y la
+   foto sale estirada: medido a 320 px, 259x1086 en vez de 259x194. */
 img {
     max-width: 100%;
+    height: auto;
     display: block;
 }
 

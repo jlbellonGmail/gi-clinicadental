@@ -80,6 +80,15 @@ como texto grande.
 | `static/images/interior-clinica.webp` | WebP | 4 KB | 800 × 600 | Contact section |
 | `static/images/interior-clinica.png` | PNG | 83 KB | 800 × 600 | Fallback |
 
+!!! info "Superado por la v1.0.1"
+    Esta tabla describe los **marcadores de posicion** generados con
+    Pillow, que fueron lo que hubo hasta la v1.0.1. Esa release los
+    reemplazo por fotografia real y **elimino los `.png`**: nunca fueron
+    un fallback efectivo -el HTML usa `<img src="*.webp">` sin
+    `<picture>`-, y conservarlos habria dejado como respaldo una imagen
+    distinta de la que acompañan. El inventario vigente esta en
+    [identidad-privacidad-white-label.md](identidad-privacidad-white-label.md).
+
 ## Riesgos y consideraciones
 
 - Las imágenes WebP tienen excelente compatibilidad en navegadores modernos (97%+ de cobertura). Para navegadores antiguos que no soporten WebP, se recomienda agregar una etiqueta `<picture>` con fallback a PNG/MPO, pero para este sitio 100% estático el enfoque actual es aceptable.
