@@ -9,7 +9,7 @@ status: construccion_parcial_faltan_las_imagenes_definitivas
 sha_intermedio: c93a4b4b2133a13b83e07bd2a75beb9b40dcbe79   # NO es el candidato final
 suites:
   npm_test: 331/331
-  pytest: 94/94
+  pytest: 113/113
   mkdocs_strict: ok
   build_check: ok
 verificacion_en_negativo: 20/20 defectos detectados
@@ -25,14 +25,13 @@ pendiente_humano:
 | Suite | Antes | Ahora |
 |---|---|---|
 | `npm test` | 272 | **331 / 331** |
-| `pytest tests/` | 79 | **94 / 94** |
+| `pytest tests/` | 79 | **113 / 113** |
 | `mkdocs build --strict` | ok | **ok** |
 | `node scripts/build-site.js --check` | — | **ok** |
 
 Los 59 tests nuevos de JavaScript son 15 del diálogo de la política, 23
-de la validación de configuración y 21 del generador. Los 15 de Python
-son 9 de configuración y secretos y 6 reescritos o agregados en los
-guards de marca.
+de la validación de configuración y 21 del generador. Los 34 de Python son 9 de configuración y secretos, 19 de la
+nomenclatura de etapa y 6 reescritos o agregados en los guards de marca.
 
 ## Que la refactorización no rompió nada
 
