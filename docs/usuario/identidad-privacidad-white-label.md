@@ -141,6 +141,54 @@ La imagen social **no es un recorte del hero**: se compone para 1.91:1, con
 el sujeto en un tercio y nada importante en los bordes, porque cada
 plataforma recorta distinto y algunas muestran un cuadrado central.
 
+## El favicon y el ícono de la app
+
+Son los dos íconos de marca: el de la pestaña del navegador y el que
+queda al guardar el sitio en la pantalla de inicio de un teléfono.
+
+| Clave | Archivo | Formato | Tamaños | Dónde se ve |
+|---|---|---|---|---|
+| `brand.favicon` | `favicon.ico` | ICO multi-tamaño | **16, 32 y 48 px** | Pestaña, favoritos, historial |
+| `brand.appleTouchIcon` | `apple-touch-icon.png` | PNG cuadrado, **sin transparencia** | **180 × 180 px** | Pantalla de inicio en iOS |
+
+El `.ico` lleva los tres tamaños dentro de un solo archivo: con uno solo,
+el navegador escala y se ve borroso. El PNG de iOS va sin transparencia
+porque el sistema compone sobre negro y las esquinas quedarían con un
+halo oscuro.
+
+### Dos formas de cambiarlos
+
+**Si ya tenés los archivos**: dejalos donde quieras dentro del proyecto y
+apuntá `brand.favicon` y `brand.appleTouchIcon` a esas rutas. El tipo del
+`<link>` se deduce solo de la extensión, así que también sirve un `.png`
+o un `.svg` como favicon.
+
+**Si querés el mismo isotipo con otros colores**: cambiá
+`brand.iconColors` y regeneralos:
+
+```bash
+python scripts/build-branding-icons.py
+```
+
+```json
+"iconColors": {
+  "background": "#076e6e",
+  "foreground": "#ffffff"
+}
+```
+
+Escribe `favicon.ico`, `apple-touch-icon.png` y el favicon del sitio de
+documentación. Con `--preview` deja además una tira con el ícono a los
+cuatro tamaños, para revisarlo sin abrir el `.ico`.
+
+!!! warning "El ícono no puede ser un glifo de Font Awesome"
+    El logo del encabezado sí lo es, y se resuelve en el navegador. Un
+    favicon no: el navegador lo pide **antes** de ejecutar nada, así que
+    tiene que ser un archivo de verdad. Por eso hay un script que lo
+    dibuja en vez de una referencia al ícono del logo.
+
+Ninguno de los dos caminos toca HTML, CSS ni JavaScript.
+
 ### Reglas que no se negocian
 
 - **Ningún texto dentro de la imagen**, y mucho menos el nombre de la

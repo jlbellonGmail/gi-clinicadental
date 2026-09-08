@@ -7,7 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ brand.name }} | Página no encontrada</title>
     <meta name="robots" content="noindex">
-    <link rel="icon" href="{{ brand.favicon }}" type="image/x-icon">
+    <link rel="icon" href="{{ brand.favicon }}" type="{{ meta.tipoFavicon }}">
+    <link rel="apple-touch-icon" href="{{ brand.appleTouchIcon }}">
     <link rel="stylesheet" href="style.css">
     <!-- Esta pagina usa iconos de Font Awesome (el diente del logo, los
          iconos de redes) y no cargaba la hoja: se veian como cuadros

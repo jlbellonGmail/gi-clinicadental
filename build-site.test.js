@@ -254,6 +254,68 @@ test('la imagen social es un archivo propio en 1.91:1, no el hero', () => {
   );
 });
 
+test('los iconos de marca salen de la configuracion, en las tres paginas', () => {
+  const config = copia();
+  config.brand.favicon = 'static/branding/mi-icono.png';
+  config.brand.appleTouchIcon = 'static/branding/mi-apple.png';
+
+  const salidas = generar(config);
+
+  for (const [, destino] of PAGINAS) {
+    const html = salidas[destino];
+    assert.ok(
+      html.includes('href="static/branding/mi-icono.png"'),
+      `${destino} no tomo el favicon de la configuracion`
+    );
+    assert.ok(
+      html.includes('<link rel="apple-touch-icon" href="static/branding/mi-apple.png">'),
+      `${destino} no tomo el apple-touch-icon de la configuracion`
+    );
+  }
+});
+
+test('el tipo del favicon se deduce de la extension, no esta fijo', () => {
+  // Estaba escrito a mano como `image/x-icon` en las tres plantillas. Con
+  // la ruta saliendo de configuracion eso era una trampa: un `.png`
+  // quedaba declarado como `.ico` y no habia forma de corregirlo sin
+  // tocar HTML.
+  const casos = [
+    ['favicon.ico', 'image/x-icon'],
+    ['icono.png', 'image/png'],
+    ['icono.svg', 'image/svg+xml'],
+  ];
+
+  for (const [archivo, tipo] of casos) {
+    const config = copia();
+    config.brand.favicon = archivo;
+    const html = generar(config)['index.html'];
+    assert.ok(
+      html.includes(`<link rel="icon" href="${archivo}" type="${tipo}">`),
+      `con '${archivo}' se esperaba type="${tipo}"`
+    );
+  }
+});
+
+test('una extension de favicon que no es un icono falla el build', () => {
+  const config = copia();
+  config.brand.favicon = 'notas.txt';
+  assert.throws(
+    () => generar(config),
+    /notas\.txt/,
+    'publicar un `<link rel="icon">` a un archivo que no es una imagen es un defecto silencioso'
+  );
+});
+
+test('las tres paginas declaran los dos iconos', () => {
+  // El 404 era la unica pagina sin apple-touch-icon. No habia motivo:
+  // tambien se puede guardar en la pantalla de inicio.
+  const salidas = generar(leerConfig());
+  for (const [, destino] of PAGINAS) {
+    assert.match(salidas[destino], /<link rel="icon"/, `${destino} sin favicon`);
+    assert.match(salidas[destino], /<link rel="apple-touch-icon"/, `${destino} sin apple-touch-icon`);
+  }
+});
+
 test('la version de la politica llega al `meta` que lee el formulario', () => {
   const config = copia();
   config.legal.privacyPolicyVersion = 'v9-2030-01-15';

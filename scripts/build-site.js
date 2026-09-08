@@ -132,6 +132,35 @@ function bloqueImagen(imagen, opciones = {}) {
   return `<img ${atributos.join(' ')}>`;
 }
 
+/**
+ * Tipo MIME del favicon, deducido de su extension.
+ *
+ * Estaba escrito a mano como `image/x-icon` en las tres plantillas. Con
+ * la ruta saliendo de configuracion eso era una trampa: una clinica que
+ * pusiera un `.png` o un `.svg` quedaba con el tipo equivocado
+ * declarado, y sin tocar HTML no tenia como corregirlo.
+ */
+function tipoDeIcono(ruta) {
+  const extension = String(ruta).toLowerCase().split('.').pop();
+  const tipos = {
+    ico: 'image/x-icon',
+    png: 'image/png',
+    svg: 'image/svg+xml',
+    gif: 'image/gif',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+  };
+  const tipo = tipos[extension];
+  if (!tipo) {
+    throw new Error(
+      `brand.favicon apunta a '${ruta}', y no se reconoce esa extension como icono. ` +
+        `Aceptadas: ${Object.keys(tipos).join(', ')}.`
+    );
+  }
+  return tipo;
+}
+
 function bloqueServicios(config) {
   return serviciosVisibles(config)
     .map((servicio) => {
@@ -255,7 +284,10 @@ function generar(config) {
     contact: config.contact,
     business: config.business,
     legal: config.legal,
-    meta: { anio: config.business.copyrightYear },
+    meta: {
+      anio: config.business.copyrightYear,
+      tipoFavicon: tipoDeIcono(config.brand.favicon),
+    },
     bloques: {
       servicios: bloqueServicios(config),
       opcionesServicio: bloqueOpcionesServicio(config),

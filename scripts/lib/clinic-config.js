@@ -150,6 +150,23 @@ function validarConfig(config) {
     }
   }
 
+  // Iconos de marca: se referencian desde el `<head>` de las tres
+  // paginas, y una ruta que no existe es un 404 en cada visita.
+  const colores = obtener(config, 'brand.iconColors');
+  if (colores === null || typeof colores !== 'object') {
+    problemas.push("'brand.iconColors' debe ser un objeto con 'background' y 'foreground'");
+  } else {
+    for (const campo of ['background', 'foreground']) {
+      const valor = colores[campo];
+      if (!esTextoUtil(valor) || !/^#[0-9a-fA-F]{6}$/.test(valor)) {
+        problemas.push(
+          `'brand.iconColors.${campo}' debe ser un color hexadecimal de 6 digitos ` +
+            `(recibido: '${valor}'). Lo usa scripts/build-branding-icons.py.`
+        );
+      }
+    }
+  }
+
   const imagenes = obtener(config, 'brand.images');
   if (imagenes === null || typeof imagenes !== 'object') {
     problemas.push("'brand.images' debe ser un objeto");

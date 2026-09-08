@@ -9,6 +9,10 @@
     "logoIcon": "fa-tooth",
     "favicon": "favicon.ico",
     "appleTouchIcon": "apple-touch-icon.png",
+    "iconColors": {
+      "background": "#076e6e",
+      "foreground": "#ffffff"
+    },
     "images": {
       "hero": {
         "src": "static/images/paciente-sonrisa.webp",

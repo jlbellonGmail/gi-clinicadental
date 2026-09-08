@@ -323,3 +323,54 @@ era la captura y no la página, midiendo el DOM con el diálogo abierto.
 La geometría está verificada por medición en las dos superficies y en
 ocho anchos. **Las fotos del diálogo y del móvil no están**, y eso se
 declara como pendiente en vez de presentarse como hecho.
+
+## Los iconos de marca: seis referencias rotas, no dos
+
+La verificación del SHA anterior dejó ver que `apple-touch-icon.png` no
+existía. Al buscar el alcance real aparecieron **seis** referencias rotas:
+el favicon en las tres páginas, el apple-touch-icon en dos, y el favicon
+del sitio de documentación declarado en `mkdocs.yml`. `404.html` era
+además la única página sin apple-touch-icon.
+
+Ninguna herramienta lo detectaba, y tiene sentido: un icono ausente no
+rompe nada visible. Simplemente no hay icono.
+
+### Un script que dibuja, no un archivo suelto
+
+El logo del encabezado es un glifo de Font Awesome, que se resuelve **en
+el navegador**. Un favicon no puede resolverse así: el navegador lo pide
+antes de ejecutar nada. Por eso el isotipo se dibuja con Pillow y se
+emite como archivo, sin fuentes de iconos ni dependencias nuevas.
+
+El icono invierte los colores del encabezado —fondo teal, diente blanco—
+porque a 16 px un trazo fino sobre fondo claro desaparece entre las
+pestañas. Es una decisión de legibilidad, no de estilo, y se revisó a los
+cuatro tamaños antes de darla por buena.
+
+Que sea un script y no tres archivos binarios sueltos es lo que hace la
+pieza parametrizable: otra clínica cambia dos colores y regenera, o
+apunta la configuración a sus propios archivos. Ninguno de los dos
+caminos toca HTML, CSS ni JavaScript.
+
+### Una trampa que venía escondida en la plantilla
+
+El `type` del `<link rel="icon">` estaba fijo como `image/x-icon` en las
+tres plantillas. Mientras el favicon fue siempre un `.ico` no molestaba,
+pero con la ruta saliendo de configuración era una trampa: una clínica
+que pusiera un `.png` quedaba con el tipo equivocado declarado y **sin
+forma de corregirlo sin tocar HTML**, que es justamente lo que esta
+release promete evitar.
+
+Ahora se deduce de la extensión, y una extensión que no es de imagen
+falla el build en vez de publicarse.
+
+### El guard que importa es el general
+
+Se agregaron guards específicos —el favicon existe, el apple-touch-icon
+existe, el `.ico` trae los tres tamaños, el HTML apunta a lo que dice la
+configuración—, pero el que cubre la clase entera del defecto es otro:
+**ninguna referencia local de las tres páginas puede apuntar a un archivo
+inexistente**. Los específicos son casos particulares de ése, y quedan
+porque dan mejores mensajes de error.
+
+Los doce se verificaron en negativo.
