@@ -130,9 +130,14 @@ los archivos.
 | `hero` | `static/images/paciente-sonrisa.webp` | 4:3 | 1600 × 1200 px | Portada, arriba a la derecha |
 | `team` | `static/images/equipo-dental.webp` | 4:3 | 1600 × 1200 px | Sección "Tecnología de Punta, Trato Humano" |
 | `interior` | `static/images/interior-clinica.webp` | 4:3 | 1600 × 1200 px | Junto a los datos de contacto |
-| `social` | (suele ser la misma que `hero`) | 1.91:1 recomendado | 1200 × 630 px | La miniatura al compartir el link |
+| `social` | `static/images/og-social.webp` | **1.91:1** | 1200 × 630 px | La miniatura al compartir el link |
 
-Formato **WebP**, calidad 80–85, **por debajo de 250 KB** cada una.
+Formato **WebP**, calidad 80–85: por debajo de **250 KB** las tres de 4:3
+y de **300 KB** la social.
+
+La imagen social **no es un recorte del hero**: se compone para 1.91:1, con
+el sujeto en un tercio y nada importante en los bordes, porque cada
+plataforma recorta distinto y algunas muestran un cuadrado central.
 Después de dejar los archivos, hay que actualizar `width` y `height` en
 la configuración con las dimensiones reales.
 

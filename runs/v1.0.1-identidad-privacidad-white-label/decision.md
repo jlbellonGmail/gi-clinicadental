@@ -233,3 +233,28 @@ Queda esperando los assets definitivos. Al recibirlos: integrarlos,
 comprobar desktop y móvil, `build:site`, suites completas,
 `build:site --check`, verificación visual y **nuevo SHA candidato**.
 Recién entonces, auditoría independiente.
+
+## La imagen social: archivo propio, aprobado
+
+Se aprueba la cuarta imagen dedicada. `og:image` y `twitter:image` van a
+apuntar a `static/images/og-social.webp`, compuesta para **1.91:1**, y no
+al hero: el hero es 4:3 y cada plataforma lo recorta a su manera, así que
+reutilizarlo da una miniatura mal encuadrada en el caso más visible que
+tiene el sitio —el enlace compartido—.
+
+Se agregaron ahora los metadatos que faltaban y que no dependen del
+archivo: `og:image:alt`, `twitter:image:alt` y `og:image:width/height`,
+los tres desde `brand.images.social`. El `alt` de la miniatura no es
+decorativo: es lo único que anuncia un lector de pantalla cuando la
+tarjeta aparece en un timeline.
+
+**Lo que no se pudo adelantar**: apuntar la configuración a
+`og-social.webp` antes de que el archivo exista pondría en rojo los dos
+guards que comprueban que las imágenes referenciadas están en el
+repositorio. Sería cambiar el sitio por un enlace roto para que la
+configuración "se vea lista".
+
+El guard que exige que la social sea un archivo propio en 1.91:1 quedó
+escrito y **saltado**, no comentado: un `test.skip` aparece en cada
+corrida de la suite y se activa al integrar los assets; un `TODO` no lo
+ve nadie. Es deuda declarada, con fecha de vencimiento visible.

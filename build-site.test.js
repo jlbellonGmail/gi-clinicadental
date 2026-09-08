@@ -205,6 +205,61 @@ test('las imagenes salen de la configuracion, con alt y dimensiones', () => {
   );
 });
 
+test('los metadatos sociales salen de la imagen social, en URL absoluta', () => {
+  const config = copia();
+  config.brand.images.social = {
+    src: 'static/images/og-social.webp',
+    alt: 'Texto alternativo de la miniatura social',
+    width: 1200,
+    height: 630,
+  };
+  config.business.siteUrl = 'https://ejemplo.test';
+
+  const html = generar(config)['index.html'];
+
+  // `og:image` tiene que ser absoluta: la lee un servidor ajeno, que no
+  // sabe resolver una ruta relativa a este sitio.
+  const absoluta = 'https://ejemplo.test/static/images/og-social.webp';
+  assert.ok(html.includes(`<meta property="og:image" content="${absoluta}">`));
+  assert.ok(html.includes(`<meta name="twitter:image" content="${absoluta}">`));
+
+  // El alt de la miniatura no es decorativo: los lectores de pantalla lo
+  // anuncian en el timeline, donde la imagen es todo lo que se ve.
+  const alt = 'Texto alternativo de la miniatura social';
+  assert.ok(html.includes(`<meta property="og:image:alt" content="${alt}">`));
+  assert.ok(html.includes(`<meta name="twitter:image:alt" content="${alt}">`));
+
+  // Las dimensiones evitan que la tarjeta salte mientras carga.
+  assert.ok(html.includes('<meta property="og:image:width" content="1200">'));
+  assert.ok(html.includes('<meta property="og:image:height" content="630">'));
+});
+
+// SE ACTIVA AL RECIBIR LOS ASSETS DEFINITIVOS.
+//
+// Hoy `brand.images.social` apunta al mismo archivo que el hero, que es
+// 4:3. La v1.0.1 aprueba una imagen dedicada en 1.91:1 porque las
+// plataformas recortan el 4:3 y la miniatura queda mal.
+//
+// Queda como test saltado y no como comentario: un `skip` aparece en cada
+// corrida de la suite; un TODO no lo ve nadie.
+test.skip('la imagen social es un archivo propio en 1.91:1, no el hero', () => {
+  const config = leerConfig();
+  const social = config.brand.images.social;
+  const hero = config.brand.images.hero;
+
+  assert.notEqual(
+    social.src,
+    hero.src,
+    'la miniatura social no puede reutilizar el hero: se compone para 1.91:1'
+  );
+
+  const proporcion = social.width / social.height;
+  assert.ok(
+    Math.abs(proporcion - 1.91) < 0.05,
+    `la imagen social deberia ser 1.91:1, es ${proporcion.toFixed(2)}:1`
+  );
+});
+
 test('la version de la politica llega al `meta` que lee el formulario', () => {
   const config = copia();
   config.legal.privacyPolicyVersion = 'v9-2030-01-15';

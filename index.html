@@ -22,13 +22,21 @@
     <meta property="og:description" content="Sonría más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital. Recupera tu bienestar bucodental con tecnología de vanguardia.">
     <meta property="og:url" content="https://gi-clinicadental.vercel.app">
     <meta property="og:type" content="website">
+    <!-- La imagen social se compone aparte, en 1.91:1: el hero es 4:3 y
+         las plataformas lo recortan mal. `og:image:alt` existe porque la
+         miniatura tambien la leen lectores de pantalla en el timeline, y
+         las dimensiones evitan que la tarjeta salte mientras carga. -->
     <meta property="og:image" content="https://gi-clinicadental.vercel.app/static/images/paciente-sonrisa.webp">
+    <meta property="og:image:alt" content="Paciente sonriendo después de un tratamiento de implante de carga inmediata">
+    <meta property="og:image:width" content="800">
+    <meta property="og:image:height" content="600">
     <meta property="og:locale" content="es_AR">
     <meta property="og:site_name" content="Sonría más">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Sonría más | Tu Sonrisa, Nuestra Pasión">
     <meta name="twitter:description" content="Sonría más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital.">
     <meta name="twitter:image" content="https://gi-clinicadental.vercel.app/static/images/paciente-sonrisa.webp">
+    <meta name="twitter:image:alt" content="Paciente sonriendo después de un tratamiento de implante de carga inmediata">
 </head>
 <body>
     <a href="#main" class="skip-link" style="position: fixed; top: -100px; left: 20px; background: var(--primary); color: var(--white); padding: 10px; border-radius: 4px; z-index: 9999; transition: top 0.3s;">Saltar al contenido principal</a>
