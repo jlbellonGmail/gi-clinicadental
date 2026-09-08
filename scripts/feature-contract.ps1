@@ -45,8 +45,18 @@ function Get-FeatureInfo {
         [string] $Title = ""
     )
 
-    if ($Slug -notmatch "^(?<number>[0-9]{2})-(?<docSlug>[a-z0-9]+(?:-[a-z0-9]+)*)$") {
-        throw "Slug invalido '$Slug'. Debe tener formato NN-slug-en-minusculas."
+    # Dos formas validas de identificar una etapa:
+    #   NN-slug        un hito del roadmap (01-, 02-, ... 99-)
+    #   vX.Y.Z-slug    una release de mantenimiento sobre una version
+    #                  ya liberada
+    # La segunda existe para que una correccion sobre lo ya publicado no
+    # tenga que consumir un numero de hito que esta reservado para otra
+    # cosa. Todo lo demas del contrato es identico para las dos.
+    # `-cnotmatch` y no `-notmatch`: en PowerShell la comparacion por
+    # defecto ignora mayusculas, asi que `[a-z0-9]` aceptaba `17-Con-Mayusculas`
+    # y el mensaje de error prometia minusculas sin exigirlas.
+    if ($Slug -cnotmatch "^(?<number>[0-9]{2}|v[0-9]+\.[0-9]+\.[0-9]+)-(?<docSlug>[a-z0-9]+(?:-[a-z0-9]+)*)$") {
+        throw "Slug invalido '$Slug'. Debe tener formato NN-slug-en-minusculas (hito) o vX.Y.Z-slug-en-minusculas (release de mantenimiento)."
     }
 
     $docSlug = $Matches["docSlug"]

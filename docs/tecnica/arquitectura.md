@@ -174,3 +174,23 @@ que es peor: el lead ya está insertado.
 - **Superficie agregada**: una sola dependencia directa más; sus
   transitivas quedan excluidas de Git vía `.gitignore`, igual que
   `@supabase/supabase-js`.
+
+## Generacion del sitio desde configuracion (v1.0.1)
+
+El sitio publico se genera desde `config/clinic.json` y las
+plantillas de `templates/`, con `scripts/build-site.js`.
+
+**El HTML generado se commitea y es lo que Vercel sirve. No se agrega
+un paso de build al deploy**: el proyecto sigue siendo estatico y sin
+dependencias de build, tal como exige este documento. Si el generador
+desapareciera, el sitio seguiria funcionando igual.
+
+La contrapartida -que el HTML commiteado se separe de la
+configuracion- la cubre `build-site.test.js`, que regenera en memoria
+y compara.
+
+El generador no agrega dependencias: usa solo Node. La unica
+devDependency del proyecto sigue siendo `jsdom`.
+
+Detalle y alternativas descartadas en
+[identidad-privacidad-white-label.md](identidad-privacidad-white-label.md).

@@ -68,6 +68,7 @@ hide:
 - [Observabilidad y operacion](observabilidad-y-operacion.md)
 - [Solicitudes que necesitan revision](estado-comunicacion-leads.md)
 - [Validación del MVP en producción](validacion-mvp-produccion.md)
+- [Identidad, privacidad y white-label](identidad-privacidad-white-label.md)
 
 <!-- FEATURE_LINKS_END -->
 

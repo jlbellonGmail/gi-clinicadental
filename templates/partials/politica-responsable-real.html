@@ -1,0 +1,16 @@
+<!-- `legal.demoMode` = false: los datos del responsable salen de
+     `config/clinic.json` y son obligatorios; la validacion de
+     configuracion no deja publicar esta variante en blanco. -->
+<section>
+    <h2>3. Responsable del tratamiento</h2>
+    <p>
+        El responsable del tratamiento de tus datos es
+        <strong>{{ legal.controller.legalName }}</strong>{{{ bloques.politicaResponsableNombreComercial }}}{{{ bloques.politicaResponsableIdentificacion }}},
+        con domicilio en {{ legal.controller.address }}.
+    </p>
+    <p>
+        Para cualquier consulta sobre el tratamiento de tus datos podés
+        escribir a
+        <a href="mailto:{{ legal.privacyContactEmail }}">{{ legal.privacyContactEmail }}</a>.
+    </p>
+</section>

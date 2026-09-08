@@ -674,6 +674,110 @@ body.con-modal {
     overflow: hidden;
 }
 
+
+/* --- Aviso de privacidad de la capa 1 ---
+   Va junto al boton de envio, no en el pie: el visitante tiene que verlo
+   en el momento en que decide enviar sus datos. Usa `--text` y no
+   `--text-muted` porque este ultimo da 4,2:1 sobre blanco, por debajo del
+   minimo AA para texto normal. --- */
+
+.form-privacy-notice {
+    margin: 0 0 18px;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--text);
+}
+
+.form-privacy-notice a {
+    color: var(--primary-deep);
+    text-decoration: underline;
+}
+
+
+/* --- Dialogo de la politica de privacidad ---
+   Misma infraestructura `.modal` que el dialogo de resultado; cambia la
+   forma de la caja. La diferencia importante es que el contenido legal
+   scrollea DENTRO del cuerpo, con el encabezado y el pie fijos: si
+   scrolleara la caja entera, el boton de cerrar se iria de pantalla justo
+   cuando hace falta. --- */
+
+.modal__caja--politica {
+    max-width: min(720px, 100%);
+    max-height: calc(100vh - 40px);
+    /* La caja no scrollea: scrollea `.modal__cuerpo`. */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    text-align: left;
+}
+
+.modal__encabezado {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(45, 58, 58, 0.12);
+}
+
+.modal__caja--politica .modal__titulo {
+    margin-bottom: 0;
+    font-size: 1.35rem;
+}
+
+.modal__cerrar {
+    flex-shrink: 0;
+    background: none;
+    border: 0;
+    padding: 8px;
+    border-radius: 8px;
+    font-size: 1.25rem;
+    line-height: 1;
+    color: var(--text);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.modal__cerrar:hover {
+    background-color: var(--primary-light);
+    color: var(--primary-deep);
+}
+
+.modal__cuerpo {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px;
+}
+
+/* Tiene `tabindex="0"` para que se pueda scrollear con el teclado; sin
+   un foco visible eso seria una trampa silenciosa. */
+.modal__cuerpo:focus-visible,
+.modal__cerrar:focus-visible {
+    outline: 3px solid var(--primary-deep);
+    outline-offset: 2px;
+}
+
+.modal__pie {
+    flex-shrink: 0;
+    padding: 16px 24px;
+    border-top: 1px solid rgba(45, 58, 58, 0.12);
+}
+
+.modal__pie .modal__accion {
+    margin-top: 0;
+}
+
+/* El texto legal dentro del dialogo no repite el ancho de lectura de la
+   pagina: ya esta acotado por la caja. */
+.modal__cuerpo.legal-content {
+    max-width: none;
+    margin: 0;
+    padding: 24px;
+}
+
 @media (max-width: 768px) {
     /* El header pasa a dos filas: barra (logo + hamburguesa) y, al
        abrir, los paneles a ancho completo. `flex-wrap` evita
@@ -839,6 +943,33 @@ body.con-modal {
 
     .modal__titulo {
         font-size: 1.3rem;
+    }
+
+    /* Dialogo de la politica: se acerca a los bordes, igual que el de
+       resultado, y el contenido legal se compacta. */
+    .modal__caja--politica {
+        max-height: calc(100vh - 32px);
+    }
+
+    .modal__encabezado {
+        padding: 16px 18px;
+    }
+
+    .modal__caja--politica .modal__titulo {
+        font-size: 1.15rem;
+    }
+
+    .modal__cuerpo,
+    .modal__cuerpo.legal-content {
+        padding: 18px;
+    }
+
+    .modal__pie {
+        padding: 14px 18px;
+    }
+
+    .form-privacy-notice {
+        font-size: 0.85rem;
     }
 }
 

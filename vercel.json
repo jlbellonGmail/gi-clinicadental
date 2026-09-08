@@ -21,7 +21,26 @@
   ],
   "functions": {
     "api/leads.js": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "config/**"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/politica-de-privacidad",
+      "destination": "/politica-de-privacidad.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/politica-privacidad",
+      "destination": "/politica-de-privacidad",
+      "permanent": true
+    },
+    {
+      "source": "/politica-privacidad.html",
+      "destination": "/politica-de-privacidad",
+      "permanent": true
+    }
+  ]
 }

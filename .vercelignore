@@ -17,3 +17,8 @@ requirements-dev.txt
 AGENTS.md
 CLAUDE.md
 ROADMAP.md
+
+# Plantillas del generador: el sitio que se sirve es el HTML ya
+# generado de la raiz. Publicarlas expondria los marcadores `{{ }}`
+# en URLs como /templates/index.html.
+templates/

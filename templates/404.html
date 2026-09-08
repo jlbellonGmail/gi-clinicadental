@@ -5,9 +5,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sonría más | Página no encontrada</title>
+    <title>{{ brand.name }} | Página no encontrada</title>
     <meta name="robots" content="noindex">
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="icon" href="{{ brand.favicon }}" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
     <!-- Esta pagina usa iconos de Font Awesome (el diente del logo, los
          iconos de redes) y no cargaba la hoja: se veian como cuadros
@@ -23,8 +23,8 @@
     <header>
         <div class="container header-container">
             <a href="index.html" class="logo">
-                <i class="fas fa-tooth"></i>
-                <span>Sonría más</span>
+                <i class="fas {{ brand.logoIcon }}"></i>
+                <span>{{ brand.name }}</span>
             </a>
             <nav class="nav-links">
                 <a href="index.html">Inicio</a>
@@ -42,7 +42,7 @@
                     <a href="index.html" class="btn btn-primary" style="padding: 16px 32px; font-size: 1.1rem;">Volver al inicio</a>
                 </div>
                 <div class="hero-image">
-                    <img src="static/images/paciente-sonrisa.webp" alt="Paciente sonriendo después de un tratamiento de implante de carga inmediata" width="800" height="600" loading="lazy" decoding="async" style="display: none;">
+                    {{{ bloques.imagenHero404 }}}
                 </div>
             </div>
         </section>
@@ -53,10 +53,10 @@
             <div class="footer-grid">
                 <div>
                     <a href="index.html" class="logo" style="color: white; margin-bottom: 20px;">
-                        <i class="fas fa-tooth"></i>
-                        <span>Sonría más</span>
+                        <i class="fas {{ brand.logoIcon }}"></i>
+                        <span>{{ brand.name }}</span>
                     </a>
-                    <p style="color: #bbb;">Transformando vidas a través de sonrisas saludables y tecnología de vanguardia.</p>
+                    <p style="color: #bbb;">{{ brand.footerText }}</p>
                 </div>
                 <div>
                     <h4>Explora</h4>
@@ -74,15 +74,12 @@
                 <div>
                     <h4>Síguenos</h4>
                     <div style="display: flex; gap: 15px; margin-top: 20px;">
-                        <a href="https://facebook.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><i class="fab fa-facebook-f" aria-hidden="true"></i></a>
-                        <a href="https://instagram.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><i class="fab fa-instagram" aria-hidden="true"></i></a>
-                        <a href="https://tiktok.com/@sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><i class="fab fa-tiktok" aria-hidden="true"></i></a>
-                        <a href="https://youtube.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><i class="fab fa-youtube" aria-hidden="true"></i></a>
+{{{ bloques.redes }}}
                     </div>
                 </div>
             </div>
             <div class="footer-bottom">
-                &copy; 2026 Sonría más. Todos los derechos reservados.
+                &copy; {{ meta.anio }} {{ brand.name }}. Todos los derechos reservados.
             </div>
         </div>
     </footer>
