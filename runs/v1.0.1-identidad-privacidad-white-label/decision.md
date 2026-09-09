@@ -592,3 +592,66 @@ ni configuración, ni scripts del circuito.** Si el criterio del humano es
 que una reauditoría debe correr sobre el árbol exacto que se mergea,
 corresponde una `audit-3` sobre el SHA final; esa decisión no es de
 Claude Code.
+
+## audit-3: APROBADA, sobre el árbol exacto
+
+Criterio del humano, aplicado: la reauditoría corre sobre el árbol que se
+mergea, no sobre uno anterior. `audit-3.md` audita `d4c84c4`.
+
+**Se le dieron los dos árboles.** Se exportaron `2f2f92a` y `d4c84c4` a
+`anterior/` y `actual/`, sin `.git`, fuera del repositorio, para que el
+auditor **corriera el diff él mismo**. La afirmación central de este
+delta —"no se tocó producto"— era justamente la que no debía llegarle ya
+resuelta. La corrió: los `diff -rq` y `diff -r` están en el apéndice del
+acta.
+
+Confirmó que los únicos archivos que difieren son cinco, y que los cinco
+caen dentro de los cuatro cambios declarados:
+
+| Archivo | Cambio |
+|---|---|
+| `audit-2.md` | nuevo, persistencia del acta |
+| `test-report-4.md` | conteo 38/36 → 37/35 |
+| `docs/tecnica/identidad-privacidad-white-label.md` | conteo 38/36 → 37/35 |
+| `tests/test_navegacion_de_documentacion.py` | guard nuevo |
+| `decision.md` | narración correspondiente |
+
+Y que `index.html`, `politica-de-privacidad.html`, `404.html`,
+`style.css`, `script.js`, `api/`, `config/`, `templates/`,
+`static/images/`, `vercel.json` y `scripts/` son **idénticos byte a
+byte**.
+
+### Contó las páginas por su cuenta
+
+No tomó la cifra de la documentación: contó 19 en `docs/tecnica/` y 18 en
+`docs/usuario/` sin `index.md`, 35 enlazadas, 2 huérfanas. Coincide con
+lo que ahora dice la documentación. Verificó además que el guard **mide**
+en vez de fijar números a mano, que es la diferencia entre un test y una
+constante.
+
+### Ejecutó las suites
+
+Se le autorizó correr las suites dentro de `actual/`, por ser una copia
+desechable. Lo hizo: `npm install` ahí, `npm test` **337/337**,
+`mkdocs build --strict` sin warnings, `build-site.js --check` OK,
+`Assert-FeatureContract` OK sin `-Title`.
+
+En `pytest` le falló **una**:
+`test_local_reconciler_scripts.py::test_start_reconciler_from_linked_worktree`,
+con `git clone ... Permission denied` sobre el temporal de Windows. La
+calificó de flaky de entorno y no de defecto de código. **Se comprobó**:
+en el worktree real, `tests/test_local_reconciler_scripts.py` pasa
+7 / 7, y la suite completa 150 / 150. Es la copia aislada, no el código.
+
+### Su intento de escribir fue rechazado
+
+`Write AUDIT-3_REPORT.md` falló contra la configuración de permisos.
+Queda en el acta. Es la garantía mecánica de la separación de autoría
+que el circuito declara: el auditor no crea artefactos, los persiste
+Claude Code.
+
+### Qué sigue sin verificarse
+
+Sin cambios: el `rewrite` y los `redirects` de Vercel, que se comprueban
+contra el deployment Preview de la PR; las capturas del diálogo y del
+móvil; y el envío real del formulario en Production.
