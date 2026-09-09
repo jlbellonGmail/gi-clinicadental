@@ -8,7 +8,7 @@ es un mensaje de nivel `INFO`:
     INFO - The following pages exist in the docs directory,
            but are not included in the "nav" configuration: ...
 
-seguido de las 38 páginas de `docs/tecnica/` y `docs/usuario/`. `--strict`
+seguido de las páginas de `docs/tecnica/` y `docs/usuario/`. `--strict`
 convierte *warnings* en errores; un `INFO` no lo es, y por eso la
 construcción nunca estuvo roja.
 
@@ -18,7 +18,7 @@ Es el diseño del repo, no un descuido. `nav` tiene tres entradas —inicio,
 `tecnica/index.md`, `usuario/index.md`— y **son los dos índices los que
 navegan**: `scripts/update-doc-indexes.ps1` mantiene sus enlaces y
 `Assert-FeatureContract` exige que cada etapa aparezca en ambos con el
-enlace exacto. Duplicar las 38 páginas dentro de `nav` obligaría a
+enlace exacto. Duplicar esas páginas dentro de `nav` obligaría a
 mantener la misma lista en dos lugares que pueden separarse en silencio.
 
 Tampoco se declara `not_in_nav` para silenciar el `INFO`: ese glob taparía
@@ -45,7 +45,7 @@ AREAS = ("tecnica", "usuario")
 # `landing.md` documenta la landing original —el baseline previo a este
 # circuito— y nunca entró en la zona FEATURE_LINKS de ningún índice,
 # porque no vino de una etapa que corriera `update-doc-indexes.ps1`.
-# Es la única página realmente inalcanzable de las 38, y lo era desde
+# Son las únicas páginas realmente inalcanzables, y lo eran desde
 # antes de esta release.
 #
 # No se corrige acá: agregarla exigiría tocar la región gestionada de los
@@ -99,8 +99,8 @@ def test_la_excepcion_heredada_sigue_siendo_la_que_dice_ser(area):
 def test_la_documentacion_de_esta_release_es_alcanzable(area):
     """Lo que introdujo la v1.0.1, comprobado aparte.
 
-    Las dos páginas nuevas aparecen en el `INFO` de MkDocs junto con las
-    otras 36, pero sí están enlazadas. El `INFO` no distingue entre
+    Las dos páginas nuevas aparecen en el `INFO` de MkDocs junto con
+    todas las demás, pero sí están enlazadas. El `INFO` no distingue entre
     'fuera de nav' e 'inalcanzable'; este test sí.
     """
     assert "identidad-privacidad-white-label.md" in enlazadas(area), (
@@ -109,7 +109,7 @@ def test_la_documentacion_de_esta_release_es_alcanzable(area):
 
 
 def test_el_nav_de_mkdocs_apunta_a_los_dos_indices():
-    """Si `nav` deja de incluir un índice, las 36 páginas se caen con él.
+    """Si `nav` deja de incluir un índice, las páginas se caen con él.
 
     Todo el esquema depende de que los dos índices estén navegables.
     """
@@ -119,3 +119,44 @@ def test_el_nav_de_mkdocs_apunta_a_los_dos_indices():
             f"mkdocs.yml ya no navega docs/{area}/index.md, que es la única "
             f"puerta de entrada a las páginas de {area}/"
         )
+
+
+def test_el_reparto_documentado_coincide_con_el_arbol():
+    """La documentación afirma cuántas páginas hay y cuántas se alcanzan.
+
+    Es una afirmación sobre el sistema, y como toda afirmación sobre el
+    sistema puede quedar desactualizada: se contaron 38 y 36 donde había
+    37 y 35, y nada lo detectó porque el número vivía en prosa. Ahora lo
+    detecta esto.
+
+    No fija los números: los mide y compara contra lo escrito. Agregar
+    una página de documentación hace fallar este test, y la corrección es
+    actualizar la cifra, que es exactamente lo que hay que hacer.
+    """
+    doc = (ROOT / "docs" / "tecnica" / "identidad-privacidad-white-label.md").read_text(
+        encoding="utf-8"
+    )
+
+    fuera_de_nav = sum(len(paginas(area)) for area in AREAS)
+    alcanzables = sum(len(paginas(area) & enlazadas(area)) for area in AREAS)
+
+    total_escrito = re.search(r"Reparto exacto de las (\d+) páginas", doc)
+    assert total_escrito, "la documentación ya no declara el reparto de páginas"
+    assert int(total_escrito.group(1)) == fuera_de_nav, (
+        f"la documentación dice {total_escrito.group(1)} páginas fuera de `nav`; "
+        f"hay {fuera_de_nav}"
+    )
+
+    alcanzables_escrito = re.search(
+        r"\| Enlazadas desde su índice, alcanzables \| (\d+) \|", doc
+    )
+    assert alcanzables_escrito, "la documentación ya no declara cuántas son alcanzables"
+    assert int(alcanzables_escrito.group(1)) == alcanzables, (
+        f"la documentación dice {alcanzables_escrito.group(1)} páginas alcanzables; "
+        f"hay {alcanzables}"
+    )
+
+    # Y el resto son exactamente las huérfanas heredadas declaradas.
+    assert fuera_de_nav - alcanzables == len(AREAS) * len(HUERFANAS_HEREDADAS), (
+        "las páginas sin enlace ya no son solo las excepciones declaradas"
+    )

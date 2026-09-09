@@ -63,8 +63,8 @@ emite es un mensaje `INFO`. `--strict` convierte *warnings* en errores; un
 
 | | páginas |
 |---|---|
-| Total fuera de `nav` | 38 |
-| De esas, alcanzables desde su índice | 36 |
+| Total fuera de `nav` | 37 |
+| De esas, alcanzables desde su índice | 35 |
 | **Realmente inalcanzables** | **2** |
 | Introducidas por la v1.0.1 | 2, **ambas enlazadas** |
 
@@ -72,7 +72,7 @@ Las dos inalcanzables son `docs/tecnica/landing.md` y
 `docs/usuario/landing.md`, preexistentes y ajenas a esta release.
 
 No se agregaron las dos páginas nuevas a `nav` —serían las únicas dos de
-38— ni se declaró `not_in_nav`, que habría silenciado el `INFO` completo
+37— ni se declaró `not_in_nav`, que habría silenciado el `INFO` completo
 incluidas las dos genuinamente inalcanzables. Se agregó un guard que
 exige que toda página esté enlazada desde el índice de su área, con las
 dos `landing.md` como excepción declarada y un test que avisa cuando la

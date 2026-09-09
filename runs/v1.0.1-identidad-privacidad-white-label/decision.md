@@ -445,11 +445,11 @@ Corresponde precisar el hallazgo antes de responderlo. `mkdocs build
 mensaje de nivel `INFO`. `--strict` convierte *warnings* en errores, y un
 `INFO` no lo es. La construcción nunca estuvo roja por esto.
 
-**Reparto de las 38 páginas:**
+**Reparto de las 37 páginas:**
 
-- **36 preexistentes en cuanto a la causa**: están fuera de `nav` porque
-  el repo navega por índices, no por `nav`. De esas 38, dos las introdujo
-  la v1.0.1.
+- **35 alcanzables**: están fuera de `nav` porque el repo navega por
+  índices, no por `nav`, pero su índice de área las enlaza. De esas 37,
+  dos las introdujo la v1.0.1.
 - **2 realmente inalcanzables**: `docs/tecnica/landing.md` y
   `docs/usuario/landing.md`. No están en `nav` **ni** en ningún índice.
   Preexistentes, de la landing anterior al circuito.
@@ -459,7 +459,7 @@ Las dos páginas que introdujo la v1.0.1 **sí están enlazadas en ambos
 introdujeron ningún defecto.
 
 **Qué se decidió no hacer, y por qué.** No se agregaron esas dos páginas
-a `nav`: serían las únicas dos de 38, una inconsistencia arbitraria, y es
+a `nav`: serían las únicas dos de 37, una inconsistencia arbitraria, y es
 el mismo error que degradar un índice para que coincida con un título
 derivado peor. Tampoco se declaró `not_in_nav`, que habría silenciado el
 `INFO` completo **incluidas las dos páginas genuinamente inalcanzables**
@@ -535,3 +535,60 @@ los guards: eran defectos de la inyección.** `docs/usuario/index.md` y
 defecto nunca llegó a escribirse. Corregida la inyección, los dos
 detectan. Queda anotado porque una verificación en negativo que falla por
 su propio andamiaje se parece mucho a un guard que funciona.
+
+## audit-2: APROBADA, y una cifra que estaba mal igual
+
+La segunda auditoría independiente, sobre `2f2f92a`, **aprobó**. El
+veredicto y el informe completo están en `audit-2.md`. Esta vez la salida
+de OpenCode se capturó a archivo y se persiste **íntegra**, incluida la
+traza de herramientas en un apéndice: es la diferencia concreta con
+`audit-1.md`, que declara no tenerla.
+
+Verificó los cuatro hallazgos de `audit-1` contra el árbol, no contra lo
+que dicen `decision.md` ni `test-report-4.md`, y revisó por su cuenta la
+marca pública, la privacidad, el white-label, los secretos, las imágenes,
+la solidez de los guards y el alcance. También evaluó los tres puntos
+donde se le pidió escepticismo —la limitación de procedencia de
+`audit-1.md`, la exclusión de las actas en el guard de nomenclatura y la
+excepción heredada `landing.md`— y los dio por legítimos.
+
+### El reparto de páginas decía 38 y 36; son 37 y 35
+
+Las páginas fuera de `nav` son **37**: 19 en `docs/tecnica/` y 18 en
+`docs/usuario/`, contadas contra el `INFO` de MkDocs y contra el árbol.
+Alcanzables desde su índice, **35**. Inalcanzables, **2**, que son las
+dos `landing.md` de siempre. La conclusión no cambia; el número sí
+estaba mal.
+
+Estaba mal en `decision.md`, en `test-report-4.md`, en
+`docs/tecnica/identidad-privacidad-white-label.md` y en el docstring del
+propio test. La auditoría no lo detectó: **lo reprodujo**, porque tomó la
+cifra de estos artefactos en vez de contarla. Queda como constancia de
+que una auditoría que verifica el razonamiento no verifica por eso la
+aritmética, y de que el `audit-2.md` persistido dice 38 en un párrafo
+donde el árbol dice 37.
+
+Es el mismo defecto que `audit-1` marcó en la spec —un documento que
+afirma algo falso sobre el sistema— aparecido en los documentos escritos
+para responder a `audit-1`. Corregido en los cuatro archivos.
+
+**Y ahora hay un guard.** El número vivía en prosa, así que nada podía
+detectarlo. `test_el_reparto_documentado_coincide_con_el_arbol` cuenta
+las páginas y las compara contra las cifras escritas en la documentación
+técnica; comprueba además que la diferencia entre ambas sean exactamente
+las huérfanas declaradas. Verificado en negativo: con la cifra vieja, el
+test falla.
+
+Los números en los que la cifra no aportaba nada —los docstrings de los
+tests, las menciones de paso— se reescribieron sin número, que es la
+forma de que no vuelvan a quedar viejos.
+
+### Qué se tocó después del SHA auditado
+
+`audit-2.md` audita `2f2f92a`. Lo que hay encima de ese SHA es, en su
+totalidad: el acta `audit-2.md`, la corrección de la cifra en los cuatro
+archivos, el guard nuevo y esta sección. **No se tocó código de producto,
+ni configuración, ni scripts del circuito.** Si el criterio del humano es
+que una reauditoría debe correr sobre el árbol exacto que se mergea,
+corresponde una `audit-3` sobre el SHA final; esa decisión no es de
+Claude Code.
