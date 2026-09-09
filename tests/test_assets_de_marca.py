@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "config" / "clinic.json"
 MKDOCS = ROOT / "mkdocs.yml"
 GENERADOR_ICONOS = ROOT / "scripts" / "build-branding-icons.py"
+VERCEL = ROOT / "vercel.json"
 
 HTML_PUBLICOS = ["index.html", "404.html", "politica-de-privacidad.html"]
 
@@ -146,15 +147,28 @@ def test_ninguna_referencia_local_del_html_apunta_a_un_archivo_inexistente(pagin
 
     Se ignoran las URLs absolutas —Font Awesome viene de un CDN—, los
     anclas y los `mailto:`/`tel:`, que no son archivos.
+
+    Una URL limpia como `/politica-de-privacidad` no corresponde a ningún
+    archivo del repositorio y aun así resuelve: la sirve un `rewrite` de
+    `vercel.json`. El guard **sigue el rewrite** y comprueba el archivo
+    real al que apunta, en vez de aceptar cualquier ruta absoluta. Así una
+    URL limpia inventada, sin rewrite que la respalde, sigue fallando.
     """
     html = (ROOT / pagina).read_text(encoding="utf-8")
     referencias = re.findall(r'(?:src|href)="([^"]+)"', html)
+
+    vercel = json.loads(VERCEL.read_text(encoding="utf-8"))
+    reescrituras = {r["source"]: r["destination"] for r in vercel.get("rewrites", [])}
 
     faltantes = []
     for ref in referencias:
         if re.match(r"^(https?:|mailto:|tel:|#|data:)", ref):
             continue
-        destino = ROOT / ref.split("?")[0].split("#")[0]
+        ruta = ref.split("?")[0].split("#")[0]
+        ruta = reescrituras.get(ruta, ruta)
+        # El sitio se sirve en la raíz del dominio, así que una ruta
+        # absoluta se resuelve contra la raíz del repositorio.
+        destino = ROOT / ruta.lstrip("/")
         if not destino.is_file():
             faltantes.append(ref)
 

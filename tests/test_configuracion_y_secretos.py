@@ -179,9 +179,15 @@ def test_la_direccion_anterior_de_la_politica_no_queda_en_404():
         r["source"]: r["destination"] for r in vercel.get("redirects", [])
     }
 
+    permanentes = {r["source"]: r.get("permanent") for r in vercel.get("redirects", [])}
+
     for vieja in ("/politica-privacidad", "/politica-privacidad.html"):
         assert vieja in destinos, f"falta el redirect de {vieja}"
         assert destinos[vieja] == "/politica-de-privacidad"
+        assert permanentes[vieja] is True, (
+            f"el redirect de {vieja} tiene que ser permanente: un 307 temporal "
+            "no traslada la dirección publicada, la deja viva indefinidamente"
+        )
 
     rewrites = {r["source"]: r["destination"] for r in vercel.get("rewrites", [])}
     assert rewrites.get("/politica-de-privacidad") == "/politica-de-privacidad.html", (

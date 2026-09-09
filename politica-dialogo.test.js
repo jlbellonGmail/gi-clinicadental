@@ -116,7 +116,7 @@ test('hay al menos un enlace que abre la politica desde el formulario', async ()
   for (const enlace of enlaces) {
     assert.equal(
       enlace.getAttribute('href'),
-      'politica-de-privacidad.html',
+      '/politica-de-privacidad',
       'el enlace tiene que conservar su destino real: sin JavaScript debe navegar a la pagina completa'
     );
   }
@@ -288,7 +288,7 @@ test('el dialogo contiene la politica completa, no un resumen', async () => {
 
   // La pagina independiente sigue siendo la direccion canonica y tiene
   // que seguir alcanzable desde el propio dialogo.
-  const aLaPagina = cuerpo.querySelector('a[href="politica-de-privacidad.html"]');
+  const aLaPagina = cuerpo.querySelector('a[href="/politica-de-privacidad"]');
   assert.ok(aLaPagina, 'el dialogo no enlaza la pagina completa');
 });
 

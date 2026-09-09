@@ -458,19 +458,27 @@ test('el 404 no declara la clase del menu movil', () => {
   assert.ok(!html.includes('has-mobile-nav'));
 });
 
-test('ninguna pagina generada enlaza la direccion vieja de la politica', () => {
+test('la politica se enlaza por su URL limpia, y por ninguna otra', () => {
   const salidas = generar(leerConfig());
   for (const [, destino] of PAGINAS) {
     assert.ok(
-      !/href="politica-privacidad\.html"/.test(salidas[destino]),
+      !/href="\/?politica-privacidad\.html"/.test(salidas[destino]),
       `${destino} sigue enlazando la direccion anterior`
+    );
+    // Tampoco se enlaza el archivo por su nombre. `vercel.json` declara
+    // el rewrite de `/politica-de-privacidad`, asi que el archivo y la
+    // URL limpia sirven la misma pagina: enlazar las dos formas deja dos
+    // direcciones publicas para un solo contenido. Se elige una.
+    assert.ok(
+      !/href="\/?politica-de-privacidad\.html"/.test(salidas[destino]),
+      `${destino} enlaza el archivo en vez de la URL limpia`
     );
     // La propia pagina de la politica no se enlaza a si misma; las
     // otras dos si tienen que llegar a ella.
     if (destino !== 'politica-de-privacidad.html') {
       assert.ok(
-        salidas[destino].includes('politica-de-privacidad.html'),
-        `${destino} tiene que enlazar la politica`
+        salidas[destino].includes('href="/politica-de-privacidad"'),
+        `${destino} tiene que enlazar la politica por su URL limpia`
       );
     }
   }
