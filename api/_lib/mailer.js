@@ -1,6 +1,7 @@
 'use strict';
 
 const nodemailer = require('nodemailer');
+const { marca } = require('./clinic.js');
 const { escapeHtml } = require('./sanitize-html');
 
 // Contrato completo en runs/05-notificacion-clinica-smtp-ferozo/spec.md y
@@ -137,7 +138,7 @@ function buildClinicNotificationEmail(lead) {
   // subject: nombre SIN escapar HTML (no es HTML, es texto de header),
   // pero saneado contra \r/\n antes de interpolarse (criterio 4).
   const subjectNombre = sanitizeHeaderValue(lead.nombre);
-  const subject = `Nuevo lead: ${subjectNombre} — Sonríe más`;
+  const subject = `Nuevo lead: ${subjectNombre} — ${marca()}`;
 
   const telefonoDisplay = lead.telefono || 'No proporcionado';
   const servicioDisplay = lead.servicio || 'No especificado';
@@ -157,7 +158,7 @@ function buildClinicNotificationEmail(lead) {
 
   const html = `
     <div>
-      <p>Notificación automática de <strong>Sonríe más</strong>: se recibió un nuevo lead a través del sitio web.</p>
+      <p>Notificación automática de <strong>${marca()}</strong>: se recibió un nuevo lead a través del sitio web.</p>
       <table>
         <tbody>
           <tr><td><strong>Nombre</strong></td><td>${nombreHtml}</td></tr>
@@ -173,7 +174,7 @@ function buildClinicNotificationEmail(lead) {
   `.trim();
 
   const text = [
-    'Notificación automática de Sonríe más: se recibió un nuevo lead a través del sitio web.',
+    `Notificación automática de ${marca()}: se recibió un nuevo lead a través del sitio web.`,
     '',
     `Nombre: ${lead.nombre}`,
     `Email: ${lead.email}`,
@@ -226,28 +227,28 @@ function buildPatientConfirmationEmail(lead) {
   const replyTo = process.env.LEADS_NOTIFICATION_EMAIL;
 
   // Subject fijo (criterio 5/f06): no interpola ningun dato del lead.
-  const subject = 'Recibimos tu solicitud — Sonríe más';
+  const subject = `Recibimos tu solicitud — ${marca()}`;
 
   const nombreHtml = escapeHtml(lead.nombre);
 
   const html = `
     <div>
       <p>Hola ${nombreHtml},</p>
-      <p>Recibimos tu solicitud de contacto a través del sitio web de <strong>Sonríe más</strong>. ¡Gracias por escribirnos!</p>
+      <p>Recibimos tu solicitud de contacto a través del sitio web de <strong>${marca()}</strong>. ¡Gracias por escribirnos!</p>
       <p><strong>Todavía tu turno no está confirmado.</strong> Nuestro equipo se va a comunicar con vos próximamente para coordinar la fecha y el horario.</p>
-      <p>Saludos,<br>El equipo de Sonríe más</p>
+      <p>Saludos,<br>El equipo de ${marca()}</p>
     </div>
   `.trim();
 
   const text = [
     `Hola ${lead.nombre},`,
     '',
-    'Recibimos tu solicitud de contacto a través del sitio web de Sonríe más. ¡Gracias por escribirnos!',
+    `Recibimos tu solicitud de contacto a través del sitio web de ${marca()}. ¡Gracias por escribirnos!`,
     '',
     'Todavía tu turno no está confirmado. Nuestro equipo se va a comunicar con vos próximamente para coordinar la fecha y el horario.',
     '',
     'Saludos,',
-    'El equipo de Sonríe más',
+    `El equipo de ${marca()}`,
   ].join('\n');
 
   return { to, from, replyTo, subject, html, text };

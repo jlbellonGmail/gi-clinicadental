@@ -358,3 +358,55 @@ def test_ninguna_regla_movil_queda_pisada_por_una_regla_base_posterior():
         + "; ".join(sorted(set(muertas)))
         + ". Las reglas base van antes del breakpoint."
     )
+
+
+def test_las_imagenes_con_atributos_de_tamano_no_quedan_deformadas():
+    """`width`/`height` en el HTML exigen `height: auto` en el CSS.
+
+    Defecto real, introducido en la v1.0.1 y encontrado midiendo en un
+    viewport de 320 px: al agregar los atributos `width`/`height` -que
+    reservan el espacio de la imagen y evitan que el layout salte- la
+    regla `img { max-width: 100% }` dejaba el alto del atributo aplicado
+    al pie de la letra mientras el ancho cedía al contenedor. La foto se
+    renderizaba **259 × 1086** en vez de 259 × 195.
+
+    Ningún test lo detectó: el HTML era válido, el CSS era válido y jsdom
+    no calcula layout. Se encontró abriendo el sitio y midiendo.
+
+    Este guard es el par obligatorio de esos atributos: si están en el
+    HTML, `height: auto` tiene que estar en el CSS.
+    """
+    html = INDEX.read_text(encoding="utf-8")
+    con_atributos = re.findall(r"<img[^>]*\swidth=\"\d+\"[^>]*\sheight=\"\d+\"", html)
+    if not con_atributos:
+        return  # sin atributos de tamaño, la regla no hace falta
+
+    css = _sin_comentarios(CSS.read_text(encoding="utf-8"))
+    regla = re.search(r"(?m)^img\s*\{([^}]*)\}", css)
+    assert regla, "falta la regla base `img`"
+
+    alto = re.search(r"height\s*:\s*([^;]+)", regla.group(1))
+    assert alto and alto.group(1).strip() == "auto", (
+        "hay %d imágenes con atributos `width`/`height`, y la regla `img` no "
+        "declara `height: auto`: se renderizan deformadas."
+        % len(con_atributos)
+    )
+
+
+def test_las_imagenes_reservan_su_espacio():
+    """Sin `width`/`height` el layout salta cuando la imagen carga.
+
+    Es el otro lado del test anterior: los dos atributos y `height: auto`
+    van juntos, y ninguno de los dos sirve solo.
+    """
+    html = INDEX.read_text(encoding="utf-8")
+    imagenes = re.findall(r"<img[^>]*>", html)
+    assert imagenes, "`index.html` ya no tiene imágenes"
+
+    sin_medidas = [
+        i for i in imagenes if not (re.search(r'\swidth="\d+"', i) and re.search(r'\sheight="\d+"', i))
+    ]
+    assert not sin_medidas, (
+        "imágenes sin `width`/`height`, que hacen saltar el layout al cargar: "
+        + "; ".join(i[:80] for i in sin_medidas)
+    )

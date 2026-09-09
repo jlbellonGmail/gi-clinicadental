@@ -1,36 +1,49 @@
 <!DOCTYPE html>
+<!-- GENERADO por scripts/build-site.js desde config/clinic.json.
+     No editar el HTML de la raiz a mano: se sobrescribe. -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sonríe más | Página no encontrada</title>
+    <title>Sonría más | Página no encontrada</title>
+    <meta name="robots" content="noindex">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="stylesheet" href="style.css">
+    <!-- Esta pagina usa iconos de Font Awesome (el diente del logo, los
+         iconos de redes) y no cargaba la hoja: se veian como cuadros
+         vacios. Corregido en la v1.0.1. -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <!-- Esta cabecera no declara la clase del menu movil, a proposito:
+         la pagina no tiene boton que lo abra. Las reglas moviles estan
+         scopeadas a esa clase justamente para no dejarla sin navegacion
+         visible en pantallas chicas. El guard que lo comprueba busca la
+         cadena literal en el HTML, asi que este comentario no la nombra. -->
     <header>
         <div class="container header-container">
-            <a href="#" class="logo">
+            <a href="index.html" class="logo">
                 <i class="fas fa-tooth"></i>
-                <span>Sonríe más</span>
+                <span>Sonría más</span>
             </a>
             <nav class="nav-links">
-                <a href="/">Inicio</a>
+                <a href="index.html">Inicio</a>
             </nav>
         </div>
     </header>
 
-    <main>
+    <main id="main">
         <section class="hero">
             <div class="container hero-grid">
                 <div class="hero-content">
                     <h1 style="font-size: 4rem; margin-bottom: 24px;">404</h1>
                     <p style="font-size: 1.5rem; margin-bottom: 40px;">Página no encontrada</p>
                     <p style="margin-bottom: 40px;">El contenido que buscas no está disponible o ha sido movido.</p>
-                    <a href="/" class="btn btn-primary" style="padding: 16px 32px; font-size: 1.1rem;">Volver al inicio</a>
+                    <a href="index.html" class="btn btn-primary" style="padding: 16px 32px; font-size: 1.1rem;">Volver al inicio</a>
                 </div>
                 <div class="hero-image">
-                    <img src="static/images/paciente-sonrisa.webp" alt="Paciente sonriendo después de un implante de carga inmediata en Sonríe más" loading="lazy" style="display: none;">
+                    <img src="static/images/paciente-sonrisa.webp" alt="Paciente sonriendo, sentada en el sillón de un consultorio odontológico moderno y luminoso" width="1448" height="1086" loading="lazy" decoding="async" style="display: none;">
                 </div>
             </div>
         </section>
@@ -40,36 +53,37 @@
         <div class="container">
             <div class="footer-grid">
                 <div>
-                    <a href="#" class="logo" style="color: white; margin-bottom: 20px;">
+                    <a href="index.html" class="logo" style="color: white; margin-bottom: 20px;">
                         <i class="fas fa-tooth"></i>
-                        <span>Sonríe más</span>
+                        <span>Sonría más</span>
                     </a>
                     <p style="color: #bbb;">Transformando vidas a través de sonrisas saludables y tecnología de vanguardia.</p>
                 </div>
                 <div>
                     <h4>Explora</h4>
                     <ul style="margin-top: 20px;">
-                        <li style="margin-bottom: 10px;"><a href="#" style="color: #bbb;">Inicio</a></li>
-                        <li style="margin-bottom: 10px;"><a href="#" style="color: #bbb;">Servicios</a></li>
+                        <li style="margin-bottom: 10px;"><a href="index.html#inicio" style="color: #bbb;">Inicio</a></li>
+                        <li style="margin-bottom: 10px;"><a href="index.html#servicios" style="color: #bbb;">Servicios</a></li>
                     </ul>
                 </div>
                 <div>
                     <h4>Legal</h4>
                     <ul style="margin-top: 20px;">
-                        <li style="margin-bottom: 10px;"><a href="#" style="color: #bbb;">Privacidad</a></li>
-                        <li style="margin-bottom: 10px;"><a href="#" style="color: #bbb;">Términos</a></li>
+                        <li style="margin-bottom: 10px;"><a href="/politica-de-privacidad" style="color: #bbb;">Privacidad</a></li>
                     </ul>
                 </div>
                 <div>
                     <h4>Síguenos</h4>
                     <div style="display: flex; gap: 15px; margin-top: 20px;">
-                        <a href="https://facebook.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer"><i class="fab fa-facebook-f"></i></a>
-                        <a href="https://instagram.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer"><i class="fab fa-instagram"></i></a>
+                        <a href="https://facebook.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><i class="fab fa-facebook-f" aria-hidden="true"></i></a>
+                        <a href="https://instagram.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><i class="fab fa-instagram" aria-hidden="true"></i></a>
+                        <a href="https://tiktok.com/@sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><i class="fab fa-tiktok" aria-hidden="true"></i></a>
+                        <a href="https://youtube.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><i class="fab fa-youtube" aria-hidden="true"></i></a>
                     </div>
                 </div>
             </div>
             <div class="footer-bottom">
-                &copy; 2026 Sonríe más. Todos los derechos reservados.
+                &copy; 2026 Sonría más. Todos los derechos reservados.
             </div>
         </div>
     </footer>

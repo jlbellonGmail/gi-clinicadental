@@ -13,6 +13,27 @@ import os
 
 os.makedirs('static/images', exist_ok=True)
 
+# Desde la v1.0.1 `static/images/` contiene FOTOGRAFIAS REALES, no los
+# marcadores de posicion que genera este script. Correrlo sin esta guarda
+# las sobrescribiria con rectangulos de color, y no hay forma de
+# recuperarlas desde el repositorio si el cambio se commitea.
+#
+# El script se conserva porque documenta la regla dura de arriba y porque
+# `tests/test_marca_publica.py` la verifica sobre este archivo.
+FORZAR = os.environ.get('CREATE_IMAGES_FORCE') == '1'
+existentes = [
+    nombre
+    for nombre in os.listdir('static/images')
+    if nombre.endswith(('.webp', '.png'))
+]
+if existentes and not FORZAR:
+    raise SystemExit(
+        'static/images/ ya tiene imagenes (%s).\n'
+        'Este script genera marcadores de posicion y las pisaria.\n'
+        'Si de verdad es lo que queres: CREATE_IMAGES_FORCE=1 python create_images.py'
+        % ', '.join(sorted(existentes))
+    )
+
 font = None
 try:
     font = ImageFont.truetype('arial.ttf', 24)

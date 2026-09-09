@@ -1,0 +1,749 @@
+# Decisiones — v1.0.1-identidad-privacidad-white-label (v1.0.1)
+
+Release de mantenimiento sobre `develop` en `b00520b`. La v1.0.0 quedó
+cerrada y no se reabrió: nada de esta etapa toca el tag ni `main`.
+
+## La decisión central: generar el HTML, no hidratarlo
+
+El pedido era instalar el mismo código para otra clínica sin modificar
+código funcional. El sitio es estático, sin build, y Vercel lo sirve tal
+cual: esa propiedad valía la pena conservarla.
+
+Se eligió **generador con salida commiteada**. `config/clinic.json` +
+`templates/` → `scripts/build-site.js` → el HTML de la raíz, que se
+commitea y es lo que se sirve. **No hay build en el deploy.**
+
+**Por qué no hidratación en el cliente**, que era la alternativa obvia
+para un sitio sin build: `title`, `description` y Open Graph quedarían
+fuera —los crawlers no ejecutan ese JavaScript— y la página se vería
+vacía si el JS falla. Justamente los metadatos son parte del pedido de
+marca.
+
+**Por qué no un build en Vercel**: `AGENTS.md` obliga a justificar
+cualquier dependencia de build, y acá no hace falta ninguna.
+
+El costo de commitear la salida es que puede separarse de la
+configuración. Se paga con un test que regenera y compara. Sin ese test,
+editar `clinic.json` podría dejar de tener efecto sin que nadie se
+entere, que es peor que no tener configuración.
+
+## Lo que se decidió no renombrar
+
+La marca pasa a `Sonría más` en toda la superficie pública. **Los
+identificadores técnicos no se tocan**: `sonriamas-contactos@nextgia.io`,
+`facebook.com/sonrimas` y los slugs internos siguen igual. Son buzones y
+URLs reales; cambiarlos por estética rompe cosas que funcionan.
+
+Eso obligó a que el guard de marca distinga entre **variantes visibles**
+—escritas con espacio o con `+`— e identificadores pegados. Un guard que
+prohibiera la subcadena `sonrie` habría fallado con el propio correo de
+contacto.
+
+## El requisito que se leyó al revés, y estuvo bien
+
+"Abrir la política no puede perder los datos del formulario" tiene dos
+lecturas: guardar y restaurar, o no navegar.
+
+Se eligió **no navegar**: `preventDefault()`, el formulario nunca se
+desmonta, y los valores siguen ahí **por construcción**. La otra lectura
+habría significado persistir nombre, correo y mensaje en `localStorage`,
+que el pedido prohíbe explícitamente.
+
+Consecuencia práctica: el test central no comprueba que los datos "se
+restauren", sino que **nunca se pierden**, y hay un guard aparte que
+verifica que `script.js` no use almacenamiento del navegador.
+
+Se conserva el `href` real del enlace: sin JavaScript lleva a la página
+completa, y con Ctrl/Cmd/Shift o botón del medio no se intercepta —si
+alguien pide otra pestaña a propósito, se respeta—.
+
+## Refactorizar el diálogo existente en vez de duplicarlo
+
+El diálogo de la política necesitaba foco, `Escape`, cierre y trampa de
+foco: exactamente lo que ya hacía el de resultado. Duplicarlo era la
+opción de menor riesgo inmediato y la peor a plazo: dos trampas de foco
+que se van diferenciando.
+
+Se extrajo `crearDialogo()`. **La refactorización se hizo con las 272
+pruebas existentes en verde, y siguieron en verde.** Esa es la única
+razón por la que era una decisión razonable y no una apuesta.
+
+## Una sola fuente para el texto legal
+
+La política se renderiza **una vez** y la misma cadena se inserta en la
+página y en el diálogo. Es lo que hace verdadero el requisito de "no
+convertir el modal en el único lugar donde vive la política": las dos
+superficies existen y no pueden divergir, porque no hay dos fuentes. Hay
+un test que compara sección por sección.
+
+## `demoMode` y el responsable
+
+Con `demoMode: false`, `legal.controller.legalName` y `.address` pasan a
+ser obligatorios y el build **falla** si faltan.
+
+El razonamiento: una política que declara tener un responsable del
+tratamiento y no lo nombra es peor que una que se declara demostración
+técnica. La validación no deja publicar esa variante en blanco.
+
+Ningún texto afirma cumplimiento normativo absoluto, y hay un test que lo
+vigila. La política es profesional y adaptable; no se declara conforme a
+ningún régimen concreto porque nadie lo verificó.
+
+## `config/clinic.json` es público, y se asume
+
+Se sirve como archivo estático, igual que el HTML que produce. Podría
+excluirse del deploy, pero `api/_lib/mailer.js` lo necesita para firmar
+los correos con la marca configurada, y su contenido ya está todo visible
+en las páginas.
+
+La consecuencia se asume explícitamente y se protege: un test recorre
+**claves y valores** buscando credenciales. No el texto crudo —la primera
+versión hacía eso y se disparaba con su propio comentario, el que
+advierte que los secretos van en variables de entorno—.
+
+## Tres correcciones incidentales
+
+Defectos preexistentes que aparecieron al reconstruir las páginas:
+
+- el enlace "Saltar al contenido principal" apuntaba a `#main` y **ningún
+  elemento tenía ese `id`**: la única ayuda de navegación por teclado del
+  sitio no funcionaba;
+- `404.html` usaba iconos de Font Awesome **sin cargar la hoja**;
+- había enlaces de footer a "Términos" y "Cookies" con `href="#"`, y el
+  footer entero del 404 apuntaba a `#`.
+
+Se corrigieron. Son cambios fuera del pedido literal, y se declaran acá
+en vez de pasarlos como parte del alcance: dejarlos habría sido publicar
+una versión "profesional" con la navegación por teclado rota.
+
+## Errores propios de esta etapa
+
+Se dejan anotados porque el patrón se repitió:
+
+1. **Dos guards nuevos se dispararon con su propia documentación.** El de
+   `localStorage` con el comentario que explica que no hay que agregarlo;
+   el de secretos con el comentario que dice que los secretos van en
+   variables de entorno. Los dos se corrigieron mirando **la causa**
+   —código sin comentarios, claves y valores del JSON— y no el texto. Es
+   el mismo error dos veces en la misma sesión.
+2. **Cuatro tests del generador estaban mal escritos, no el código.**
+   Asumían que cambiar `brand.name` cambiaba también `brand.description`,
+   que `contact.email` y `legal.privacyContactEmail` eran el mismo campo,
+   y que la página de la política se enlaza a sí misma. Se corrigieron
+   los tests.
+3. **El comentario del `404.html` nombraba la clase literal
+   `has-mobile-nav`**, y el guard que la prohíbe busca la cadena en el
+   HTML. Se reescribió el comentario en vez de aflojar el guard.
+
+Ninguno de los tres llegó a `develop`: los detectó la suite antes del
+commit. Pero los tres son la misma clase de descuido —escribir el guard
+sin ejecutarlo contra el caso que debe pasar—.
+
+## Lo que NO se hizo
+
+- **Las imágenes fotográficas.** No hay generación de imágenes de calidad
+  disponible en esta sesión. Se entrega el inventario exacto —archivo,
+  ubicación, proporción, tamaño y prompt— y la integración lista para
+  recibirlas: cada imagen sale de configuración, con su `alt`, `width` y
+  `height`. Reemplazarlas es dejar los archivos y editar una línea.
+  **Es el único punto que requiere intervención humana**, y no bloqueó
+  nada más.
+- Agenda, calendario, profesionales, chatbot, agente de voz, CMS, panel
+  administrativo, dashboard y multi-tenant: v2.0.0.
+- Tag y release: no corresponden a esta etapa.
+
+## Lo que no se pudo verificar desde esta sesión
+
+- **El `rewrite` y los `redirects` de Vercel.** Están declarados y hay un
+  guard estructural sobre `vercel.json`, pero que `/politica-de-privacidad`
+  responda 200 y `/politica-privacidad` devuelva 308 solo se comprueba
+  contra un deployment. Queda para el Preview de la PR.
+- **El envío real del formulario** con la nueva versión de política. El
+  circuito quedó igual y la suite lo cubre, pero la validación en
+  Production es una acción humana.
+
+## La numeración: por qué esta etapa no es un hito
+
+Se construyó bajo el nombre `17-identidad-privacidad-y-white-label`.
+**Estaba mal**: H17 está reservado para "UI/UX avanzada y profesional" de
+la v2.0.0, y una corrección sobre una versión ya publicada no debe
+consumir un número de hito del roadmap.
+
+Pasa a llamarse **`v1.0.1-identidad-privacidad-white-label`**, y el
+ROADMAP la lista en una sección propia de *Releases de mantenimiento*,
+fuera de la numeración de hitos.
+
+### Eso obligó a tocar el motor del circuito
+
+No era solo renombrar carpetas. `Get-FeatureInfo` exigía
+`^[0-9]{2}-slug$`, y el workflow de cierre post-merge derivaba el slug de
+la rama con `^feature/([0-9]{2}-...)$`. Con el nombre nuevo, la release no
+habría podido pasar por `ready-for-pr.ps1` ni cerrar su ROADMAP sola.
+
+Se amplió a **dos formas válidas**, con el mismo contrato:
+
+| Forma | Para qué |
+|---|---|
+| `NN-slug` | un hito del roadmap |
+| `vX.Y.Z-slug` | una release de mantenimiento sobre una versión liberada |
+
+Cambiar el motor del circuito excede el pedido literal, y por eso se
+declara acá en vez de pasarlo como parte del alcance. La alternativa era
+renombrar los documentos y dejar la automatización rota, que es peor:
+`ready-for-pr.ps1` habría fallado y el cierre post-merge se habría
+saltado en silencio.
+
+### Un defecto encontrado al escribir el guard
+
+Al probar qué identificadores **debía rechazar** el contrato, apareció
+que `17-Con-Mayusculas` pasaba. La causa: PowerShell compara sin
+distinguir mayúsculas por defecto, así que el `[a-z0-9]` del patrón no
+exigía minúsculas y el mensaje de error las prometía sin pedirlas. Es un
+defecto preexistente, anterior a esta etapa. Corregido con `-cnotmatch`.
+
+Apareció por escribir la verificación en negativo, no la positiva: los
+cinco identificadores válidos pasaban desde el principio.
+
+### La rama y el historial
+
+- La rama se renombró a `feature/v1.0.1-identidad-privacidad-white-label`.
+  Era seguro: **nunca se había pusheado**. El worktree se movió a
+  `../worktrees/identidad-privacidad-white-label`.
+- **Los mensajes de los commits de construcción conservan el nombre
+  viejo.** Es historial, no un documento permanente, y no se reescribe
+  para maquillarlo. Hay un test que comprueba que ningún archivo de
+  `docs/`, `runs/` ni el ROADMAP presente esta release como hito 17, y que
+  declara explícitamente que el historial queda fuera de su alcance.
+- **No se tocó el roadmap H17–H30 de la v2.0.0.**
+
+## Las imágenes: la construcción no está terminada
+
+Se corrige lo dicho en el reporte anterior. Las fotografías generadas por
+IA son **parte obligatoria del alcance aprobado de la v1.0.1**, no un
+pendiente aceptable: la etapa no se audita con los marcadores de posición
+de Pillow como resultado final.
+
+La integración está lista y no cambia cuando lleguen los archivos: cada
+imagen sale de `config/clinic.json` con `src`, `alt`, `width` y `height`.
+El inventario detallado —archivo, ruta, función, proporción, resolución,
+peso, formato, prompt, restricciones y `alt`— está en
+`docs/usuario/identidad-privacidad-white-label.md`.
+
+Queda esperando los assets definitivos. Al recibirlos: integrarlos,
+comprobar desktop y móvil, `build:site`, suites completas,
+`build:site --check`, verificación visual y **nuevo SHA candidato**.
+Recién entonces, auditoría independiente.
+
+## La imagen social: archivo propio, aprobado
+
+Se aprueba la cuarta imagen dedicada. `og:image` y `twitter:image` van a
+apuntar a `static/images/og-social.webp`, compuesta para **1.91:1**, y no
+al hero: el hero es 4:3 y cada plataforma lo recorta a su manera, así que
+reutilizarlo da una miniatura mal encuadrada en el caso más visible que
+tiene el sitio —el enlace compartido—.
+
+Se agregaron ahora los metadatos que faltaban y que no dependen del
+archivo: `og:image:alt`, `twitter:image:alt` y `og:image:width/height`,
+los tres desde `brand.images.social`. El `alt` de la miniatura no es
+decorativo: es lo único que anuncia un lector de pantalla cuando la
+tarjeta aparece en un timeline.
+
+**Lo que no se pudo adelantar**: apuntar la configuración a
+`og-social.webp` antes de que el archivo exista pondría en rojo los dos
+guards que comprueban que las imágenes referenciadas están en el
+repositorio. Sería cambiar el sitio por un enlace roto para que la
+configuración "se vea lista".
+
+El guard que exige que la social sea un archivo propio en 1.91:1 quedó
+escrito y **saltado**, no comentado: un `test.skip` aparece en cada
+corrida de la suite y se activa al integrar los assets; un `TODO` no lo
+ve nadie. Es deuda declarada, con fecha de vencimiento visible.
+
+## Las imágenes definitivas: integradas
+
+Las cuatro fotografías entregadas por el humano están integradas. Detalle
+y mediciones en `test-report-2.md`; acá quedan las decisiones.
+
+### Recomprimir, no reescalar ni recortar
+
+Llegaban a ~1,2 MB cada una, contra un presupuesto aprobado de 250 KB (300
+la social). Se recomprimieron a WebP calidad 85, **sin tocar dimensiones
+ni encuadre**: 63–92 KB, con la calidad visualmente intacta.
+
+No se reescaló a las medidas "recomendadas" del inventario. Subir de 1448
+a 1600 px es inventar píxeles, y bajar la social de 1731 a 1200 es tirar
+detalle sin ganar nada. Lo que importaba era la **proporción**, y las
+cuatro la cumplen: 1.333 y 1.904.
+
+### Los `alt` se reescribieron, y no por estilo
+
+Los anteriores afirmaban "implante de carga inmediata", "tecnología de
+punta" y "tecnología CAD/CAM y escáner 3D". **Ninguna de esas cosas es
+visible en las fotos.** La regla de dominio de `AGENTS.md` prohíbe
+inventar información clínica no provista, y un texto alternativo es el
+único acceso que tiene a la imagen quien no puede verla: describir ahí un
+tratamiento que la foto no muestra es mentirle exactamente a esa persona.
+
+Los cuatro describen ahora lo que se ve.
+
+### Un defecto que me pertenece
+
+Al integrar apareció que las fotos se renderizaban **259 × 1086** en vez
+de 259 × 195. La causa la introduje en esta misma release: agregué los
+atributos `width`/`height` para reservar el espacio de la imagen sin
+agregar `height: auto` al CSS, así que el ancho cedía al contenedor y el
+alto se aplicaba literal.
+
+No lo vio ningún test —HTML válido, CSS válido, y jsdom no calcula
+layout—. Se encontró **abriendo el sitio y midiendo**, que es la cuarta
+vez en este proyecto que un defecto real aparece midiendo y no testeando.
+Quedan dos guards nuevos, verificados en negativo, que son el par
+obligatorio de esos atributos.
+
+### Los `.png` se van, y `create_images.py` se blinda
+
+Los tres PNG de relleno no los referenciaba nadie: el HTML usa
+`<img src="*.webp">` sin `<picture>`, así que nunca fueron un fallback
+real. Conservarlos ahora sería dejar como respaldo un rectángulo de color
+en lugar de la foto que acompaña.
+
+`create_images.py` se conserva —documenta la regla de no rasterizar
+marcas, y un test la verifica sobre ese archivo—, pero ahora **se niega a
+correr si `static/images/` ya tiene imágenes**. Sin esa guarda, ejecutarlo
+por distracción destruía los cuatro assets sin vuelta atrás, y el
+repositorio ya no tendría con qué recuperarlos.
+
+### La verificación visual quedó a medias, y se dice
+
+Hay dos capturas válidas del escritorio con la fotografía renderizada.
+Después la ventana de Chrome pasó a segundo plano, la composición se
+suspendió y las capturas siguientes salieron en blanco. Se comprobó que
+era la captura y no la página, midiendo el DOM con el diálogo abierto.
+
+La geometría está verificada por medición en las dos superficies y en
+ocho anchos. **Las fotos del diálogo y del móvil no están**, y eso se
+declara como pendiente en vez de presentarse como hecho.
+
+## Los iconos de marca: seis referencias rotas, no dos
+
+La verificación del SHA anterior dejó ver que `apple-touch-icon.png` no
+existía. Al buscar el alcance real aparecieron **seis** referencias rotas:
+el favicon en las tres páginas, el apple-touch-icon en dos, y el favicon
+del sitio de documentación declarado en `mkdocs.yml`. `404.html` era
+además la única página sin apple-touch-icon.
+
+Ninguna herramienta lo detectaba, y tiene sentido: un icono ausente no
+rompe nada visible. Simplemente no hay icono.
+
+### Un script que dibuja, no un archivo suelto
+
+El logo del encabezado es un glifo de Font Awesome, que se resuelve **en
+el navegador**. Un favicon no puede resolverse así: el navegador lo pide
+antes de ejecutar nada. Por eso el isotipo se dibuja con Pillow y se
+emite como archivo, sin fuentes de iconos ni dependencias nuevas.
+
+El icono invierte los colores del encabezado —fondo teal, diente blanco—
+porque a 16 px un trazo fino sobre fondo claro desaparece entre las
+pestañas. Es una decisión de legibilidad, no de estilo, y se revisó a los
+cuatro tamaños antes de darla por buena.
+
+Que sea un script y no tres archivos binarios sueltos es lo que hace la
+pieza parametrizable: otra clínica cambia dos colores y regenera, o
+apunta la configuración a sus propios archivos. Ninguno de los dos
+caminos toca HTML, CSS ni JavaScript.
+
+### Una trampa que venía escondida en la plantilla
+
+El `type` del `<link rel="icon">` estaba fijo como `image/x-icon` en las
+tres plantillas. Mientras el favicon fue siempre un `.ico` no molestaba,
+pero con la ruta saliendo de configuración era una trampa: una clínica
+que pusiera un `.png` quedaba con el tipo equivocado declarado y **sin
+forma de corregirlo sin tocar HTML**, que es justamente lo que esta
+release promete evitar.
+
+Ahora se deduce de la extensión, y una extensión que no es de imagen
+falla el build en vez de publicarse.
+
+### El guard que importa es el general
+
+Se agregaron guards específicos —el favicon existe, el apple-touch-icon
+existe, el `.ico` trae los tres tamaños, el HTML apunta a lo que dice la
+configuración—, pero el que cubre la clase entera del defecto es otro:
+**ninguna referencia local de las tres páginas puede apuntar a un archivo
+inexistente**. Los específicos son casos particulares de ése, y quedan
+porque dan mejores mensajes de error.
+
+Los doce se verificaron en negativo.
+
+
+## audit-1: NO APROBADA, y qué se hizo con cada hallazgo
+
+La primera auditoría independiente sobre `42eb36e` **no aprobó**. El
+producto se consideró técnicamente apto; los seis hallazgos son de
+circuito y documentación. El veredicto está en `audit-1.md` y **no se
+marca como aprobado**: se responde con un SHA nuevo y una segunda
+auditoría.
+
+### Una limitación de procedencia, dicha de frente
+
+`audit-1.md` **no contiene la salida íntegra de OpenCode**, a diferencia
+del `audit-1.md` del punto 16. Esa salida no llegó a la sesión: lo que
+llegó fue el veredicto y los hallazgos transmitidos por el humano. Se
+persistieron sin resumir, sin reinterpretar y sin corregir, y el
+encabezado del archivo lo declara.
+
+No se fabricó un informe de auditoría para que el artefacto pareciera más
+completo de lo que es. Si se quiere trazabilidad hasta el transcript
+original, hay que adjuntarlo o reejecutar la auditoría capturando la
+salida.
+
+### 1. La spec describía un sistema que no se construyó
+
+Tres desviaciones reales, todas corregidas:
+
+| Decía | Es |
+|---|---|
+| `scripts/build-site.mjs`, `clinic-config.mjs` | `.js`, los dos |
+| Inventario en `docs/usuario/imagenes-del-sitio.md` | Ese archivo **no existe**; el inventario quedó consolidado en `docs/usuario/identidad-privacidad-white-label.md` |
+| `<picture>` con AVIF/WebP/fallback | Un solo `<img>` con WebP directo |
+| "La generación de fotografía realista no está disponible en esta sesión" | Las cuatro fotografías están integradas |
+| `runs/17-.../decision.md` | `runs/v1.0.1-identidad-privacidad-white-label/decision.md` |
+
+La sección B de la spec se reescribió para describir el sistema final:
+las cuatro imágenes con sus medidas, **por qué** se sirve WebP directo en
+vez de `<picture>` —soporte universal en los navegadores vigentes; una
+segunda codificación por imagen agrega archivos que mantener y una
+negociación en el HTML a cambio de nada medible—, y dónde quedó el
+inventario. Se agregó una sección B bis para los iconos de marca, que no
+existían cuando se escribió la spec.
+
+**Un hallazgo propio, del mismo tipo, que la auditoría no marcó:**
+`docs/tecnica/identidad-privacidad-white-label.md` seguía declarando en
+"Límites declarados" que *"las imágenes siguen siendo marcadores de
+posición generados con Pillow"*. Era falso desde `53c8ee9`. Se eliminó.
+Buscar el hallazgo señalado y no la clase de hallazgo habría dejado esa
+mentira en la documentación técnica.
+
+**Por qué el guard de nomenclatura no lo detectó.** El patrón era
+`runs/17-identidad`, y la spec traía `runs/17-.../decision.md`, con el
+nombre elidido. Se amplió a `runs/17-` a secas, que sí cubre las dos
+formas. Es la cuarta vez en esta etapa que un guard resulta ser más
+específico que el defecto que decía cubrir.
+
+Al ampliarlo, el guard empezó a dispararse con `audit-1.md`, que cita el
+hallazgo `runs/17-...` textualmente. **No se editó el acta de auditoría
+para que pasara un test.** Se excluyeron los `audit-N.md` del barrido —
+son actas de un auditor externo que el circuito persiste literalmente,
+por la misma razón por la que ya se excluía el historial de Git— y se
+agregó una verificación en negativo que demuestra que el patrón sigue
+funcionando y que la exclusión tiene motivo vigente.
+
+### 2. MkDocs: no eran warnings
+
+Corresponde precisar el hallazgo antes de responderlo. `mkdocs build
+--strict` termina **en verde con cero warnings**; lo que emite es un
+mensaje de nivel `INFO`. `--strict` convierte *warnings* en errores, y un
+`INFO` no lo es. La construcción nunca estuvo roja por esto.
+
+**Reparto de las 37 páginas:**
+
+- **35 alcanzables**: están fuera de `nav` porque el repo navega por
+  índices, no por `nav`, pero su índice de área las enlaza. De esas 37,
+  dos las introdujo la v1.0.1.
+- **2 realmente inalcanzables**: `docs/tecnica/landing.md` y
+  `docs/usuario/landing.md`. No están en `nav` **ni** en ningún índice.
+  Preexistentes, de la landing anterior al circuito.
+
+Las dos páginas que introdujo la v1.0.1 **sí están enlazadas en ambos
+índices**. En lo que importa —que se pueda llegar a ellas— no
+introdujeron ningún defecto.
+
+**Qué se decidió no hacer, y por qué.** No se agregaron esas dos páginas
+a `nav`: serían las únicas dos de 37, una inconsistencia arbitraria, y es
+el mismo error que degradar un índice para que coincida con un título
+derivado peor. Tampoco se declaró `not_in_nav`, que habría silenciado el
+`INFO` completo **incluidas las dos páginas genuinamente inalcanzables**
+— es decir, habría tapado el único caso en que ese mensaje sirve.
+
+**Qué sí se hizo.** Convertir el `INFO` pasivo en un guard activo:
+`tests/test_navegacion_de_documentacion.py` exige que toda página esté
+enlazada desde el índice de su área. Las dos `landing.md` quedan como
+excepción heredada **declarada con nombre y motivo**, y un segundo test
+avisa el día que alguien las enlace, para que la excepción no sobreviva a
+su razón de ser.
+
+El warning heredado que permanece, con precisión: **`docs/tecnica/landing.md`
+y `docs/usuario/landing.md` no son alcanzables desde ninguna navegación
+publicada.** Cerrarlas exige tocar la región gestionada de los dos
+índices por una feature que no es esta.
+
+### 3. El título canónico: era peor de lo señalado
+
+La fragilidad tenía dos capas, y la segunda era un defecto latente que
+**introdujo esta misma release**.
+
+La primera: `Get-FeatureInfo` derivaba el título capitalizando el slug
+—`Identidad Privacidad White Label`— contra índices que dicen
+`Identidad, privacidad y white-label`. El contrato solo pasaba si el
+invocante recordaba pasar `-Title` exacto.
+
+La segunda: `ready-for-pr.ps1` obtenía el título de documentación
+recortándole el prefijo al título de la PR con
+`-replace "^Feature [0-9]{2}-"`. La v1.0.1 amplió el contrato de slugs a
+`vX.Y.Z-slug` **y no amplió ese recorte**. Para esta release el recorte
+no quitaba nada, el título quedaba en
+`Feature v1.0.1-identidad-privacidad-white-label`, y el contrato no podía
+pasar por ninguna vía. Es un defecto que esta etapa creó al extender el
+contrato a medias.
+
+**La corrección**, siguiendo la preferencia indicada de fuente coherente:
+`scripts/feature-titles.json` declara el título canónico una vez, y lo
+consumen `Get-FeatureInfo`, `Assert-FeatureContract`, `ready-for-pr.ps1`
+y `update-doc-indexes.ps1`. Además, `-Title` (PR) y `-DocTitle`
+(documentación) quedaron separados, y el default `"Feature <slug>"` se
+calcula **después** de resolver el de documentación para que no se cuele.
+
+Los índices no se tocaron. Se comprobó ejecutando
+`Assert-FeatureContract -Slug v1.0.1-identidad-privacidad-white-label`
+**sin `-Title`**: pasa.
+
+Compatibilidad hacia atrás: una etapa sin entrada en el registro cae al
+título derivado, igual que antes, y un `-Title` explícito sigue ganando.
+Los 16 tests del contrato pasan sin cambios.
+
+### 4. CSS
+
+Corregido como higiene, no como defecto: el comentario decía
+`"Sonrie mas"` describiendo por qué el logo necesita `clamp()` a 320 px.
+Se reemplazó por "el nombre de la clínica", que además no vuelve a
+quedar obsoleto la próxima vez que cambie la marca.
+
+### Verificación en negativo
+
+Trece defectos inyectados, **trece detectados**: la spec volviendo a la
+ruta vieja en sus dos formas; la etapa sin título canónico; el registro
+con título vacío; el índice degradado al título derivado; los dos
+índices en desacuerdo; `Get-FeatureInfo` dejando de leer el registro; el
+recorte por patrón de hito de vuelta; la PR titulándose con la variable
+del contrato; una página nueva sin enlace; la documentación de la
+release desenlazada; `nav` perdiendo un índice; y la excepción heredada
+quedando obsoleta.
+
+Dos de los trece dieron verde en la primera pasada. **No eran huecos de
+los guards: eran defectos de la inyección.** `docs/usuario/index.md` y
+`mkdocs.yml` son CRLF, y las sustituciones buscaban `\n`, así que el
+defecto nunca llegó a escribirse. Corregida la inyección, los dos
+detectan. Queda anotado porque una verificación en negativo que falla por
+su propio andamiaje se parece mucho a un guard que funciona.
+
+## audit-2: APROBADA, y una cifra que estaba mal igual
+
+La segunda auditoría independiente, sobre `2f2f92a`, **aprobó**. El
+veredicto y el informe completo están en `audit-2.md`. Esta vez la salida
+de OpenCode se capturó a archivo y se persiste **íntegra**, incluida la
+traza de herramientas en un apéndice: es la diferencia concreta con
+`audit-1.md`, que declara no tenerla.
+
+Verificó los cuatro hallazgos de `audit-1` contra el árbol, no contra lo
+que dicen `decision.md` ni `test-report-4.md`, y revisó por su cuenta la
+marca pública, la privacidad, el white-label, los secretos, las imágenes,
+la solidez de los guards y el alcance. También evaluó los tres puntos
+donde se le pidió escepticismo —la limitación de procedencia de
+`audit-1.md`, la exclusión de las actas en el guard de nomenclatura y la
+excepción heredada `landing.md`— y los dio por legítimos.
+
+### El reparto de páginas decía 38 y 36; son 37 y 35
+
+Las páginas fuera de `nav` son **37**: 19 en `docs/tecnica/` y 18 en
+`docs/usuario/`, contadas contra el `INFO` de MkDocs y contra el árbol.
+Alcanzables desde su índice, **35**. Inalcanzables, **2**, que son las
+dos `landing.md` de siempre. La conclusión no cambia; el número sí
+estaba mal.
+
+Estaba mal en `decision.md`, en `test-report-4.md`, en
+`docs/tecnica/identidad-privacidad-white-label.md` y en el docstring del
+propio test. La auditoría no lo detectó: **lo reprodujo**, porque tomó la
+cifra de estos artefactos en vez de contarla. Queda como constancia de
+que una auditoría que verifica el razonamiento no verifica por eso la
+aritmética, y de que el `audit-2.md` persistido dice 38 en un párrafo
+donde el árbol dice 37.
+
+Es el mismo defecto que `audit-1` marcó en la spec —un documento que
+afirma algo falso sobre el sistema— aparecido en los documentos escritos
+para responder a `audit-1`. Corregido en los cuatro archivos.
+
+**Y ahora hay un guard.** El número vivía en prosa, así que nada podía
+detectarlo. `test_el_reparto_documentado_coincide_con_el_arbol` cuenta
+las páginas y las compara contra las cifras escritas en la documentación
+técnica; comprueba además que la diferencia entre ambas sean exactamente
+las huérfanas declaradas. Verificado en negativo: con la cifra vieja, el
+test falla.
+
+Los números en los que la cifra no aportaba nada —los docstrings de los
+tests, las menciones de paso— se reescribieron sin número, que es la
+forma de que no vuelvan a quedar viejos.
+
+### Qué se tocó después del SHA auditado
+
+`audit-2.md` audita `2f2f92a`. Lo que hay encima de ese SHA es, en su
+totalidad: el acta `audit-2.md`, la corrección de la cifra en los cuatro
+archivos, el guard nuevo y esta sección. **No se tocó código de producto,
+ni configuración, ni scripts del circuito.** Si el criterio del humano es
+que una reauditoría debe correr sobre el árbol exacto que se mergea,
+corresponde una `audit-3` sobre el SHA final; esa decisión no es de
+Claude Code.
+
+## audit-3: APROBADA, sobre el árbol exacto
+
+Criterio del humano, aplicado: la reauditoría corre sobre el árbol que se
+mergea, no sobre uno anterior. `audit-3.md` audita `d4c84c4`.
+
+**Se le dieron los dos árboles.** Se exportaron `2f2f92a` y `d4c84c4` a
+`anterior/` y `actual/`, sin `.git`, fuera del repositorio, para que el
+auditor **corriera el diff él mismo**. La afirmación central de este
+delta —"no se tocó producto"— era justamente la que no debía llegarle ya
+resuelta. La corrió: los `diff -rq` y `diff -r` están en el apéndice del
+acta.
+
+Confirmó que los únicos archivos que difieren son cinco, y que los cinco
+caen dentro de los cuatro cambios declarados:
+
+| Archivo | Cambio |
+|---|---|
+| `audit-2.md` | nuevo, persistencia del acta |
+| `test-report-4.md` | conteo 38/36 → 37/35 |
+| `docs/tecnica/identidad-privacidad-white-label.md` | conteo 38/36 → 37/35 |
+| `tests/test_navegacion_de_documentacion.py` | guard nuevo |
+| `decision.md` | narración correspondiente |
+
+Y que `index.html`, `politica-de-privacidad.html`, `404.html`,
+`style.css`, `script.js`, `api/`, `config/`, `templates/`,
+`static/images/`, `vercel.json` y `scripts/` son **idénticos byte a
+byte**.
+
+### Contó las páginas por su cuenta
+
+No tomó la cifra de la documentación: contó 19 en `docs/tecnica/` y 18 en
+`docs/usuario/` sin `index.md`, 35 enlazadas, 2 huérfanas. Coincide con
+lo que ahora dice la documentación. Verificó además que el guard **mide**
+en vez de fijar números a mano, que es la diferencia entre un test y una
+constante.
+
+### Ejecutó las suites
+
+Se le autorizó correr las suites dentro de `actual/`, por ser una copia
+desechable. Lo hizo: `npm install` ahí, `npm test` **337/337**,
+`mkdocs build --strict` sin warnings, `build-site.js --check` OK,
+`Assert-FeatureContract` OK sin `-Title`.
+
+En `pytest` le falló **una**:
+`test_local_reconciler_scripts.py::test_start_reconciler_from_linked_worktree`,
+con `git clone ... Permission denied` sobre el temporal de Windows. La
+calificó de flaky de entorno y no de defecto de código. **Se comprobó**:
+en el worktree real, `tests/test_local_reconciler_scripts.py` pasa
+7 / 7, y la suite completa 150 / 150. Es la copia aislada, no el código.
+
+### Su intento de escribir fue rechazado
+
+`Write AUDIT-3_REPORT.md` falló contra la configuración de permisos.
+Queda en el acta. Es la garantía mecánica de la separación de autoría
+que el circuito declara: el auditor no crea artefactos, los persiste
+Claude Code.
+
+### Qué sigue sin verificarse
+
+Sin cambios: el `rewrite` y los `redirects` de Vercel, que se comprueban
+contra el deployment Preview de la PR; las capturas del diálogo y del
+móvil; y el envío real del formulario en Production.
+
+
+## Corrección menor posterior a audit-3: la URL limpia de la política
+
+La validación automática del Preview quedó aprobada. Dejó **una sola
+observación**, y se resolvió antes del HITL visual.
+
+`vercel.json` declara el `rewrite` de `/politica-de-privacidad` y la
+documentación llama a esa dirección la canónica. El HTML enlazaba
+`politica-de-privacidad.html`. Las dos devuelven la misma página con 200
+y el camino sin JavaScript funcionaba por cualquiera de las dos: **nada
+estaba roto**. Lo que había era una incoherencia: dos URLs públicas para
+un solo contenido, y la que el sitio ofrecía no era la que declaraba como
+canónica.
+
+### Dónde se corrigió
+
+En las plantillas, que es la fuente:
+
+| Fuente | Enlaces |
+|---|---|
+| `templates/index.html` | 4 |
+| `templates/404.html` | 1 |
+| `templates/partials/aviso-demo-formulario.html` | 1 |
+
+El HTML de la raíz se rehizo con `node scripts/build-site.js`. **No se
+editó HTML generado a mano**, y `build-site.js --check` lo confirma. El
+diff del HTML son exactamente seis líneas, todas el mismo cambio de
+`href`; `politica-de-privacidad.html` no cambió, porque la página no se
+enlaza a sí misma.
+
+`vercel.json` **no se tocó**: los redirects permanentes de
+`/politica-privacidad` y `/politica-privacidad.html` quedan como estaban.
+
+### Los guards siguieron a la fuente
+
+Un cambio así falla de la peor manera si los guards se ajustan para que
+pasen. Tres estaban afirmando lo viejo, y ninguno se debilitó:
+
+- **`build-site.test.js`** exigía que cada página *contuviera* la cadena
+  `politica-de-privacidad.html`. Ahora exige la URL limpia **y además
+  rechaza las dos formas con extensión**. Es más estricto que antes: lo
+  que impide que las dos direcciones vuelvan a convivir.
+- **`politica-dialogo.test.js`** comprueba el destino del enlace sin
+  JavaScript y el que el diálogo ofrece hacia la página completa.
+- **`tests/test_assets_de_marca.py`** resolvía cada referencia local
+  contra un archivo del repositorio. Una URL limpia no es un archivo, así
+  que habría dado referencia rota. **Exceptuar las rutas absolutas habría
+  ablandado el guard para todas**; en cambio ahora sigue el `rewrite` de
+  `vercel.json` y comprueba el archivo real. Una URL limpia inventada,
+  sin rewrite que la respalde, sigue fallando — y se verificó
+  inyectándola.
+- **`tests/test_configuracion_y_secretos.py`** verificaba el origen y el
+  destino de los dos redirects, pero **no que fueran permanentes**. La
+  permanencia es justo la propiedad que traslada la dirección publicada
+  en vez de dejarla viva. Ahora se exige `permanent: true`.
+
+### Verificación en negativo — 3/3
+
+| Defecto inyectado | Detectado |
+|---|---|
+| Una plantilla vuelve a enlazar el archivo con extensión | Sí |
+| Una página enlaza una URL limpia sin `rewrite` que la respalde | Sí |
+| El redirect de la dirección vieja deja de ser permanente | Sí |
+
+### Lo que no se hizo
+
+No se agregó `<link rel="canonical">`. **No existe soporte de canonical
+en el proyecto**: ninguna plantilla ni el generador lo emiten, y la
+página de la política no declara hoy ninguna URL propia — `og:url` solo
+está en la home. Introducirlo sería arquitectura nueva, fuera de una
+corrección de enlaces.
+
+### Alcance respecto de audit-3
+
+`audit-3` aprobó el árbol `d4c84c4`. Esta corrección es **posterior** y
+toca producto: el HTML servido cambia. Se declara como tal, sin
+presentarla como cubierta por la auditoría. Lo que cambia es el valor de
+seis atributos `href` hacia una dirección que el propio despliegue ya
+servía y que la documentación ya declaraba canónica; no cambia contenido,
+estilos, comportamiento del diálogo, la API, la configuración ni la
+infraestructura.
+
+### Suites
+
+| | |
+|---|---|
+| `npm test` | **337 / 337** |
+| `pytest` | **150 / 150** |
+| `mkdocs build --strict` | OK, 0 warnings |
+| `node scripts/build-site.js --check` | OK |
+| `Assert-FeatureContract` sin `-Title` | OK |

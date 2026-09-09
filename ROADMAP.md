@@ -81,7 +81,6 @@ circuito AI-Native encima.
 **Patrón del ítem**: `NN` (dos dígitos, numeración secuencial), `slug` en
 minúsculas con guiones, seguido de `—` y descripción corta en español.
 
-
 ## Roadmap
 
 - [x] 00-aprovisionamiento-entorno-vercel — Rotar inmediatamente la contraseña SMTP y la clave secreta de Supabase que fueron expuestas. Actualizar sus nuevos valores exclusivamente en la interfaz segura de Vercel para los entornos Production y Preview. Confirmar el hostname SMTP real proporcionado por Ferozo. Ninguna credencial deberá quedar almacenada en el repositorio, documentación, historial Git, logs o prompts.
@@ -116,19 +115,21 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 - [x] 15-observabilidad-y-operacion — Incorporar logs estructurados y seguros para solicitudes, validaciones, inserciones y errores de Supabase o SMTP. No registrar contraseñas, claves ni mensajes sensibles completos. Definir un procedimiento para diagnóstico, recuperación, rotación de credenciales, revisión de leads pendientes y detección de notificaciones fallidas. Utilizar inicialmente el panel protegido de Supabase para administrar los estados `nuevo`, `contactado`, `confirmado` y `descartado`, sin construir todavía un panel administrativo propio.
 
-- [ ] 16-validacion-mvp-produccion — Ejecutar una validación funcional completa en producción utilizando datos de prueba controlados: completar el formulario, aceptar la política, enviar la solicitud, verificar la respuesta de la API, confirmar la creación del lead en Supabase, comprobar la notificación a la clínica y recibir la confirmación como paciente. Verificar además la visualización desde computadora y celular. El MVP solamente podrá cerrarse cuando todo el circuito funcione sin credenciales expuestas, errores críticos ni pasos manuales no documentados.
+- [x] 16-validacion-mvp-produccion — Ejecutar una validación funcional completa en producción utilizando datos de prueba controlados: completar el formulario, aceptar la política, enviar la solicitud, verificar la respuesta de la API, confirmar la creación del lead en Supabase, comprobar la notificación a la clínica y recibir la confirmación como paciente. Verificar además la visualización desde computadora y celular. El MVP solamente podrá cerrarse cuando todo el circuito funcione sin credenciales expuestas, errores críticos ni pasos manuales no documentados.
 
 - [x] 99-personalizacion-wiki — Personalizar la documentación MkDocs y proteger la actualización automática de sus índices.
 
+## Releases de mantenimiento
 
+Correcciones y mejoras sobre una version ya liberada. **No consumen un
+numero de hito**: se identifican por la version que preparan. El roadmap
+de hitos sigue su propia numeracion, y H17 en adelante pertenece a la
+v2.0.0.
 
+Siguen el mismo circuito que un hito -spec, auditoria, QA, `decision.md`,
+documentacion tecnica y de usuario, PR y HITL-, con la rama
+`feature/vX.Y.Z-<slug>`.
 
-
-
-
-
-
-
-
+- [x] v1.0.1-identidad-privacidad-white-label — Release de mantenimiento v1.0.1: corregir la marca publica a "Sonría más" en todas las superficies (HTML, metadatos, Open Graph, alt y correos transaccionales); parametrizar el sitio como white-label desde `config/clinic.json` con validacion explicita de la configuracion; permitir leer la politica de privacidad sin salir del formulario ni perder los datos, conservando la pagina independiente en `/politica-de-privacidad`; separar la plantilla legal estable de los datos variables del cliente con un interruptor `demoMode`; y dejar preparada la integracion de imagenes fotograficas reales, cuya produccion requiere intervencion humana.
 
 

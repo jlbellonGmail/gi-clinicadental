@@ -180,6 +180,11 @@ merge solo puede quedar pendiente `[ ]` o `READY_FOR_PR` `[-]`.
 - Rama base de trabajo diario: `develop`
 - Rama de producción: `main` — solo recibe merges desde `develop` vía PR,
   cuando se decide hacer un release (no en cada feature)
+- Releases de mantenimiento sobre una version ya liberada:
+  `feature/v<X.Y.Z>-<slug>`, con `runs/v<X.Y.Z>-<slug>/`. Siguen el mismo
+  circuito y el mismo contrato que un hito; existen para que una
+  correccion sobre lo publicado no consuma un numero de hito reservado
+  a otra cosa en el roadmap.
 - Cada feature: `feature/<NN>-<slug>`, en su propio `git worktree` bajo
   `../worktrees/<slug>/` — esto habilita correr varios circuitos en
   paralelo sin pisarse

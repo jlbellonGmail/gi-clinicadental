@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<!-- GENERADO por scripts/build-site.js desde config/clinic.json.
+     No editar el HTML de la raiz a mano: se sobrescribe. -->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Política de Privacidad | {{ brand.name }}</title>
+    <meta name="description" content="Política de privacidad de {{ brand.name }}: finalidad, datos almacenados, responsable del tratamiento, destinatarios, plazo de conservación y procedimiento de acceso, rectificación y eliminación.">
+    <link rel="icon" href="{{ brand.favicon }}" type="{{ meta.tipoFavicon }}">
+    <link rel="apple-touch-icon" href="{{ brand.appleTouchIcon }}">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <header>
+        <div class="container header-container">
+            <a href="index.html" class="logo">
+                <i class="fas {{ brand.logoIcon }}"></i>
+                <span>{{ brand.name }}</span>
+            </a>
+            <a href="index.html" class="btn btn-outline">
+                <i class="fas fa-arrow-left"></i> Volver al inicio
+            </a>
+        </div>
+    </header>
+
+    <main id="main">
+        <section class="section">
+            <div class="container">
+                <div class="legal-content">
+                    <h1>Política de Privacidad</h1>
+                    <p class="legal-version">Versión: {{ legal.privacyPolicyVersion }} &middot; Actualizada: {{ legal.updatedAt }}</p>
+
+{{{ bloques.politica }}}
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-bottom">
+                <a href="index.html">Volver al inicio</a> &middot; &copy; {{ meta.anio }} {{ brand.name }}. Todos los derechos reservados.
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

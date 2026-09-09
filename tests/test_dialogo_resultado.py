@@ -118,16 +118,70 @@ def test_el_script_no_tiene_que_cerrar_el_dialogo_al_arrancar():
     )
 
 
-def test_hay_una_sola_infraestructura_de_dialogo():
+def bloque_dialogo_resultado(html: str) -> str:
+    """El diálogo de resultado, aislado del resto del documento.
+
+    Desde la v1.0.1 hay un segundo diálogo en la página —la política de
+    privacidad—, así que ya no alcanza con cortar hasta `<script>`: ese
+    rango se comía el texto legal.
+    """
+    inicio = html.find('id="modalResultado"')
+    assert inicio != -1, "Falta el diálogo de resultado"
+    # Termina donde empieza el diálogo siguiente, o donde termina el
+    # cuerpo del documento si es el último.
+    candidatos = [
+        pos
+        for pos in (html.find('<div class="modal"', inicio + 1), html.find("<script", inicio))
+        if pos != -1
+    ]
+    fin = min(candidatos) if candidatos else len(html)
+    return html[inicio:fin]
+
+
+def test_los_tres_estados_comparten_un_solo_dialogo():
     """Tres estados, un solo diálogo.
 
     Tres modales distintos serían tres implementaciones de foco, `Escape`
     y cierre que hay que mantener en paralelo.
+
+    El conteo global de `.modal` **ya no sirve** para medir esto: la
+    v1.0.1 agregó un segundo diálogo, el de la política de privacidad. Lo
+    que se comprueba ahora es más preciso y a la vez más amplio: que el
+    diálogo de resultado siga siendo uno solo con sus tres variantes, y
+    que todos los diálogos de la página reusen la misma infraestructura
+    en vez de traer cada uno la suya.
     """
     html = INDEX.read_text(encoding="utf-8")
-    assert html.count('class="modal"') == 1, "Debe haber un único contenedor de diálogo"
-    assert html.count('role="dialog"') == 1, "Un solo `role=dialog`"
-    assert html.count("modal__variante") == len(VARIANTES)
+
+    assert html.count('id="modalResultado"') == 1, "Debe haber un único diálogo de resultado"
+
+    resultado = bloque_dialogo_resultado(html)
+    assert resultado.count('role="dialog"') == 1, "Un solo `role=dialog` en el resultado"
+    assert resultado.count("modal__variante") == len(VARIANTES)
+
+    # Cada `role="dialog"` tiene que estar dentro de un `.modal`: es lo
+    # que garantiza que compartan el bloqueo de scroll, el fondo y el
+    # comportamiento de `script.js`.
+    assert html.count('role="dialog"') == html.count('class="modal"'), (
+        "Hay un `role=dialog` que no vive dentro de la infraestructura "
+        "`.modal`, o un `.modal` sin diálogo adentro"
+    )
+
+
+def test_todos_los_dialogos_arrancan_cerrados_desde_el_html():
+    """El defecto original era un diálogo visible al cargar la página.
+
+    No alcanza con que lo esté el de resultado: cualquier diálogo nuevo
+    tiene que arrancar cerrado por el atributo `hidden` del HTML, sin
+    depender de que JavaScript llegue a ejecutarse.
+    """
+    html = INDEX.read_text(encoding="utf-8")
+    aperturas = re.findall(r"<div class=\"modal\"[^>]*>", html)
+    assert aperturas, "No hay ningún diálogo en la página"
+    sin_hidden = [a for a in aperturas if "hidden" not in a]
+    assert not sin_hidden, (
+        "Hay diálogos que no arrancan ocultos desde el HTML: " + "; ".join(sin_hidden)
+    )
 
 
 def test_no_se_usa_alert_nativo():
@@ -189,9 +243,7 @@ def test_ninguna_variante_promete_un_correo():
     mismo.
     """
     html = INDEX.read_text(encoding="utf-8")
-    bloque = re.search(r'id="modalResultado".*?<script', html, re.S)
-    assert bloque, "No se pudo aislar el diálogo"
-    texto = re.sub(r"<[^>]+>", " ", bloque.group(0)).lower()
+    texto = re.sub(r"<[^>]+>", " ", bloque_dialogo_resultado(html)).lower()
 
     for promesa in ["correo", "email", "e-mail", "bandeja", "casilla"]:
         assert promesa not in texto, (

@@ -247,3 +247,26 @@ No se rediseñó ningún otro componente visual del sitio existente.
   `index.html`), aunque `ROADMAP.md`/`AGENTS.md` usan "Sonríe más" como
   nombre real del negocio — inconsistencia preexistente fuera de alcance
   de esta feature (corresponde a la feature `10`).
+
+## Cambios de la v1.0.1
+
+- **La version de la politica ya no es una constante de `script.js`.**
+  Sale de `legal.privacyPolicyVersion` en `config/clinic.json`, el
+  generador la escribe en `<meta name="politica-privacidad-version">`
+  y `script.js` la lee. La version enviada con el consentimiento y la
+  publicada son el mismo dato, no dos copias que hay que sincronizar a
+  mano.
+- **La direccion canonica pasa a ser `/politica-de-privacidad`.** Las
+  dos anteriores redirigen con 308: estaban enlazadas desde
+  consentimientos ya registrados y no pueden quedar en 404.
+- **La politica se puede leer sin salir del formulario**, en un dialogo
+  accesible. La pagina independiente sigue existiendo y sigue siendo la
+  direccion canonica; el dialogo no la reemplaza. Ambas superficies se
+  renderizan de la misma plantilla, en el mismo build.
+- **El texto legal esta partido** entre plantilla estable
+  (`templates/partials/politica-*.html`) y datos variables del cliente
+  (`config/clinic.json`), con `legal.demoMode` como interruptor entre
+  sitio demostrativo y clinica real.
+- **No se persiste nada del formulario** para sostener el dialogo: no
+  navega, asi que no hay nada que restaurar. `script.js` no usa
+  `localStorage` ni `sessionStorage`, y hay un guard que lo comprueba.
