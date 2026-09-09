@@ -168,15 +168,44 @@ def test_ningun_documento_permanente_apunta_al_nombre_viejo():
     construcción son anteriores a la corrección, llevan el identificador
     viejo en su mensaje, y no se reescribe historial para maquillarlo.
     """
+    # `runs/17-` a secas, no `runs/17-identidad`: la spec traia
+    # `runs/17-.../decision.md`, con el nombre elidido, y el patron mas
+    # especifico no lo veia. Una ruta que empieza por `runs/17-` apunta al
+    # nombre viejo aunque el resto este abreviado.
     patrones_de_ruta = [
-        re.compile(r"runs/17-identidad"),
+        re.compile(r"runs/17-"),
         re.compile(r"docs/(tecnica|usuario)/identidad-privacidad-y-white-label"),
         re.compile(r"identidad-privacidad-y-white-label\.md"),
         re.compile(r"\]\(.*17-identidad"),
     ]
 
     sospechosos = []
-    documentos = list(ROOT.glob("docs/**/*.md")) + list(ROOT.glob("runs/**/*.md")) + [ROADMAP]
+    # Se barren los documentos que **describen el sistema**: la
+    # documentacion publicada, el ROADMAP y las specs. Ahi una ruta al
+    # nombre viejo es una referencia en uso, y esta mal.
+    #
+    # Quedan fuera las **actas del proceso** -`audit-N.md`,
+    # `test-report-N.md` y `decision.md`-, que existen justamente para
+    # narrar que se corrigio y por que. Citar `runs/17-...` al contar la
+    # correccion no es apuntar al nombre viejo: es dejar constancia. Es la
+    # misma razon por la que el historial de Git tampoco se barre, y los
+    # `audit-N.md` tienen ademas la suya propia: son actas de un auditor
+    # externo que se persisten literalmente y no se editan para que pase
+    # un test.
+    #
+    # La distincion no puede hacerla el patron. En la spec, la cadena
+    # `runs/17-.../decision.md` decia donde vive un artefacto requerido;
+    # en decision.md, la misma cadena cuenta que ahi decia eso. Son
+    # identicas como texto y opuestas como significado, asi que la separa
+    # el tipo de documento.
+    ACTAS = ("audit-", "test-report-", "decision.md")
+
+    documentos = [
+        d
+        for d in list(ROOT.glob("docs/**/*.md")) + list(ROOT.glob("runs/**/*.md")) + [ROADMAP]
+        if not d.name.startswith(ACTAS[:2]) and d.name != "decision.md"
+    ]
+
     for ruta in documentos:
         texto = ruta.read_text(encoding="utf-8")
         for patron in patrones_de_ruta:
@@ -202,3 +231,36 @@ def test_la_correccion_de_nomenclatura_queda_documentada():
         "decision.md tiene que decir con qué nombre se construyó la etapa"
     )
     assert "H17" in decision, "decision.md tiene que explicar por qué ese número estaba reservado"
+
+
+def test_la_exclusion_de_las_actas_no_es_una_via_de_escape():
+    """El guard anterior no barre las actas del proceso. Esto sostiene por qué.
+
+    Si mañana alguien mete una referencia de ruta al nombre viejo en un
+    documento **descriptivo** creyendo que el guard ya no mira, este test
+    demuestra que sí mira: el patrón funciona, y lo que se excluye es una
+    clase de archivo concreta, por un motivo declarado y todavía vigente.
+    """
+    patron = re.compile(r"runs/17-")
+
+    assert patron.search("ver runs/17-identidad/decision.md"), "el patrón no detecta la ruta"
+    assert patron.search("runs/17-.../decision.md"), (
+        "el patrón no detecta la forma elidida, que es la que se coló en spec.md"
+    )
+    assert not patron.search("la etapa 17 del roadmap"), "el patrón se dispara con prosa"
+
+    etapa = ROOT / "runs" / "v1.0.1-identidad-privacidad-white-label"
+
+    citan = [
+        a
+        for a in list(etapa.glob("audit-*.md")) + [etapa / "decision.md"]
+        if a.is_file() and patron.search(a.read_text(encoding="utf-8"))
+    ]
+    assert citan, (
+        "ninguna acta cita la ruta vieja: la exclusión dejó de tener motivo y "
+        "hay que quitarla en vez de arrastrarla"
+    )
+
+    # Y el documento que tenía el defecto real quedó limpio.
+    spec = (etapa / "spec.md").read_text(encoding="utf-8")
+    assert not patron.search(spec), "la spec volvió a apuntar al nombre viejo"

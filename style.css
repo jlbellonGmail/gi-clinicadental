@@ -877,7 +877,7 @@ body.con-modal {
     /* A 320-360px el logo a 1.5rem mas el icono a 1.8rem empujaban al
        boton hamburguesa contra el borde. */
     .logo {
-        /* Fluido y sin envolver: a 320 px, con 1.15rem fijo, "Sonrie mas"
+        /* Fluido y sin envolver: a 320 px, con 1.15rem fijo, el nombre de la clinica
            caia a dos lineas y estiraba el header a 75 px. */
         font-size: clamp(1rem, 4.2vw, 1.15rem);
         gap: 8px;

@@ -374,3 +374,164 @@ inexistente**. Los específicos son casos particulares de ése, y quedan
 porque dan mejores mensajes de error.
 
 Los doce se verificaron en negativo.
+
+
+## audit-1: NO APROBADA, y qué se hizo con cada hallazgo
+
+La primera auditoría independiente sobre `42eb36e` **no aprobó**. El
+producto se consideró técnicamente apto; los seis hallazgos son de
+circuito y documentación. El veredicto está en `audit-1.md` y **no se
+marca como aprobado**: se responde con un SHA nuevo y una segunda
+auditoría.
+
+### Una limitación de procedencia, dicha de frente
+
+`audit-1.md` **no contiene la salida íntegra de OpenCode**, a diferencia
+del `audit-1.md` del punto 16. Esa salida no llegó a la sesión: lo que
+llegó fue el veredicto y los hallazgos transmitidos por el humano. Se
+persistieron sin resumir, sin reinterpretar y sin corregir, y el
+encabezado del archivo lo declara.
+
+No se fabricó un informe de auditoría para que el artefacto pareciera más
+completo de lo que es. Si se quiere trazabilidad hasta el transcript
+original, hay que adjuntarlo o reejecutar la auditoría capturando la
+salida.
+
+### 1. La spec describía un sistema que no se construyó
+
+Tres desviaciones reales, todas corregidas:
+
+| Decía | Es |
+|---|---|
+| `scripts/build-site.mjs`, `clinic-config.mjs` | `.js`, los dos |
+| Inventario en `docs/usuario/imagenes-del-sitio.md` | Ese archivo **no existe**; el inventario quedó consolidado en `docs/usuario/identidad-privacidad-white-label.md` |
+| `<picture>` con AVIF/WebP/fallback | Un solo `<img>` con WebP directo |
+| "La generación de fotografía realista no está disponible en esta sesión" | Las cuatro fotografías están integradas |
+| `runs/17-.../decision.md` | `runs/v1.0.1-identidad-privacidad-white-label/decision.md` |
+
+La sección B de la spec se reescribió para describir el sistema final:
+las cuatro imágenes con sus medidas, **por qué** se sirve WebP directo en
+vez de `<picture>` —soporte universal en los navegadores vigentes; una
+segunda codificación por imagen agrega archivos que mantener y una
+negociación en el HTML a cambio de nada medible—, y dónde quedó el
+inventario. Se agregó una sección B bis para los iconos de marca, que no
+existían cuando se escribió la spec.
+
+**Un hallazgo propio, del mismo tipo, que la auditoría no marcó:**
+`docs/tecnica/identidad-privacidad-white-label.md` seguía declarando en
+"Límites declarados" que *"las imágenes siguen siendo marcadores de
+posición generados con Pillow"*. Era falso desde `53c8ee9`. Se eliminó.
+Buscar el hallazgo señalado y no la clase de hallazgo habría dejado esa
+mentira en la documentación técnica.
+
+**Por qué el guard de nomenclatura no lo detectó.** El patrón era
+`runs/17-identidad`, y la spec traía `runs/17-.../decision.md`, con el
+nombre elidido. Se amplió a `runs/17-` a secas, que sí cubre las dos
+formas. Es la cuarta vez en esta etapa que un guard resulta ser más
+específico que el defecto que decía cubrir.
+
+Al ampliarlo, el guard empezó a dispararse con `audit-1.md`, que cita el
+hallazgo `runs/17-...` textualmente. **No se editó el acta de auditoría
+para que pasara un test.** Se excluyeron los `audit-N.md` del barrido —
+son actas de un auditor externo que el circuito persiste literalmente,
+por la misma razón por la que ya se excluía el historial de Git— y se
+agregó una verificación en negativo que demuestra que el patrón sigue
+funcionando y que la exclusión tiene motivo vigente.
+
+### 2. MkDocs: no eran warnings
+
+Corresponde precisar el hallazgo antes de responderlo. `mkdocs build
+--strict` termina **en verde con cero warnings**; lo que emite es un
+mensaje de nivel `INFO`. `--strict` convierte *warnings* en errores, y un
+`INFO` no lo es. La construcción nunca estuvo roja por esto.
+
+**Reparto de las 38 páginas:**
+
+- **36 preexistentes en cuanto a la causa**: están fuera de `nav` porque
+  el repo navega por índices, no por `nav`. De esas 38, dos las introdujo
+  la v1.0.1.
+- **2 realmente inalcanzables**: `docs/tecnica/landing.md` y
+  `docs/usuario/landing.md`. No están en `nav` **ni** en ningún índice.
+  Preexistentes, de la landing anterior al circuito.
+
+Las dos páginas que introdujo la v1.0.1 **sí están enlazadas en ambos
+índices**. En lo que importa —que se pueda llegar a ellas— no
+introdujeron ningún defecto.
+
+**Qué se decidió no hacer, y por qué.** No se agregaron esas dos páginas
+a `nav`: serían las únicas dos de 38, una inconsistencia arbitraria, y es
+el mismo error que degradar un índice para que coincida con un título
+derivado peor. Tampoco se declaró `not_in_nav`, que habría silenciado el
+`INFO` completo **incluidas las dos páginas genuinamente inalcanzables**
+— es decir, habría tapado el único caso en que ese mensaje sirve.
+
+**Qué sí se hizo.** Convertir el `INFO` pasivo en un guard activo:
+`tests/test_navegacion_de_documentacion.py` exige que toda página esté
+enlazada desde el índice de su área. Las dos `landing.md` quedan como
+excepción heredada **declarada con nombre y motivo**, y un segundo test
+avisa el día que alguien las enlace, para que la excepción no sobreviva a
+su razón de ser.
+
+El warning heredado que permanece, con precisión: **`docs/tecnica/landing.md`
+y `docs/usuario/landing.md` no son alcanzables desde ninguna navegación
+publicada.** Cerrarlas exige tocar la región gestionada de los dos
+índices por una feature que no es esta.
+
+### 3. El título canónico: era peor de lo señalado
+
+La fragilidad tenía dos capas, y la segunda era un defecto latente que
+**introdujo esta misma release**.
+
+La primera: `Get-FeatureInfo` derivaba el título capitalizando el slug
+—`Identidad Privacidad White Label`— contra índices que dicen
+`Identidad, privacidad y white-label`. El contrato solo pasaba si el
+invocante recordaba pasar `-Title` exacto.
+
+La segunda: `ready-for-pr.ps1` obtenía el título de documentación
+recortándole el prefijo al título de la PR con
+`-replace "^Feature [0-9]{2}-"`. La v1.0.1 amplió el contrato de slugs a
+`vX.Y.Z-slug` **y no amplió ese recorte**. Para esta release el recorte
+no quitaba nada, el título quedaba en
+`Feature v1.0.1-identidad-privacidad-white-label`, y el contrato no podía
+pasar por ninguna vía. Es un defecto que esta etapa creó al extender el
+contrato a medias.
+
+**La corrección**, siguiendo la preferencia indicada de fuente coherente:
+`scripts/feature-titles.json` declara el título canónico una vez, y lo
+consumen `Get-FeatureInfo`, `Assert-FeatureContract`, `ready-for-pr.ps1`
+y `update-doc-indexes.ps1`. Además, `-Title` (PR) y `-DocTitle`
+(documentación) quedaron separados, y el default `"Feature <slug>"` se
+calcula **después** de resolver el de documentación para que no se cuele.
+
+Los índices no se tocaron. Se comprobó ejecutando
+`Assert-FeatureContract -Slug v1.0.1-identidad-privacidad-white-label`
+**sin `-Title`**: pasa.
+
+Compatibilidad hacia atrás: una etapa sin entrada en el registro cae al
+título derivado, igual que antes, y un `-Title` explícito sigue ganando.
+Los 16 tests del contrato pasan sin cambios.
+
+### 4. CSS
+
+Corregido como higiene, no como defecto: el comentario decía
+`"Sonrie mas"` describiendo por qué el logo necesita `clamp()` a 320 px.
+Se reemplazó por "el nombre de la clínica", que además no vuelve a
+quedar obsoleto la próxima vez que cambie la marca.
+
+### Verificación en negativo
+
+Trece defectos inyectados, **trece detectados**: la spec volviendo a la
+ruta vieja en sus dos formas; la etapa sin título canónico; el registro
+con título vacío; el índice degradado al título derivado; los dos
+índices en desacuerdo; `Get-FeatureInfo` dejando de leer el registro; el
+recorte por patrón de hito de vuelta; la PR titulándose con la variable
+del contrato; una página nueva sin enlace; la documentación de la
+release desenlazada; `nav` perdiendo un índice; y la excepción heredada
+quedando obsoleta.
+
+Dos de los trece dieron verde en la primera pasada. **No eran huecos de
+los guards: eran defectos de la inyección.** `docs/usuario/index.md` y
+`mkdocs.yml` son CRLF, y las sustituciones buscaban `\n`, así que el
+defecto nunca llegó a escribirse. Corregida la inyección, los dos
+detectan. Queda anotado porque una verificación en negativo que falla por
+su propio andamiaje se parece mucho a un guard que funciona.

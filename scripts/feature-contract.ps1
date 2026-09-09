@@ -37,6 +37,44 @@ function Get-FeatureStateDir {
     return $stateDir
 }
 
+function Get-CanonicalTitle {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Slug
+    )
+
+    # Titulo canonico declarado, si lo hay. Ver scripts/feature-titles.json
+    # para el motivo: derivarlo del slug daba 'Identidad Privacidad White
+    # Label' contra indices que dicen 'Identidad, privacidad y white-label',
+    # y el contrato solo pasaba si el invocante recordaba pasar -Title.
+    $registry = Join-Path $PSScriptRoot "feature-titles.json"
+    if (-not (Test-Path -LiteralPath $registry -PathType Leaf)) {
+        return ""
+    }
+
+    try {
+        $data = Get-Content -LiteralPath $registry -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        throw "scripts/feature-titles.json no es JSON valido: $($_.Exception.Message)"
+    }
+
+    if ($null -eq $data.titulos) {
+        throw "scripts/feature-titles.json debe tener un objeto 'titulos'."
+    }
+
+    $entry = $data.titulos.PSObject.Properties[$Slug]
+    if ($null -eq $entry) {
+        return ""
+    }
+
+    if ([string]::IsNullOrWhiteSpace($entry.Value)) {
+        throw "El titulo canonico de '$Slug' esta declarado vacio en scripts/feature-titles.json."
+    }
+
+    return $entry.Value
+}
+
 function Get-FeatureInfo {
     param(
         [Parameter(Mandatory = $true)]
@@ -60,6 +98,16 @@ function Get-FeatureInfo {
     }
 
     $docSlug = $Matches["docSlug"]
+
+    # Orden de resolucion del titulo, de mas explicito a menos:
+    #   1. el -Title que recibio esta funcion;
+    #   2. el titulo canonico declarado en scripts/feature-titles.json;
+    #   3. el derivado del slug, que es el comportamiento historico y el
+    #      que se conserva para las etapas sin entrada en el registro.
+    if ([string]::IsNullOrWhiteSpace($Title)) {
+        $Title = Get-CanonicalTitle -Slug $Slug
+    }
+
     if ([string]::IsNullOrWhiteSpace($Title)) {
         $Title = ($docSlug -split "-" | ForEach-Object {
             if ($_.Length -eq 0) { $_ } else { $_.Substring(0, 1).ToUpperInvariant() + $_.Substring(1) }

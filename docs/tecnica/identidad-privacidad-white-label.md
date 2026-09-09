@@ -205,6 +205,101 @@ Las dos direcciones anteriores —`/politica-privacidad` y
 `/politica-privacidad.html`— **redirigen con 308**. Estaban publicadas y
 enlazadas desde consentimientos ya registrados: no pueden quedar en 404.
 
+## 8. El título canónico de la etapa
+
+`Get-FeatureInfo` derivaba el título capitalizando el slug:
+`identidad-privacidad-white-label` daba
+**Identidad Privacidad White Label**. Los dos índices dicen
+**Identidad, privacidad y white-label**, que es el título correcto, y
+`Assert-FeatureContract` compara uno contra otro.
+
+El contrato pasaba, entonces, **solo si quien corría el script se
+acordaba de pasar `-Title` con el texto exacto**. Si se olvidaba, fallaba
+contra índices bien escritos, y el mensaje de error invitaba a
+"arreglar" el índice degradándolo al título derivado.
+
+`ready-for-pr.ps1` lo agravaba. Sacaba el título de documentación
+recortándole el prefijo al de la PR:
+
+```powershell
+$contractTitle = $Title -replace "^Feature [0-9]{2}-", ""
+```
+
+Ese patrón solo contempla hitos `NN-`. La v1.0.1 amplió el contrato de
+slugs a `vX.Y.Z-slug` **y no amplió este recorte**, así que para una
+release de mantenimiento no recortaba nada: el título de documentación
+quedaba en `Feature v1.0.1-identidad-privacidad-white-label` y el
+contrato no podía pasar por ninguna vía.
+
+**La corrección.** `scripts/feature-titles.json` declara el título
+canónico una vez:
+
+```json
+{
+  "titulos": {
+    "v1.0.1-identidad-privacidad-white-label": "Identidad, privacidad y white-label"
+  }
+}
+```
+
+Lo lee `Get-CanonicalTitle`, y a través de `Get-FeatureInfo` lo heredan
+`Assert-FeatureContract`, `ready-for-pr.ps1` y `update-doc-indexes.ps1`.
+El orden de resolución va de más explícito a menos: `-Title` explícito →
+registro → derivado del slug. Una etapa sin entrada se comporta como
+antes.
+
+Y las dos cosas que se confundían quedaron separadas: **`-Title` es el
+título de la PR**, **`-DocTitle` el de la documentación**. El default
+`"Feature <slug>"` se calcula después de resolver el de documentación,
+para que no se cuele.
+
+Los índices no se tocaron. Era el título derivado el que estaba peor.
+
+## 9. Las páginas fuera de `nav` de MkDocs
+
+`mkdocs build --strict` termina **en verde, con cero warnings**. Lo que
+emite es un mensaje de nivel `INFO` que lista las 38 páginas de
+`docs/tecnica/` y `docs/usuario/` como ausentes de `nav`. `--strict`
+convierte *warnings* en errores; un `INFO` no lo es.
+
+Están fuera de `nav` por diseño: `nav` tiene tres entradas y **son los
+dos índices los que navegan**. `update-doc-indexes.ps1` mantiene sus
+enlaces y `Assert-FeatureContract` exige el enlace exacto de cada etapa
+en ambos. Duplicar las 38 páginas dentro de `nav` obligaría a mantener la
+misma lista en dos lugares que pueden separarse en silencio.
+
+Tampoco se declaró `not_in_nav` para silenciar el `INFO`: ese glob
+taparía también las páginas que **de verdad** no son alcanzables, que es
+lo único que ese mensaje sirve para detectar.
+
+Lo que sí se hizo fue convertir el `INFO` pasivo en un guard activo.
+`tests/test_navegacion_de_documentacion.py` comprueba que cada página
+esté enlazada desde el índice de su área — la discoverability real, que
+es lo que `nav` daría.
+
+**Reparto exacto de las 38 páginas:**
+
+| | páginas |
+|---|---|
+| Enlazadas desde su índice, alcanzables | 36 |
+| Sin enlace en ningún lado | 2 |
+
+Las dos inalcanzables son `docs/tecnica/landing.md` y
+`docs/usuario/landing.md`, **preexistentes y ajenas a esta release**:
+documentan la landing original, anterior a este circuito, y nunca
+entraron en la zona `FEATURE_LINKS` porque no vinieron de una etapa que
+corriera `update-doc-indexes.ps1`.
+
+No se corrigen acá: cerrarlas exige tocar la región gestionada de los dos
+índices por una feature que no es esta. Quedan declaradas con nombre y
+motivo en `HUERFANAS_HEREDADAS`, y un segundo test avisa el día que
+alguien las enlace, para que la excepción no se arrastre vacía.
+
+Las dos páginas que **sí** introdujo la v1.0.1 están enlazadas en ambos
+índices, y hay un test que lo comprueba por separado: el `INFO` de MkDocs
+no distingue entre "fuera de `nav`" e "inalcanzable", y esa diferencia es
+justamente la que importa.
+
 ## Correcciones incidentales
 
 Tres defectos preexistentes que aparecieron al reconstruir las páginas y
@@ -218,12 +313,6 @@ que habría sido peor dejar:
 
 ## Límites declarados
 
-- **Las imágenes siguen siendo marcadores de posición** generados con
-  Pillow. La integración está lista para recibir fotografía real —cada
-  imagen sale de configuración, con `alt`, `width` y `height`—, pero
-  producir los archivos requiere intervención humana. El inventario y los
-  prompts están en
-  [la guía de usuario](../usuario/identidad-privacidad-white-label.md).
 - **Los guards del diálogo corren en jsdom**, que no pinta. Que la caja
   entre en 320 px y tenga scroll interno lo vigila el CSS en
   `tests/test_dialogo_resultado.py`, no los tests de JavaScript. Es la

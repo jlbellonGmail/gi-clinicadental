@@ -2,8 +2,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $Slug,
 
-    [Parameter(Mandatory = $true)]
-    [string] $Title
+    # Opcional: si no se pasa, sale del titulo canonico declarado en
+    # scripts/feature-titles.json, y si tampoco esta ahi, del slug.
+    [string] $Title = ""
 )
 
 $ErrorActionPreference = "Stop"

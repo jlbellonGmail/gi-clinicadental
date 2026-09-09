@@ -28,7 +28,7 @@ El sitio es estatico, sin build, y Vercel lo sirve tal cual. Se conserva
 esa propiedad.
 
 ```
-config/clinic.json  ->  scripts/build-site.mjs  ->  index.html
+config/clinic.json  ->  scripts/build-site.js   ->  index.html
 templates/*.html                                   politica-de-privacidad.html
                                                    404.html
 ```
@@ -65,22 +65,50 @@ estables y cambiarlos por estetica romperia enlaces reales.
 
 ### B. Imagenes
 
-La generacion de fotografia realista no esta disponible en esta sesion.
-Se entrega:
-
-- el inventario exacto -archivo, ubicacion, aspect ratio, tamaño, prompt-
-  en `docs/usuario/imagenes-del-sitio.md`;
-- la integracion **lista para recibir los assets**: cada imagen sale de
-  `config/clinic.json`, con `alt` propio, `width`/`height` para reservar
-  espacio, y `<picture>` con AVIF/WebP/fallback.
-
-Reemplazar una imagen = dejar el archivo y editar una linea de config. No
-se toca HTML.
-
 Las fotografias son **alcance obligatorio de la v1.0.1**: la etapa no se
-da por construida ni se audita con los marcadores de posicion actuales.
-La integracion puede quedar lista antes; los archivos definitivos los
-entrega el humano y son la ultima pieza de la construccion.
+da por construida ni se audita con los marcadores de posicion generados
+con Pillow.
+
+**Lo entregado son cuatro archivos WebP definitivos**, no marcadores:
+
+| clave | archivo | ratio | medidas |
+|---|---|---|---|
+| `hero` | `static/images/paciente-sonrisa.webp` | 4:3 | 1448 x 1086 |
+| `team` | `static/images/equipo-dental.webp` | 4:3 | 1448 x 1086 |
+| `interior` | `static/images/interior-clinica.webp` | 4:3 | 1448 x 1086 |
+| `social` | `static/images/og-social.webp` | 1.91:1 | 1731 x 909 |
+
+La imagen social **es una composicion propia para 1.91:1**, no un recorte
+del hero: soporta los distintos recortes de cada plataforma y tiene su
+propio `alt`, distinto del de la portada.
+
+**Se sirve WebP directo, con un solo `<img>`.** No hay `<picture>` ni
+variantes AVIF con cadena de fallback: WebP tiene soporte universal en
+los navegadores vigentes, y una segunda codificacion por imagen agrega
+archivos que mantener y una decision de negociacion en el HTML a cambio
+de nada medible. Cada `<img>` lleva `alt` propio y `width`/`height` para
+reservar el espacio antes de que la imagen cargue -- y `height: auto` en
+la hoja de estilos, sin el cual esos atributos deforman la imagen.
+
+Cada imagen sale de `config/clinic.json`. Reemplazarla = dejar el archivo
+y editar una linea de configuracion. No se toca HTML.
+
+**El inventario y la guia de reemplazo -- archivo, ubicacion, ratio,
+medidas, peso, `alt` y las reglas de que debe y no debe mostrar una
+foto -- viven consolidados en `docs/usuario/identidad-privacidad-white-label.md`.**
+No hay un `docs/usuario/imagenes-del-sitio.md` separado: partir la guia
+de configuracion en dos archivos obligaba a quien instala el sitio para
+otra clinica a leer los dos para hacer una sola cosa.
+
+### B bis. Iconos de marca
+
+`favicon.ico` y `apple-touch-icon.png` estaban referenciados en el
+`<head>` y **no existian**. Los produce `scripts/build-branding-icons.py`
+con Pillow -- el logo del header es un glifo de Font Awesome que se
+resuelve en el navegador, y un favicon tiene que ser un archivo que
+exista antes de que se ejecute nada. Rutas y colores salen de
+`brand.favicon`, `brand.appleTouchIcon` y `brand.iconColors`; el tipo MIME
+del `<link rel="icon">` se deduce de la extension en vez de estar fijo.
 
 ### C. Privacidad desde el formulario
 
@@ -135,7 +163,7 @@ como archivo estatico- y el guard lo trata como tal.
 
 ### G. Validacion de configuracion
 
-`scripts/lib/clinic-config.mjs` valida campos obligatorios, tipos y
+`scripts/lib/clinic-config.js` valida campos obligatorios, tipos y
 formas. Una configuracion incompleta **falla ruidosamente** en el
 generador; nunca produce un sitio roto en silencio. Sin dependencias
 nuevas.
@@ -156,8 +184,10 @@ nuevas.
 9. El formulario, el dialogo de resultado, el guard de doble envio, el
    backend y los correos siguen funcionando: la suite existente pasa sin
    cambios de comportamiento.
-10. `docs/tecnica/<slug>.md`, `docs/usuario/<slug>.md`, la guia de
-    configuracion, `runs/17-.../decision.md` y los enlaces exactos en
+10. Ninguna referencia local del HTML publicado apunta a un archivo
+    inexistente, iconos de marca incluidos.
+11. `docs/tecnica/<slug>.md`, `docs/usuario/<slug>.md`, la guia de
+    configuracion, `runs/v1.0.1-identidad-privacidad-white-label/decision.md` y los enlaces exactos en
     ambos indices.
 
 ## Fuera de alcance
