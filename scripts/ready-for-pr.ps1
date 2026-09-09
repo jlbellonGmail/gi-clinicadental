@@ -2,7 +2,12 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $Slug,
 
-    [string] $Title = ""
+    # Titulo de la Pull Request. NO es el titulo de la documentacion.
+    [string] $Title = "",
+
+    # Escape hatch para el titulo canonico de la documentacion cuando la
+    # etapa no tiene entrada en scripts/feature-titles.json.
+    [string] $DocTitle = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -127,14 +132,36 @@ function Get-ExistingPr {
     throw "Error real consultando PR existente con gh: $($result.StdErr)"
 }
 
-if ([string]::IsNullOrWhiteSpace($Title)) {
-    $Title = "Feature $Slug"
+# Titulo de la documentacion. Orden, de mas explicito a menos:
+#
+#   1. -DocTitle
+#   2. el titulo canonico de scripts/feature-titles.json
+#   3. -Title, como ultimo recurso y por compatibilidad: si alguien paso
+#      un titulo y la etapa no declaro el suyo, es mejor que derivarlo
+#   4. el derivado del slug, que resuelve Get-FeatureInfo
+#
+# El default "Feature <slug>" se calcula DESPUES, en $prTitle, para que no
+# se cuele como titulo de documentacion cuando no se paso ninguno.
+$docTitle = $DocTitle
+if ([string]::IsNullOrWhiteSpace($docTitle)) {
+    $docTitle = Get-CanonicalTitle -Slug $Slug
 }
+if ([string]::IsNullOrWhiteSpace($docTitle)) {
+    $docTitle = $Title
+}
+
+$prTitle = if ([string]::IsNullOrWhiteSpace($Title)) { "Feature $Slug" } else { $Title }
 
 $baseBranch = if ([string]::IsNullOrWhiteSpace($env:BASE_BRANCH)) { "develop" } else { $env:BASE_BRANCH }
 $currentBranch = Get-CheckedOutput "git" @("branch", "--show-current")
-$contractTitle = $Title -replace "^Feature [0-9]{2}-", ""
-$info = Get-FeatureInfo -Slug $Slug -Title $contractTitle
+# El titulo de la documentacion no se deriva del titulo de la PR. Antes si:
+# se le quitaba el prefijo con `-replace "^Feature [0-9]{2}-"`, un patron
+# que solo contemplaba hitos NN- y que dejaba 'Feature v1.0.1-identidad-...'
+# entero cuando el slug era una release de mantenimiento. El titulo
+# resultante no coincidia con ningun indice y el contrato fallaba.
+# Ahora son dos cosas distintas: $prTitle es de la PR, y el de la
+# documentacion sale del registro canonico (o de -DocTitle).
+$info = Get-FeatureInfo -Slug $Slug -Title $docTitle
 
 if ($currentBranch -eq $baseBranch -or $currentBranch -eq "main") {
     throw "Este script debe correr en una rama de feature, no en $currentBranch."
@@ -251,7 +278,7 @@ try {
         "pr", "create",
         "--base", $baseBranch,
         "--head", $currentBranch,
-        "--title", $Title,
+        "--title", $prTitle,
         "--body-file", $bodyPath
     )
     $prUrl = $createResult.StdOut.Trim()

@@ -1,8 +1,21 @@
-// Debe coincidir exactamente con el texto "Versión: ..." mostrado en
-// politica-privacidad.html. Actualizar ambos valores juntos cada vez
-// que cambie el contenido de la política (ver
-// docs/tecnica/seguridad-y-politica-privacidad.md).
-const POLITICA_PRIVACIDAD_VERSION = 'v1-2026-08-20';
+// Version de la politica que se envia junto al consentimiento.
+//
+// Antes era una constante de este archivo y habia que acordarse de
+// moverla a mano cada vez que cambiaba el texto publicado. Ahora sale de
+// `config/clinic.json`, el generador la escribe en un `<meta>` del HTML y
+// aca solo se lee: la version enviada y la version publicada son el mismo
+// dato, no dos copias que alguien tiene que mantener sincronizadas.
+//
+// El valor de reserva cubre un HTML sin ese `<meta>` (por ejemplo una
+// copia vieja en cache). Enviar una version equivocada seria peor que
+// enviar una declaradamente desconocida.
+const POLITICA_PRIVACIDAD_VERSION_DESCONOCIDA = 'v0-0000-00-00';
+
+function leerVersionPolitica(documento) {
+    const meta = documento.querySelector('meta[name="politica-privacidad-version"]');
+    const valor = meta && meta.getAttribute('content');
+    return valor && valor.trim() ? valor.trim() : POLITICA_PRIVACIDAD_VERSION_DESCONOCIDA;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     // Header Scroll Effect
@@ -69,6 +82,155 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ---- Dialogos modales -------------------------------------------
+    //
+    // Un solo comportamiento para los dos dialogos del sitio: el del
+    // resultado del envio y el de la politica de privacidad. Antes esta
+    // logica vivia suelta dentro del bloque del formulario; se extrajo
+    // porque duplicarla para el segundo dialogo habria significado dos
+    // trampas de foco distintas que se separan con el tiempo.
+    //
+    // Lo que garantiza:
+    //   - `hidden` como unica fuente de verdad de abierto/cerrado;
+    //   - el foco vuelve al elemento exacto que lo abrio;
+    //   - la posicion de scroll se conserva;
+    //   - `Escape` y los disparadores de cierre cierran;
+    //   - el Tab no se escapa del dialogo mientras esta abierto.
+    const ENFOCABLES = [
+        'a[href]',
+        'button:not([disabled])',
+        'input:not([disabled])',
+        'select:not([disabled])',
+        'textarea:not([disabled])',
+        '[tabindex]:not([tabindex="-1"])',
+    ].join(', ');
+
+    function crearDialogo(modal, opciones) {
+        if (!modal) return null;
+
+        const config = opciones || {};
+        const selectorCierre = config.selectorCierre || '[data-cerrar-modal]';
+        let focoPrevio = null;
+        let scrollPrevio = 0;
+
+        function estaAbierto() {
+            return !modal.hidden;
+        }
+
+        function abrir() {
+            if (estaAbierto()) return;
+
+            focoPrevio = document.activeElement;
+            // El scroll se guarda y se restaura explicitamente.
+            // `body.con-modal` aplica `overflow: hidden`, y aunque los
+            // navegadores actuales conservan la posicion, dejarlo librado a
+            // eso significaria que abrir la politica a mitad del formulario
+            // pueda devolver al visitante al principio de la pagina.
+            scrollPrevio = typeof window.scrollY === 'number' ? window.scrollY : 0;
+
+            modal.hidden = false;
+            // Bloqueo de scroll del fondo mientras el dialogo esta abierto.
+            // NO es una mascara de desborde: va sobre `body.con-modal`, solo
+            // existe mientras el modal esta visible, y se quita al cerrarlo.
+            document.body.classList.add('con-modal');
+
+            const inicial = typeof config.foco === 'function' ? config.foco() : null;
+            if (inicial && typeof inicial.focus === 'function') {
+                inicial.focus();
+            }
+        }
+
+        function cerrar() {
+            if (!estaAbierto()) return;
+
+            modal.hidden = true;
+            document.body.classList.remove('con-modal');
+
+            if (typeof window.scrollTo === 'function') {
+                window.scrollTo(0, scrollPrevio);
+            }
+            // Devolver el foco a donde estaba evita que un lector de
+            // pantalla quede al principio del documento.
+            if (focoPrevio && typeof focoPrevio.focus === 'function') {
+                focoPrevio.focus();
+            }
+            focoPrevio = null;
+        }
+
+        modal.querySelectorAll(selectorCierre).forEach((elemento) => {
+            elemento.addEventListener('click', cerrar);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (!estaAbierto()) return;
+
+            if (e.key === 'Escape') {
+                cerrar();
+                return;
+            }
+
+            // Trampa de foco. Con `aria-modal="true"` el resto del documento
+            // se anuncia como inerte, pero el Tab del teclado igual se escapa
+            // si nadie lo retiene: el foco terminaba en la pagina de atras,
+            // que visualmente esta tapada.
+            if (e.key !== 'Tab') return;
+
+            const caja = modal.querySelector('.modal__caja');
+            const items = caja ? Array.from(caja.querySelectorAll(ENFOCABLES)) : [];
+            if (items.length === 0) {
+                e.preventDefault();
+                return;
+            }
+
+            const primero = items[0];
+            const ultimo = items[items.length - 1];
+            const activo = document.activeElement;
+
+            if (!caja.contains(activo)) {
+                e.preventDefault();
+                primero.focus();
+            } else if (e.shiftKey && activo === primero) {
+                e.preventDefault();
+                ultimo.focus();
+            } else if (!e.shiftKey && activo === ultimo) {
+                e.preventDefault();
+                primero.focus();
+            }
+        });
+
+        return { abrir, cerrar, estaAbierto };
+    }
+
+    // ---- Politica de privacidad (capa 2, sin salir del formulario) ----
+    //
+    // El requisito es que abrir la politica con el formulario a medio
+    // completar NO haga perder nada. La forma de garantizarlo no es guardar
+    // y restaurar los valores -eso obligaria a persistir nombre, correo y
+    // mensaje en algun lado-, sino **no navegar**: se cancela la navegacion
+    // y el formulario nunca se desmonta. Por eso aca no hay ningun
+    // `localStorage`, y no debe agregarse.
+    //
+    // El `href` real se conserva en el HTML: sin JavaScript el enlace sigue
+    // llevando a la pagina completa, que es la direccion canonica.
+    const modalPolitica = document.getElementById('modalPolitica');
+    const dialogoPolitica = crearDialogo(modalPolitica, {
+        selectorCierre: '[data-cerrar-politica]',
+        foco: () => document.getElementById('politicaCerrarX'),
+    });
+
+    if (dialogoPolitica) {
+        document.querySelectorAll('a[data-abrir-politica]').forEach((enlace) => {
+            enlace.addEventListener('click', (e) => {
+                // Si el visitante pidio explicitamente otra pestaña
+                // (Ctrl/Cmd/Shift o boton del medio), se respeta y se deja
+                // que el navegador haga lo suyo.
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+                e.preventDefault();
+                dialogoPolitica.abrir();
+            });
+        });
+    }
+
     // Envio del formulario.
     //
     // Tres resultados terminales, no dos, y esa es la correccion central
@@ -98,7 +260,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const modal = document.getElementById('modalResultado');
         const cajaModal = document.getElementById('modalCaja');
-        let focoPrevioAlModal = null;
+        const dialogoResultado = crearDialogo(modal, {
+            selectorCierre: '[data-cerrar-modal]',
+            foco: () => document.getElementById('modalCerrar'),
+        });
 
         function bloquearEnvio() {
             enviando = true;
@@ -121,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
          * @param {'exito'|'parcial'|'error'} resultado
          */
         function mostrarResultado(resultado) {
-            if (!modal) return;
+            if (!dialogoResultado) return;
 
             let visible = null;
             modal.querySelectorAll('.modal__variante').forEach((variante) => {
@@ -131,89 +296,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (!visible) return;
 
-            // El nombre accesible del dialogo tiene que ser el titulo de
-            // la variante que se esta mostrando, no uno fijo.
+            // El nombre accesible del dialogo tiene que ser el titulo de la
+            // variante que se esta mostrando, no uno fijo.
             const titulo = visible.querySelector('.modal__titulo');
             if (cajaModal && titulo && titulo.id) {
                 cajaModal.setAttribute('aria-labelledby', titulo.id);
             }
 
-            focoPrevioAlModal = document.activeElement;
-            modal.hidden = false;
-            // Bloqueo de scroll del fondo mientras el dialogo esta
-            // abierto. NO es una mascara de desborde: va sobre
-            // `body.con-modal`, solo existe mientras el modal esta
-            // visible, y se quita al cerrarlo.
-            document.body.classList.add('con-modal');
-
-            const cerrar = document.getElementById('modalCerrar');
-            if (cerrar) cerrar.focus();
-        }
-
-        function cerrarModal() {
-            if (!modal || modal.hidden) return;
-            modal.hidden = true;
-            document.body.classList.remove('con-modal');
-            // Devolver el foco a donde estaba evita que un lector de
-            // pantalla quede al principio del documento.
-            if (focoPrevioAlModal && typeof focoPrevioAlModal.focus === 'function') {
-                focoPrevioAlModal.focus();
-            }
-            focoPrevioAlModal = null;
-        }
-
-        // Elementos que pueden recibir foco dentro del dialogo.
-        const ENFOCABLES = [
-            'a[href]',
-            'button:not([disabled])',
-            'input:not([disabled])',
-            'select:not([disabled])',
-            'textarea:not([disabled])',
-            '[tabindex]:not([tabindex="-1"])',
-        ].join(', ');
-
-        if (modal) {
-            modal.querySelectorAll('[data-cerrar-modal]').forEach((elemento) => {
-                elemento.addEventListener('click', cerrarModal);
-            });
-
-            document.addEventListener('keydown', (e) => {
-                if (modal.hidden) return;
-
-                if (e.key === 'Escape') {
-                    cerrarModal();
-                    return;
-                }
-
-                // Trampa de foco. Con `aria-modal="true"` el resto del
-                // documento se anuncia como inerte, pero el Tab del
-                // teclado igual se escapa si nadie lo retiene: el foco
-                // terminaba en la pagina de atras, que visualmente esta
-                // tapada.
-                if (e.key !== 'Tab') return;
-
-                const caja = modal.querySelector('.modal__caja');
-                const items = caja ? Array.from(caja.querySelectorAll(ENFOCABLES)) : [];
-                if (items.length === 0) {
-                    e.preventDefault();
-                    return;
-                }
-
-                const primero = items[0];
-                const ultimo = items[items.length - 1];
-                const activo = document.activeElement;
-
-                if (!caja.contains(activo)) {
-                    e.preventDefault();
-                    primero.focus();
-                } else if (e.shiftKey && activo === primero) {
-                    e.preventDefault();
-                    ultimo.focus();
-                } else if (!e.shiftKey && activo === ultimo) {
-                    e.preventDefault();
-                    primero.focus();
-                }
-            });
+            dialogoResultado.abrir();
         }
 
         // Segunda barrera, por si algun navegador dejara pasar el click
@@ -252,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 servicio: document.getElementById('service').value,
                 mensaje: document.getElementById('message').value.trim() || null,
                 consentimiento_privacidad: consentCheckbox.checked,
-                version_politica_privacidad: POLITICA_PRIVACIDAD_VERSION,
+                version_politica_privacidad: leerVersionPolitica(document),
             };
 
             bloquearEnvio();

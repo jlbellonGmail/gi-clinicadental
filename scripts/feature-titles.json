@@ -1,0 +1,25 @@
+{
+  "_acerca_de": [
+    "Titulo canonico de cada etapa: el texto exacto que llevan sus dos",
+    "enlaces en docs/tecnica/index.md y docs/usuario/index.md.",
+    "",
+    "POR QUE EXISTE ESTE ARCHIVO",
+    "Get-FeatureInfo derivaba el titulo capitalizando el slug, y eso da",
+    "'Identidad Privacidad White Label' donde los indices dicen",
+    "'Identidad, privacidad y white-label'. El contrato solo pasaba si",
+    "quien invocaba el script acertaba a pasar -Title con el texto exacto;",
+    "si se olvidaba, Assert-FeatureContract fallaba contra un indice que",
+    "estaba bien escrito. El titulo dependia de la memoria del invocante.",
+    "",
+    "Con este registro el titulo canonico se declara una vez y lo leen",
+    "Get-FeatureInfo, Assert-FeatureContract, ready-for-pr.ps1 y",
+    "update-doc-indexes.ps1. Una etapa sin entrada aqui sigue funcionando:",
+    "cae al titulo derivado del slug, que es el comportamiento historico.",
+    "",
+    "El titulo de la PR es otra cosa y no se deriva de este: ready-for-pr.ps1",
+    "recibe -Title para la PR y -DocTitle para la documentacion."
+  ],
+  "titulos": {
+    "v1.0.1-identidad-privacidad-white-label": "Identidad, privacidad y white-label"
+  }
+}

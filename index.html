@@ -1,26 +1,42 @@
 <!DOCTYPE html>
+<!-- GENERADO por scripts/build-site.js desde config/clinic.json.
+     No editar el HTML de la raiz a mano: se sobrescribe. Editar
+     config/clinic.json o esta plantilla y correr `npm run build:site`. -->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sonríe más | Tu Sonrisa, Nuestra Pasión</title>
-    <meta name="description" content="Sonríe más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital. Recupera tu bienestar bucodental con tecnología de vanguardia.">
+    <title>Sonría más | Tu Sonrisa, Nuestra Pasión</title>
+    <meta name="description" content="Sonría más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital. Recupera tu bienestar bucodental con tecnología de vanguardia.">
+    <!-- Version de la politica que el formulario envia como
+         `version_politica_privacidad`. Vive en el HTML, no en una
+         constante de JavaScript, para que salga de la configuracion y no
+         pueda quedar desincronizada del texto publicado. -->
+    <meta name="politica-privacidad-version" content="v2-2026-09-08">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Open Graph / SEO -->
-    <meta property="og:title" content="Sonríe más | Tu Sonrisa, Nuestra Pasión">
-    <meta property="og:description" content="Sonríe más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital. Recupera tu bienestar bucodental con tecnología de vanguardia.">
+    <meta property="og:title" content="Sonría más | Tu Sonrisa, Nuestra Pasión">
+    <meta property="og:description" content="Sonría más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital. Recupera tu bienestar bucodental con tecnología de vanguardia.">
     <meta property="og:url" content="https://gi-clinicadental.vercel.app">
     <meta property="og:type" content="website">
-    <meta property="og:image" content="https://gi-clinicadental.vercel.app/static/images/paciente-sonrisa.webp">
+    <!-- La imagen social se compone aparte, en 1.91:1: el hero es 4:3 y
+         las plataformas lo recortan mal. `og:image:alt` existe porque la
+         miniatura tambien la leen lectores de pantalla en el timeline, y
+         las dimensiones evitan que la tarjeta salte mientras carga. -->
+    <meta property="og:image" content="https://gi-clinicadental.vercel.app/static/images/og-social.webp">
+    <meta property="og:image:alt" content="Paciente sonriendo en el sillón de un consultorio odontológico luminoso, junto a un ventanal con vegetación">
+    <meta property="og:image:width" content="1731">
+    <meta property="og:image:height" content="909">
     <meta property="og:locale" content="es_AR">
-    <meta property="og:site_name" content="Sonríe más">
+    <meta property="og:site_name" content="Sonría más">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Sonríe más | Tu Sonrisa, Nuestra Pasión">
-    <meta name="twitter:description" content="Sonríe más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital.">
-    <meta name="twitter:image" content="https://gi-clinicadental.vercel.app/static/images/paciente-sonrisa.webp">
+    <meta name="twitter:title" content="Sonría más | Tu Sonrisa, Nuestra Pasión">
+    <meta name="twitter:description" content="Sonría más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital.">
+    <meta name="twitter:image" content="https://gi-clinicadental.vercel.app/static/images/og-social.webp">
+    <meta name="twitter:image:alt" content="Paciente sonriendo en el sillón de un consultorio odontológico luminoso, junto a un ventanal con vegetación">
 </head>
 <body>
     <a href="#main" class="skip-link" style="position: fixed; top: -100px; left: 20px; background: var(--primary); color: var(--white); padding: 10px; border-radius: 4px; z-index: 9999; transition: top 0.3s;">Saltar al contenido principal</a>
@@ -29,7 +45,7 @@
         <div class="container header-container">
             <a href="#" class="logo">
                 <i class="fas fa-tooth"></i>
-                <span>Sonríe más</span>
+                <span>Sonría más</span>
             </a>
             <button type="button" class="nav-toggle" aria-label="Abrir menú de navegación" aria-expanded="false" aria-controls="navPrincipal">
                 <i class="fas fa-bars" aria-hidden="true"></i>
@@ -47,20 +63,20 @@
         </div>
     </header>
 
-    <main>
+    <main id="main">
         <!-- Hero Section -->
         <section id="inicio" class="hero">
             <div class="container hero-grid">
                 <div class="hero-content">
                     <h1>Recupera tu sonrisa en solo <span class="accent">24 horas</span>.</h1>
-                    <p>En Sonríe más combinamos la tecnología digital más avanzada con un enfoque humano y cercano para que vuelvas a sonreír con confianza hoy mismo.</p>
+                    <p>En Sonría más combinamos la tecnología digital más avanzada con un enfoque humano y cercano para que vuelvas a sonreír con confianza hoy mismo.</p>
                     <div class="hero-btns">
                         <a href="#contacto" class="btn btn-primary">Diagnóstico Gratuito</a>
                         <a href="#servicios" class="btn btn-outline">Ver Tratamientos</a>
                     </div>
                 </div>
                 <div class="hero-image">
-                    <img src="static/images/paciente-sonrisa.webp" alt="Paciente sonriendo después de un implante de carga inmediata en Sonríe más" loading="lazy">
+                    <img src="static/images/paciente-sonrisa.webp" alt="Paciente sonriendo, sentada en el sillón de un consultorio odontológico moderno y luminoso" width="1448" height="1086" loading="lazy" decoding="async">
                 </div>
             </div>
         </section>
@@ -95,32 +111,32 @@
                     <p>Tratamientos diseñados para optimizar tu tiempo, reducir la ansiedad y garantizar resultados naturales y duraderos.</p>
                 </div>
                 <div class="services-grid">
-                    <div class="service-card">
+                    <div class="service-card" data-servicio="implantes">
                         <div class="service-icon"><i class="fas fa-plus"></i></div>
                         <h3>Implantes en 24h</h3>
                         <p>Recupera la funcionalidad y estética de tu boca en un solo día con nuestra técnica de carga inmediata.</p>
                     </div>
-                    <div class="service-card">
+                    <div class="service-card" data-servicio="ortodoncia">
                         <div class="service-icon"><i class="fas fa-teeth"></i></div>
                         <h3>Ortodoncia Invisible</h3>
                         <p>Alineadores cómodos y discretos que se adaptan a tu ritmo de vida sin afectar tu imagen.</p>
                     </div>
-                    <div class="service-card">
+                    <div class="service-card" data-servicio="diseno-sonrisa">
                         <div class="service-icon"><i class="fas fa-smile-beam"></i></div>
                         <h3>Diseño de Sonrisa Digital</h3>
                         <p>Visualiza el resultado final de tu tratamiento en 3D antes de comenzar gracias a la simulación digital.</p>
                     </div>
-                    <div class="service-card">
+                    <div class="service-card" data-servicio="blanqueamiento">
                         <div class="service-icon"><i class="fas fa-sparkles"></i></div>
                         <h3>Blanqueamiento Profesional</h3>
                         <p>Resultados visibles y seguros en una sola sesión, protegiendo siempre tu esmalte dental.</p>
                     </div>
-                    <div class="service-card">
+                    <div class="service-card" data-servicio="infantil">
                         <div class="service-icon"><i class="fas fa-child"></i></div>
                         <h3>Odontología Infantil</h3>
                         <p>Cuidamos la salud bucodental de los más pequeños en un entorno divertido y libre de miedos.</p>
                     </div>
-                    <div class="service-card">
+                    <div class="service-card" data-servicio="armonizacion">
                         <div class="service-icon"><i class="fas fa-magic"></i></div>
                         <h3>Armonización Orofacial</h3>
                         <p>Tratamientos integrales para resaltar la belleza natural de tu rostro y de tu sonrisa.</p>
@@ -133,7 +149,7 @@
         <section id="equipo" class="section testimonials">
             <div class="container hero-grid">
                 <div class="hero-image">
-                    <img src="static/images/equipo-dental.webp" alt="Equipo de dentistas de Sonríe más trabajando con tecnología de punta" loading="lazy">
+                    <img src="static/images/equipo-dental.webp" alt="Tres profesionales de odontología observando juntos una radiografía dental panorámica en un monitor" width="1448" height="1086" loading="lazy" decoding="async">
                 </div>
                 <div class="hero-content">
                     <h2>Tecnología de Punta, <br>Trato Humano.</h2>
@@ -159,17 +175,20 @@
                             <p><i class="fas fa-clock" style="color:var(--primary); width: 25px;"></i> L a V: 9:00 - 19:00 | S: 9:00 - 13:00</p>
                         </div>
                         <div style="margin-top: 30px;">
-                            <img src="static/images/interior-clinica.webp" alt="Interior moderno de la clínica Sonríe más con tecnología CAD/CAM y scanner 3D" style="border-radius: 20px;" loading="lazy">
+                            <img src="static/images/interior-clinica.webp" alt="Consultorio odontológico moderno y vacío, con sillón, lámpara de techo y ventanal al jardín" width="1448" height="1086" loading="lazy" decoding="async" style="border-radius: 20px;">
                         </div>
                     </div>
                     <div class="lead-form-container">
+<!-- Solo se inserta con `legal.demoMode` en true. Es el aviso fuerte de
+     que nadie va a responder; no reemplaza al aviso de privacidad de la
+     capa 1, que se muestra siempre. -->
                         <p class="form-demo-notice" role="note" style="margin: 0 0 25px; padding: 14px 16px; border-left: 4px solid var(--primary); background: rgba(0,0,0,0.04); border-radius: 8px; font-size: 0.9rem; line-height: 1.5;">
                             <strong>Demostración técnica.</strong> Este sitio es un
                             ejemplo de portfolio, no una clínica en funcionamiento: nadie
                             se comunicará para coordinar una atención médica.
                             <strong>No ingreses datos personales reales ni información de
                             salud.</strong> Más detalle en la
-                            <a href="politica-privacidad.html" target="_blank" rel="noopener noreferrer">política de privacidad</a>.
+                            <a href="/politica-de-privacidad" data-abrir-politica>política de privacidad</a>.
                         </p>
                         <form id="leadForm">
                             <div class="form-group">
@@ -193,12 +212,23 @@
                                 <label for="message">Cuéntanos sobre tu caso (Opcional)</label>
                                 <textarea id="message" rows="4" placeholder="¿Cómo podemos ayudarte?"></textarea>
                             </div>
+
+                            <!-- CAPA 1 de la politica: aviso breve, junto al
+                                 envio. El enlace abre el dialogo sin salir del
+                                 formulario; su `href` real se conserva para que
+                                 siga funcionando sin JavaScript y para que se
+                                 pueda abrir en una pestaña nueva a proposito. -->
+                            <p class="form-privacy-notice" id="avisoPrivacidad">
+                                Usaremos tus datos únicamente para gestionar tu solicitud de contacto y comunicarnos con vos.
+                                Consultá nuestra
+                                <a href="/politica-de-privacidad" data-abrir-politica>Política de privacidad</a>.
+                            </p>
+
                             <div class="form-group form-group--consent">
                                 <label for="consent">
                                     <input type="checkbox" id="consent" required>
                                     <span>He leído y acepto la
-                                        <a href="politica-privacidad.html" target="_blank" rel="noopener noreferrer">política de privacidad</a>
-                                        y entiendo que este sitio es una demostración técnica.</span>
+                                        <a href="/politica-de-privacidad" data-abrir-politica>política de privacidad</a> y entiendo que este sitio es una demostración técnica.</span>
                                 </label>
                             </div>
                             <button type="submit" class="btn btn-primary form-submit" id="submitLead">
@@ -218,7 +248,7 @@
                 <div>
                     <a href="#" class="logo" style="color: white; margin-bottom: 20px;">
                         <i class="fas fa-tooth"></i>
-                        <span>Sonríe más</span>
+                        <span>Sonría más</span>
                     </a>
                     <p style="color: #bbb;">Transformando vidas a través de sonrisas saludables y tecnología de vanguardia.</p>
                 </div>
@@ -233,23 +263,21 @@
                 <div>
                     <h4>Legal</h4>
                     <ul style="margin-top: 20px;">
-                        <li style="margin-bottom: 10px;"><a href="politica-privacidad.html" style="color: #bbb;">Privacidad</a></li>
-                        <li style="margin-bottom: 10px;"><a href="#" style="color: #bbb;">Términos</a></li>
-                        <li style="margin-bottom: 10px;"><a href="#" style="color: #bbb;">Cookies</a></li>
+                        <li style="margin-bottom: 10px;"><a href="/politica-de-privacidad" style="color: #bbb;">Privacidad</a></li>
                     </ul>
                 </div>
                 <div>
                     <h4>Síguenos</h4>
                     <div style="display: flex; gap: 15px; margin-top: 20px;">
-                        <a href="https://facebook.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer"><i class="fab fa-facebook-f"></i></a>
-                        <a href="https://instagram.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer"><i class="fab fa-instagram"></i></a>
-                        <a href="https://tiktok.com/@sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer"><i class="fab fa-tiktok"></i></a>
-                        <a href="https://youtube.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer"><i class="fab fa-youtube"></i></a>
+                        <a href="https://facebook.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><i class="fab fa-facebook-f" aria-hidden="true"></i></a>
+                        <a href="https://instagram.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><i class="fab fa-instagram" aria-hidden="true"></i></a>
+                        <a href="https://tiktok.com/@sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="TikTok"><i class="fab fa-tiktok" aria-hidden="true"></i></a>
+                        <a href="https://youtube.com/sonrimas" style="color: white; font-size: 1.2rem;" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><i class="fab fa-youtube" aria-hidden="true"></i></a>
                     </div>
                 </div>
             </div>
             <div class="footer-bottom">
-                &copy; 2026 Sonríe más. Todos los derechos reservados.
+                &copy; 2026 Sonría más. Todos los derechos reservados.
             </div>
         </div>
     </footer>
@@ -312,6 +340,164 @@
 
             <button type="button" class="btn btn-primary modal__accion" id="modalCerrar"
                     data-cerrar-modal>Entendido</button>
+        </div>
+    </div>
+
+    <!-- CAPA 2 de la politica, servida sin salir del formulario.
+         El texto es EL MISMO que el de /politica-de-privacidad: ambas
+         superficies se renderizan de la misma plantilla, en el mismo
+         build. La pagina sigue existiendo y sigue siendo la direccion
+         canonica; este dialogo no la reemplaza.
+
+         Arranca con `hidden`, igual que el dialogo de resultado y por el
+         mismo motivo. -->
+    <div class="modal" id="modalPolitica" hidden>
+        <div class="modal__fondo" data-cerrar-politica></div>
+        <div class="modal__caja modal__caja--politica" role="dialog" aria-modal="true"
+             aria-labelledby="tituloPolitica" id="modalPoliticaCaja">
+            <div class="modal__encabezado">
+                <h2 class="modal__titulo" id="tituloPolitica">Política de Privacidad</h2>
+                <button type="button" class="modal__cerrar" id="politicaCerrarX"
+                        data-cerrar-politica aria-label="Cerrar y volver al formulario">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <!-- El contenido legal scrollea acá adentro, no en la página. -->
+            <div class="modal__cuerpo legal-content" id="politicaCuerpo" tabindex="0"
+                 role="document">
+                <p class="legal-version">Versión: v2-2026-09-08 &middot; Actualizada: 2026-09-08</p>
+<!-- PLANTILLA LEGAL ESTABLE.
+
+     Esto es la parte del texto que NO cambia al instalar el sitio para
+     otra clinica. Todo lo que si cambia -responsable, domicilio, correo
+     de contacto, finalidad, plazo de conservacion, proveedores- entra
+     por `config/clinic.json`.
+
+     Se renderiza una sola vez y se inserta en DOS superficies: la pagina
+     `/politica-de-privacidad` y el dialogo del formulario. Es la misma
+     cadena en ambas, por construccion: no pueden divergir.
+
+     No afirma cumplimiento normativo de ningun regimen concreto. -->
+
+<!-- Solo se inserta con `legal.demoMode` en true. -->
+<section>
+    <h2>0. Aviso: este sitio es una demostración técnica</h2>
+    <p>
+        <strong>Sonría más no es una clínica en funcionamiento.</strong>
+        Este sitio es una demostración técnica y de portfolio: la clínica,
+        sus servicios y sus datos de contacto son un ejemplo construido
+        para mostrar cómo funciona el circuito de captación de solicitudes
+        de principio a fin.
+    </p>
+    <p>
+        <strong>No ingreses datos personales reales ni información clínica
+        o de salud en el formulario.</strong> Nadie va a contactarte para
+        coordinar una atención médica, porque no hay un equipo clínico
+        detrás. Si querés probar el formulario, usá datos de prueba.
+    </p>
+    <p>
+        El resto de esta política describe con exactitud qué hace el
+        sistema con lo que se envía, porque el comportamiento técnico que
+        se describe es real: los datos efectivamente se guardan y se
+        envían correos automáticos.
+    </p>
+</section>
+
+
+<section>
+    <h2>1. Finalidad</h2>
+    <p>
+        Lo que completás en el formulario de este sitio (nombre, correo
+        electrónico, servicio de interés y el mensaje que quieras agregar)
+        se registra con una única finalidad: <strong>gestionar tu solicitud de contacto y comunicarnos con vos</strong>.
+    </p>
+    <p>
+        No se usan estos datos para ningún otro propósito distinto al
+        descrito acá.
+    </p>
+</section>
+
+<section>
+    <h2>2. Datos almacenados</h2>
+    <p>Cuando enviás el formulario, se almacenan los siguientes datos:</p>
+    <ul>
+        <li>Nombre completo.</li>
+        <li>Correo electrónico.</li>
+        <li>Teléfono, si el formulario lo solicita.</li>
+        <li>Servicio de interés seleccionado.</li>
+        <li>Mensaje opcional que hayas escrito.</li>
+        <li>Fecha y hora en que se recibió tu solicitud.</li>
+        <li>Estado de seguimiento de tu solicitud (por ejemplo, si ya fue contactada o está pendiente).</li>
+        <li>El registro de que diste tu consentimiento y la versión de esta política que aceptaste al enviar el formulario.</li>
+    </ul>
+</section>
+
+<!-- `legal.demoMode` = true: no se declara ninguna entidad responsable,
+     precisamente para no afirmar algo que no existe. -->
+<section>
+    <h2>3. Responsable del tratamiento</h2>
+    <p>
+        No hay una persona jurídica constituida detrás de este sitio:
+        <strong>no existe una clínica ni una empresa responsable</strong>,
+        porque se trata de una demostración técnica y no de un servicio en
+        operación.
+    </p>
+    <p>
+        El único canal de contacto de esta demostración es
+        <a href="mailto:sonriamas-contactos@nextgia.io">sonriamas-contactos@nextgia.io</a>.
+        Escribí a esa dirección para cualquier consulta sobre este sitio o
+        sobre los datos que hayas enviado.
+    </p>
+    <p>
+        Esta sección se completará con la identificación y el domicilio
+        correspondientes si el proyecto pasa alguna vez a operar como un
+        servicio real.
+    </p>
+</section>
+
+
+<section>
+    <h2>4. Destinatarios</h2>
+    <p>Tus datos son accedidos únicamente por:</p>
+    <ul>
+        <li>Quien mantiene esta demostración técnica, a través del buzón <a href="mailto:sonriamas-contactos@nextgia.io">sonriamas-contactos@nextgia.io</a>, que recibe el aviso de cada solicitud enviada.</li>
+        <li>Supabase, proveedor de base de datos donde se almacenan los registros.</li>
+        <li>DonWeb, proveedor de correo SMTP utilizado exclusivamente para enviar los correos automáticos asociados a tu solicitud.</li>
+    </ul>
+    <p>No se venden ni se comparten tus datos con terceros ajenos a este proceso.</p>
+</section>
+
+<section>
+    <h2>5. Plazo de conservación</h2>
+    <p>
+        Los registros se conservan mientras la solicitud siga siendo necesaria para esa gestión, o hasta que pidas su eliminación.
+    </p>
+</section>
+
+<section>
+    <h2>6. Acceso, rectificación y eliminación de tus datos</h2>
+    <p>
+        Como titular de tus datos, podés solicitar acceder a la
+        información que almacenamos sobre vos, pedir que se corrija si
+        está desactualizada o es incorrecta, o solicitar su eliminación.
+    </p>
+    <p>
+        Para ejercer cualquiera de estos derechos, escribinos a
+        <a href="mailto:sonriamas-contactos@nextgia.io">sonriamas-contactos@nextgia.io</a>,
+        indicando el correo electrónico con el que enviaste tu solicitud
+        para que podamos identificar tus datos.
+    </p>
+</section>
+
+                <p class="legal-version">
+                    También podés abrir esta política en
+                    <a href="/politica-de-privacidad">su página completa</a>.
+                </p>
+            </div>
+            <div class="modal__pie">
+                <button type="button" class="btn btn-primary modal__accion" id="politicaVolver"
+                        data-cerrar-politica>Volver al formulario</button>
+            </div>
         </div>
     </div>
 

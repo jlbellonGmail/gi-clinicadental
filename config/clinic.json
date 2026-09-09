@@ -1,0 +1,169 @@
+{
+  "_comentario": "Contenido publico del sitio. Se sirve como archivo estatico: NO poner aca ninguna credencial, clave ni token. Los secretos viven solo en variables de entorno de Vercel. Al editar este archivo hay que regenerar el HTML: npm run build:site",
+  "brand": {
+    "name": "Sonría más",
+    "tagline": "Tu Sonrisa, Nuestra Pasión",
+    "description": "Sonría más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital. Recupera tu bienestar bucodental con tecnología de vanguardia.",
+    "shortDescription": "Sonría más: especialistas en implantes de carga inmediata, ortodoncia invisible y diseño de sonrisa digital.",
+    "footerText": "Transformando vidas a través de sonrisas saludables y tecnología de vanguardia.",
+    "logoIcon": "fa-tooth",
+    "favicon": "favicon.ico",
+    "appleTouchIcon": "apple-touch-icon.png",
+    "iconColors": {
+      "background": "#076e6e",
+      "foreground": "#ffffff"
+    },
+    "images": {
+      "hero": {
+        "src": "static/images/paciente-sonrisa.webp",
+        "alt": "Paciente sonriendo, sentada en el sillón de un consultorio odontológico moderno y luminoso",
+        "width": 1448,
+        "height": 1086
+      },
+      "team": {
+        "src": "static/images/equipo-dental.webp",
+        "alt": "Tres profesionales de odontología observando juntos una radiografía dental panorámica en un monitor",
+        "width": 1448,
+        "height": 1086
+      },
+      "interior": {
+        "src": "static/images/interior-clinica.webp",
+        "alt": "Consultorio odontológico moderno y vacío, con sillón, lámpara de techo y ventanal al jardín",
+        "width": 1448,
+        "height": 1086
+      },
+      "social": {
+        "src": "static/images/og-social.webp",
+        "alt": "Paciente sonriendo en el sillón de un consultorio odontológico luminoso, junto a un ventanal con vegetación",
+        "width": 1731,
+        "height": 909
+      }
+    }
+  },
+  "contact": {
+    "phone": {
+      "display": "+54 9 11 4123-4567",
+      "href": "tel:+5491141234567"
+    },
+    "whatsapp": {
+      "display": "+54 9 11 4123-4567",
+      "href": "https://wa.me/5491141234567"
+    },
+    "email": "sonriamas-contactos@nextgia.io",
+    "address": {
+      "display": "Av. Corrientes 1234, Piso 2, C1043AAE",
+      "mapsUrl": "https://maps.google.com/?q=Av+Corrientes+1234+Piso+2+Ciudad+Aut%C3%B3noma+de+Buenos+Aires+C1043AAE"
+    }
+  },
+  "business": {
+    "siteUrl": "https://gi-clinicadental.vercel.app",
+    "locale": "es_AR",
+    "copyrightYear": 2026,
+    "openingHours": "L a V: 9:00 - 19:00 | S: 9:00 - 13:00",
+    "socialNetworks": [
+      {
+        "name": "Facebook",
+        "icon": "fab fa-facebook-f",
+        "url": "https://facebook.com/sonrimas"
+      },
+      {
+        "name": "Instagram",
+        "icon": "fab fa-instagram",
+        "url": "https://instagram.com/sonrimas"
+      },
+      {
+        "name": "TikTok",
+        "icon": "fab fa-tiktok",
+        "url": "https://tiktok.com/@sonrimas"
+      },
+      {
+        "name": "YouTube",
+        "icon": "fab fa-youtube",
+        "url": "https://youtube.com/sonrimas"
+      }
+    ]
+  },
+  "services": [
+    {
+      "id": "implantes",
+      "name": "Implantes en 24h",
+      "formName": "Implantes 24h",
+      "description": "Recupera la funcionalidad y estética de tu boca en un solo día con nuestra técnica de carga inmediata.",
+      "icon": "fas fa-plus",
+      "order": 1,
+      "visible": true,
+      "inForm": true
+    },
+    {
+      "id": "ortodoncia",
+      "name": "Ortodoncia Invisible",
+      "formName": "Ortodoncia Invisible",
+      "description": "Alineadores cómodos y discretos que se adaptan a tu ritmo de vida sin afectar tu imagen.",
+      "icon": "fas fa-teeth",
+      "order": 2,
+      "visible": true,
+      "inForm": true
+    },
+    {
+      "id": "diseno-sonrisa",
+      "name": "Diseño de Sonrisa Digital",
+      "description": "Visualiza el resultado final de tu tratamiento en 3D antes de comenzar gracias a la simulación digital.",
+      "icon": "fas fa-smile-beam",
+      "order": 3,
+      "visible": true,
+      "inForm": false
+    },
+    {
+      "id": "blanqueamiento",
+      "name": "Blanqueamiento Profesional",
+      "formName": "Blanqueamiento",
+      "description": "Resultados visibles y seguros en una sola sesión, protegiendo siempre tu esmalte dental.",
+      "icon": "fas fa-sparkles",
+      "order": 4,
+      "visible": true,
+      "inForm": true
+    },
+    {
+      "id": "infantil",
+      "name": "Odontología Infantil",
+      "description": "Cuidamos la salud bucodental de los más pequeños en un entorno divertido y libre de miedos.",
+      "icon": "fas fa-child",
+      "order": 5,
+      "visible": true,
+      "inForm": false
+    },
+    {
+      "id": "armonizacion",
+      "name": "Armonización Orofacial",
+      "description": "Tratamientos integrales para resaltar la belleza natural de tu rostro y de tu sonrisa.",
+      "icon": "fas fa-magic",
+      "order": 6,
+      "visible": true,
+      "inForm": false
+    }
+  ],
+  "legal": {
+    "demoMode": true,
+    "privacyPolicyVersion": "v2-2026-09-08",
+    "updatedAt": "2026-09-08",
+    "privacyContactEmail": "sonriamas-contactos@nextgia.io",
+    "controller": {
+      "legalName": "",
+      "tradeName": "",
+      "taxId": "",
+      "address": ""
+    },
+    "purpose": "gestionar tu solicitud de contacto y comunicarnos con vos",
+    "retention": "mientras la solicitud siga siendo necesaria para esa gestión, o hasta que pidas su eliminación",
+    "providers": [
+      {
+        "name": "Supabase",
+        "role": "proveedor de base de datos donde se almacenan los registros"
+      },
+      {
+        "name": "DonWeb",
+        "role": "proveedor de correo SMTP utilizado exclusivamente para enviar los correos automáticos asociados a tu solicitud"
+      }
+    ]
+  }
+}
