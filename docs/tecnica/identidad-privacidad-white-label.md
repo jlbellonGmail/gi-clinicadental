@@ -205,6 +205,39 @@ Las dos direcciones anteriores —`/politica-privacidad` y
 `/politica-privacidad.html`— **redirigen con 308**. Estaban publicadas y
 enlazadas desde consentimientos ya registrados: no pueden quedar en 404.
 
+### El HTML enlaza la URL limpia, no el archivo
+
+Declarar la dirección canónica y después enlazar otra cosa la deja en
+canónica solo de nombre. El HTML enlazaba `politica-de-privacidad.html`;
+ahora enlaza **`/politica-de-privacidad`**, que es lo que el `rewrite`
+sirve. Nada estaba roto —las dos direcciones devuelven la misma página
+con 200, y el camino sin JavaScript funcionaba por cualquiera de las
+dos—, pero convivían dos URLs públicas para un solo contenido y la que
+el sitio ofrecía no era la canónica.
+
+El cambio se hace en las plantillas. El HTML de la raíz se rehace con
+`node scripts/build-site.js`, y `--check` comprueba que no haya
+divergido.
+
+`build-site.test.js` exigía antes que cada página **contuviera** la
+cadena `politica-de-privacidad.html`. Ahora exige la URL limpia y además
+rechaza las formas con extensión: es lo que impide que las dos vuelvan a
+convivir.
+
+El guard de referencias locales de `tests/test_assets_de_marca.py`
+resolvía cada `href` contra un archivo del repositorio, y una URL limpia
+no es un archivo: habría dado referencia rota. Exceptuar las rutas
+absolutas habría ablandado el guard para todas. En cambio **sigue el
+`rewrite` de `vercel.json`** y comprueba el archivo real al que apunta,
+así que una URL limpia inventada, sin rewrite que la respalde, sigue
+fallando.
+
+No se agregó `<link rel="canonical">`. No existe soporte de canonical en
+ninguna plantilla ni en el generador, y la página de la política no
+declara hoy ninguna URL propia —tampoco `og:url`, que solo tiene la
+home—. Añadirlo sería arquitectura nueva, no la normalización de
+enlaces que esta corrección abarca.
+
 ## 8. El título canónico de la etapa
 
 `Get-FeatureInfo` derivaba el título capitalizando el slug:

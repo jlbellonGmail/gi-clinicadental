@@ -655,3 +655,95 @@ Claude Code.
 Sin cambios: el `rewrite` y los `redirects` de Vercel, que se comprueban
 contra el deployment Preview de la PR; las capturas del diálogo y del
 móvil; y el envío real del formulario en Production.
+
+
+## Corrección menor posterior a audit-3: la URL limpia de la política
+
+La validación automática del Preview quedó aprobada. Dejó **una sola
+observación**, y se resolvió antes del HITL visual.
+
+`vercel.json` declara el `rewrite` de `/politica-de-privacidad` y la
+documentación llama a esa dirección la canónica. El HTML enlazaba
+`politica-de-privacidad.html`. Las dos devuelven la misma página con 200
+y el camino sin JavaScript funcionaba por cualquiera de las dos: **nada
+estaba roto**. Lo que había era una incoherencia: dos URLs públicas para
+un solo contenido, y la que el sitio ofrecía no era la que declaraba como
+canónica.
+
+### Dónde se corrigió
+
+En las plantillas, que es la fuente:
+
+| Fuente | Enlaces |
+|---|---|
+| `templates/index.html` | 4 |
+| `templates/404.html` | 1 |
+| `templates/partials/aviso-demo-formulario.html` | 1 |
+
+El HTML de la raíz se rehizo con `node scripts/build-site.js`. **No se
+editó HTML generado a mano**, y `build-site.js --check` lo confirma. El
+diff del HTML son exactamente seis líneas, todas el mismo cambio de
+`href`; `politica-de-privacidad.html` no cambió, porque la página no se
+enlaza a sí misma.
+
+`vercel.json` **no se tocó**: los redirects permanentes de
+`/politica-privacidad` y `/politica-privacidad.html` quedan como estaban.
+
+### Los guards siguieron a la fuente
+
+Un cambio así falla de la peor manera si los guards se ajustan para que
+pasen. Tres estaban afirmando lo viejo, y ninguno se debilitó:
+
+- **`build-site.test.js`** exigía que cada página *contuviera* la cadena
+  `politica-de-privacidad.html`. Ahora exige la URL limpia **y además
+  rechaza las dos formas con extensión**. Es más estricto que antes: lo
+  que impide que las dos direcciones vuelvan a convivir.
+- **`politica-dialogo.test.js`** comprueba el destino del enlace sin
+  JavaScript y el que el diálogo ofrece hacia la página completa.
+- **`tests/test_assets_de_marca.py`** resolvía cada referencia local
+  contra un archivo del repositorio. Una URL limpia no es un archivo, así
+  que habría dado referencia rota. **Exceptuar las rutas absolutas habría
+  ablandado el guard para todas**; en cambio ahora sigue el `rewrite` de
+  `vercel.json` y comprueba el archivo real. Una URL limpia inventada,
+  sin rewrite que la respalde, sigue fallando — y se verificó
+  inyectándola.
+- **`tests/test_configuracion_y_secretos.py`** verificaba el origen y el
+  destino de los dos redirects, pero **no que fueran permanentes**. La
+  permanencia es justo la propiedad que traslada la dirección publicada
+  en vez de dejarla viva. Ahora se exige `permanent: true`.
+
+### Verificación en negativo — 3/3
+
+| Defecto inyectado | Detectado |
+|---|---|
+| Una plantilla vuelve a enlazar el archivo con extensión | Sí |
+| Una página enlaza una URL limpia sin `rewrite` que la respalde | Sí |
+| El redirect de la dirección vieja deja de ser permanente | Sí |
+
+### Lo que no se hizo
+
+No se agregó `<link rel="canonical">`. **No existe soporte de canonical
+en el proyecto**: ninguna plantilla ni el generador lo emiten, y la
+página de la política no declara hoy ninguna URL propia — `og:url` solo
+está en la home. Introducirlo sería arquitectura nueva, fuera de una
+corrección de enlaces.
+
+### Alcance respecto de audit-3
+
+`audit-3` aprobó el árbol `d4c84c4`. Esta corrección es **posterior** y
+toca producto: el HTML servido cambia. Se declara como tal, sin
+presentarla como cubierta por la auditoría. Lo que cambia es el valor de
+seis atributos `href` hacia una dirección que el propio despliegue ya
+servía y que la documentación ya declaraba canónica; no cambia contenido,
+estilos, comportamiento del diálogo, la API, la configuración ni la
+infraestructura.
+
+### Suites
+
+| | |
+|---|---|
+| `npm test` | **337 / 337** |
+| `pytest` | **150 / 150** |
+| `mkdocs build --strict` | OK, 0 warnings |
+| `node scripts/build-site.js --check` | OK |
+| `Assert-FeatureContract` sin `-Title` | OK |
