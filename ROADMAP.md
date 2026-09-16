@@ -1,4 +1,4 @@
-# Roadmap: gi-clinicadental
+﻿# Roadmap: gi-clinicadental
 
 Cada feature nueva se implementa siguiendo el circuito agéntico de
 [AGENTS.md](AGENTS.md): Analyst → Reviewer → Builder → QA →
@@ -53,7 +53,7 @@ circuito AI-Native encima.
 
 ## Backlog (circuito `AGENTS.md`)
 
-- [-] adopcion-template-v2 — Adoptar Template v2.0.0 como capa de gobernanza y herramientas sin modificar el producto 1.0.1 (work unit 17; no consume un número de hito).
+- [x] adopcion-template-v2 — Adoptar Template v2.0.0 como capa de gobernanza y herramientas sin modificar el producto 1.0.1 (work unit 17; no consume un número de hito).
 
 - [ ] 01-formulario-leads-real — Conectar `#leadForm` a un destino real
       (definir en la spec: email transaccional, CRM o base de datos +
@@ -133,5 +133,6 @@ documentacion tecnica y de usuario, PR y HITL-, con la rama
 `feature/vX.Y.Z-<slug>`.
 
 - [x] v1.0.1-identidad-privacidad-white-label — Release de mantenimiento v1.0.1: corregir la marca publica a "Sonría más" en todas las superficies (HTML, metadatos, Open Graph, alt y correos transaccionales); parametrizar el sitio como white-label desde `config/clinic.json` con validacion explicita de la configuracion; permitir leer la politica de privacidad sin salir del formulario ni perder los datos, conservando la pagina independiente en `/politica-de-privacidad`; separar la plantilla legal estable de los datos variables del cliente con un interruptor `demoMode`; y dejar preparada la integracion de imagenes fotograficas reales, cuya produccion requiere intervencion humana.
+
 
 
