@@ -1,0 +1,3 @@
+# Perfil v2: proveedor y modelo son reemplazables.
+model = "gpt-5.5"
+model_reasoning_effort = "high"

@@ -5,3 +5,7 @@
 !*-agent.config.toml
 !prompts/
 !prompts/*.md
+!planner.md
+!planner.config.toml
+!builder.md
+!reviewer.md

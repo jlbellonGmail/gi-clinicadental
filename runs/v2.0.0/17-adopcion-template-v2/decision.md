@@ -17,4 +17,7 @@ OpenCode, no siete reintentos técnicos de npm. El contador no se reinició.
 La convergencia FULL ejecutó iteraciones 1 y 2 con hallazgos y la iteración 3
 terminó `FAILED_SAFELY`/`BLOCKED` por gates externos pendientes. Las
 correcciones se hicieron entre ciclos Builder–Reviewer; el Reviewer final fue
-APPROVED con cero hallazgos de implementación.
+APPROVED con cero hallazgos de implementación. Posteriormente, el fallo CI de
+adaptadores produjo `attempt 8` (rejected) y su corrección fue reauditada como
+`attempt 9` (approved); esos ciclos adicionales se conservan y no alteran el
+cómputo histórico de los siete ciclos iniciales.
