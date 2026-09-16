@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "version": "",
+  "mode": "feature",
+  "unitId": "17-adopcion-template-v2",
+  "canonicalSlug": "17-adopcion-template-v2",
+  "branch": "feature/17-adopcion-template-v2",
+  "worktree": "C:/Proyectos/worktrees/17-adopcion-template-v2",
+  "runPath": "runs/v2.0.0/17-adopcion-template-v2",
+  "baseCommit": "28d27456fc802710231e21386e83fc6d920c58ef",
+  "currentHead": "28d27456fc802710231e21386e83fc6d920c58ef",
+  "originDevelop": "28d27456fc802710231e21386e83fc6d920c58ef",
+  "lifecycle": "ACTIVE",
+  "pr": null,
+  "staleEvidence": [],
+  "workingTreeDirty": true,
+  "headMeaning": "base commit; uncommitted adoption changes are intentionally isolated",
+  "provenance": {"templateVersion":"v2.0.0","templateCommit":"f5d4b6cc029c34c0d0c05831bfd28134276fa167"},
+  "productVersion": "1.0.1"
+}

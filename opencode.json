@@ -1,43 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
-
-  // Reglas normativas del repo + reglas modulares (ver .claude/rules/).
-  "instructions": ["AGENTS.md", ".claude/rules/*.md"],
-
-  // Modelo global por defecto (fallback si algun agente primario no
-  // define el suyo). Valor de ejemplo: ajustar al proveedor real
-  // disponible (Anthropic, OpenRouter, etc.) antes de usar opencode.
-  "model": "anthropic/claude-sonnet-4-5",
-
+  "instructions": ["AGENTS.md", "CONSTITUTION.md", ".claude/rules/*.md"],
+  "model": "replaceable/provider-model",
   "agent": {
-    // --- analyst-agent: read-only, razonamiento alto ---
-    "analyst-agent": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "permission": { "edit": "deny", "bash": "deny", "webfetch": "deny" }
-    },
-
-    // --- reviewer-agent: read-only, razonamiento alto ---
-    "reviewer-agent": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "permission": { "edit": "deny", "bash": "deny", "webfetch": "deny" }
-    },
-
-    // --- builder-agent: write completo, razonamiento alto ---
-    "builder-agent": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "permission": { "edit": "allow", "bash": "allow" }
-    },
-
-    // --- qa-agent: write (solo tests), razonamiento medio ---
-    "qa-agent": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "permission": { "edit": "allow", "bash": "allow" }
-    }
+    "planner": {"mode":"subagent","prompt":"{file:./.agentic/roles/planner.md}","permission":{"edit":"deny","bash":"deny","webfetch":"deny"}},
+    "builder": {"mode":"subagent","prompt":"{file:./.agentic/roles/builder.md}","permission":{"edit":"allow","bash":"allow"}},
+    "reviewer": {"mode":"primary","prompt":"{file:./.agentic/roles/reviewer.md}","permission":{"edit":"deny","bash":"deny","webfetch":"deny","external_directory":"allow"}}
   },
-
-  "mcp": {
-    "servers": {
-      "enabled": false
-    }
-  }
+  "mcp": {"servers": {}}
 }

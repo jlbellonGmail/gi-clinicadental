@@ -4,13 +4,15 @@ param(
 
     # Opcional: si no se pasa, sale del titulo canonico declarado en
     # scripts/feature-titles.json, y si tampoco esta ahi, del slug.
-    [string] $Title = ""
+    [string] $Title = "",
+
+    [string] $Version = ""
 )
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "feature-contract.ps1")
 
-$info = Get-FeatureInfo -Slug $Slug -Title $Title
+$info = Get-FeatureInfo -Slug $Slug -Title $Title -Version $Version
 $changed = $false
 
 # Preflight de ambos indices antes de escribir. Evita que un indice quede

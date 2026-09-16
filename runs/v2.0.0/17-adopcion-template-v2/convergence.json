@@ -1,0 +1,10 @@
+﻿{
+    "schemaVersion":  1,
+    "convergence":  "CONVERGENCE",
+    "depth":  "FULL",
+    "iteration":  3,
+    "maxIterations":  6,
+    "reviewerVerdict":  "BLOCKED",
+    "state":  "FAILED_SAFELY",
+    "terminal":  true
+}

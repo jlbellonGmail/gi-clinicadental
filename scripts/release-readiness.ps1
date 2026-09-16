@@ -1,0 +1,3 @@
+[CmdletBinding()]
+param([Parameter(Mandatory=$true)][string]$Version,[string]$CandidateBranch='develop',[string]$TargetBranch='main',[switch]$DryRun)
+$ErrorActionPreference='Stop';if($Version -notmatch '^v\d+\.\d+\.\d+$'){throw 'Version debe ser SemVer vMAJOR.MINOR.PATCH'};if($CandidateBranch -eq $TargetBranch){throw 'La candidata no puede ser main'};$head=git rev-parse $CandidateBranch;[ordered]@{version=$Version;candidate=$CandidateBranch;target=$TargetBranch;candidateHead=$head;dryRun=[bool]$DryRun;action=if($DryRun){'no tag, no release, no push'}else{'not authorized in this adoption'}}|ConvertTo-Json

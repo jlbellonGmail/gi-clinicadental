@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "catalog": {
+    "builder-default": {"provider": "openai", "model": "gpt-5.5", "variant": "medium"},
+    "reviewer-high-full": {"provider": "openai", "model": "gpt-5.6-luna", "variant": "medium"}
+  },
+  "selection": {
+    "builder": "builder-default",
+    "reviewer": "reviewer-high-full"
+  },
+  "roles": {
+    "planner": {"selection": "builder-default"},
+    "builder": {"selection": "builder-default"},
+    "reviewer": {"selection": "reviewer-high-full"}
+  },
+  "availability": {
+    "source": "OpenCode local provider discovery; OpenAI OAuth credential present",
+    "verified": ["openai/gpt-5.5", "openai/gpt-5.6-luna", "openai/gpt-5.6-luna-fast"],
+    "reviewerOptions": {"variant": "medium", "mcp": "disabled"}
+  }
+}

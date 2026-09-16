@@ -7,7 +7,9 @@ param(
 
     # Escape hatch para el titulo canonico de la documentacion cuando la
     # etapa no tiene entrada en scripts/feature-titles.json.
-    [string] $DocTitle = ""
+    [string] $DocTitle = "",
+
+    [string] $Version = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -161,7 +163,7 @@ $currentBranch = Get-CheckedOutput "git" @("branch", "--show-current")
 # resultante no coincidia con ningun indice y el contrato fallaba.
 # Ahora son dos cosas distintas: $prTitle es de la PR, y el de la
 # documentacion sale del registro canonico (o de -DocTitle).
-$info = Get-FeatureInfo -Slug $Slug -Title $docTitle
+$info = Get-FeatureInfo -Slug $Slug -Title $docTitle -Version $Version
 
 if ($currentBranch -eq $baseBranch -or $currentBranch -eq "main") {
     throw "Este script debe correr en una rama de feature, no en $currentBranch."
@@ -204,7 +206,7 @@ else {
     Invoke-Checked "git" @("commit", "-m", "docs: marcar $Slug como ready for PR")
 }
 
-Assert-FeatureContract -Slug $Slug -Title $info.Title -RequireReadyRoadmap
+Assert-FeatureContract -Slug $Slug -Title $info.Title -Version $Version -RequireReadyRoadmap
 
 Write-Host "==> Pusheando $currentBranch..."
 Invoke-Checked "git" @("push", "-u", "origin", $currentBranch)
