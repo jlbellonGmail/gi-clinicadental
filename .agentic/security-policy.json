@@ -1,0 +1,6 @@
+{
+  "mcp": "disabled",
+  "secrets": "never-commit",
+  "remoteMutation": "disabled",
+  "reviewer": {"readOnly": true, "autofix": false}
+}

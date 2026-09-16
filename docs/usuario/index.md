@@ -52,6 +52,8 @@ hide:
 
 <!-- FEATURE_LINKS_START -->
 
+- [Adopción Template v2.0.0](adopcion-template-v2.md)
+
 - [Redisenio Estetico Y Assets](redisenio-estetico-y-assets.md)
 - [Configuración de variables de entorno](configuracion-variables-entorno.md)
 - [Inicialización del esquema Supabase](inicializacion-supabase-schema.md)

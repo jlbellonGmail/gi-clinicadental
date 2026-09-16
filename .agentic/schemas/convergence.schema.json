@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schemaVersion", "convergence", "depth", "state", "terminal"],
+  "properties": {"schemaVersion": {"type": "integer"}, "convergence": {"const": "CONVERGENCE"}, "depth": {"enum": ["LIGHT", "STANDARD", "FULL"]}, "state": {"enum": ["CONTINUE", "APPROVED", "FAILED_SAFELY"]}, "terminal": {"type": "boolean"}}
+}

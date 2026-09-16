@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "generatedNotice": "Fuente canónica de roles; los adaptadores se regeneran.",
+  "roles": {
+    "planner": {"prompt": ".agentic/roles/planner.md", "readOnly": true, "capabilities": ["assess", "sdd", "routing"]},
+    "builder": {"prompt": ".agentic/roles/builder.md", "readOnly": false, "capabilities": ["implementation", "evidence", "lifecycle"]},
+    "reviewer": {"prompt": ".agentic/roles/reviewer.md", "readOnly": true, "capabilities": ["audit", "convergence"]}
+  },
+  "adapters": {
+    "claude": {"roleDirectory": ".claude/agents", "status": "compatibility-wrapper"},
+    "codex": {"roleDirectory": ".codex", "status": "compatibility-wrapper"},
+    "opencode": {"roleDirectory": ".opencode/agent", "status": "compatibility-wrapper"}
+  }
+}

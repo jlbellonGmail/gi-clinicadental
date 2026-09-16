@@ -24,10 +24,11 @@ Profiles:
 | Role | Model | Reasoning effort |
 | --- | --- | --- |
 | `analyst-agent` | `gpt-5.5` | `high` |
-| `reviewer-agent` | `gpt-5.5` | `high` |
+| `reviewer-agent` | `gpt-5.6-luna` | `medium` |
 | `builder-agent` | `gpt-5.5` | `high` |
 | `qa-agent` | `gpt-5.5` | `medium` |
 
 The Main Agent delegates by selecting the matching profile and piping the
-matching prompt. Codex profiles provide reproducible model and reasoning
-settings; the role boundaries and circuit rules remain in `AGENTS.md`.
+matching prompt. For this adoption the effective Reviewer selection is
+centralized in `.agentic/models.json`; this legacy profile remains compatible
+and does not define a second normative role.

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schemaVersion", "catalog", "selection"],
+  "properties": {"schemaVersion": {"type": "integer"}, "catalog": {"type": "object"}, "selection": {"type": "object"}}
+}

@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schemaVersion", "roles", "adapters"],
+  "properties": {"schemaVersion": {"type": "integer"}, "roles": {"type": "object"}, "adapters": {"type": "object"}}
+}

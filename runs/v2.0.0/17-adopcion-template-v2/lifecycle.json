@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "action": "inspect-and-reconcile",
+  "unitId": "17-adopcion-template-v2",
+  "branch": "feature/17-adopcion-template-v2",
+  "baseCommit": "28d27456fc802710231e21386e83fc6d920c58ef",
+  "originDevelop": "28d27456fc802710231e21386e83fc6d920c58ef",
+  "baseVerified": true,
+  "pr": null,
+  "reconcile": "RECONCILE_REQUIRED",
+  "cleanup": "not executed; requires merged PR and authorization",
+  "remoteMutation": "disabled",
+  "lifecycle": "ACTIVE"
+}

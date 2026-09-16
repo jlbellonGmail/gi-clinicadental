@@ -291,7 +291,7 @@ Los índices no se tocaron. Era el título derivado el que estaba peor.
 ## 9. Las páginas fuera de `nav` de MkDocs
 
 `mkdocs build --strict` termina **en verde, con cero warnings**. Lo que
-emite es un mensaje de nivel `INFO` que lista las 37 páginas de
+emite es un mensaje de nivel `INFO` que lista las 39 páginas de
 `docs/tecnica/` y `docs/usuario/` como ausentes de `nav`. `--strict`
 convierte *warnings* en errores; un `INFO` no lo es.
 
@@ -310,11 +310,11 @@ Lo que sí se hizo fue convertir el `INFO` pasivo en un guard activo.
 esté enlazada desde el índice de su área — la discoverability real, que
 es lo que `nav` daría.
 
-**Reparto exacto de las 37 páginas:**
+**Reparto exacto de las 39 páginas:**
 
 | | páginas |
 |---|---|
-| Enlazadas desde su índice, alcanzables | 35 |
+| Enlazadas desde su índice, alcanzables | 37 |
 | Sin enlace en ningún lado | 2 |
 
 Las dos inalcanzables son `docs/tecnica/landing.md` y

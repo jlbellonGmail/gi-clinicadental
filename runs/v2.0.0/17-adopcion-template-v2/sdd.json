@@ -1,0 +1,28 @@
+﻿{
+    "schemaVersion":  1,
+    "sdd":  "adaptive",
+    "depth":  "FULL",
+    "steps":  [
+                  "objective",
+                  "planning",
+                  "spec",
+                  "plan",
+                  "tasks",
+                  "validations",
+                  "build",
+                  "tests",
+                  "review",
+                  "gates"
+              ],
+    "requiredEvidence":  [
+                             "SUMMARY.md",
+                             "spec",
+                             "plan",
+                             "tasks",
+                             "decision",
+                             "audit",
+                             "test-evidence",
+                             "review",
+                             "gates"
+                         ]
+}

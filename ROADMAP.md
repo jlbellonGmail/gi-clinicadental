@@ -53,6 +53,8 @@ circuito AI-Native encima.
 
 ## Backlog (circuito `AGENTS.md`)
 
+- [ ] adopcion-template-v2 — Adoptar Template v2.0.0 como capa de gobernanza y herramientas sin modificar el producto 1.0.1 (work unit 17; no consume un número de hito).
+
 - [ ] 01-formulario-leads-real — Conectar `#leadForm` a un destino real
       (definir en la spec: email transaccional, CRM o base de datos +
       validación server-side + qué pasa con los datos personales/de
