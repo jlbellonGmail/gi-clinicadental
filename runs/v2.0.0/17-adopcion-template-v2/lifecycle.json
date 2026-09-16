@@ -12,7 +12,7 @@
   "postMergeCI": "PASS",
   "automaticClose": "failed: roadmap slug mismatch; recovered through approved lifecycle invocation",
   "reconcile": "COMPLETED",
-  "cleanup": "pending local cleanup after verification",
+  "cleanup": "COMPLETED: adoption worktree and local branch removed; evidence preserved",
   "remoteMutation": "disabled",
-  "lifecycle": "CLOSED_PENDING_CLEANUP"
+  "lifecycle": "CLOSED"
 }

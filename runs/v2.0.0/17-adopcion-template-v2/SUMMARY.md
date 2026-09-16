@@ -1,6 +1,6 @@
 # SUMMARY — 17-adopcion-template-v2
 
-Estado: CLOSED; integración y cierre operativo completados.
+Estado: CLOSED; integración, cierre operativo y cleanup completados.
 
 Objetivo: adoptar gobernanza, herramientas y evidencias de Template v2 sin
 alterar el producto `1.0.1`.
