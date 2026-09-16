@@ -6,9 +6,13 @@
   "baseCommit": "28d27456fc802710231e21386e83fc6d920c58ef",
   "originDevelop": "28d27456fc802710231e21386e83fc6d920c58ef",
   "baseVerified": true,
-  "pr": null,
-  "reconcile": "RECONCILE_REQUIRED",
-  "cleanup": "not executed; requires merged PR and authorization",
+  "pr": 54,
+  "mergeCommit": "629fa70d029f97a1cab8f4f5dbc8624ecba34711",
+  "roadmapClosureCommit": "b244c98",
+  "postMergeCI": "PASS",
+  "automaticClose": "failed: roadmap slug mismatch; recovered through approved lifecycle invocation",
+  "reconcile": "COMPLETED",
+  "cleanup": "pending local cleanup after verification",
   "remoteMutation": "disabled",
-  "lifecycle": "ACTIVE"
+  "lifecycle": "CLOSED_PENDING_CLEANUP"
 }
