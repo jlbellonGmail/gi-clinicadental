@@ -13,6 +13,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "identity-contract.ps1")
+
 function Invoke-Checked {
     param(
         [Parameter(Mandatory = $true)]
@@ -242,6 +244,7 @@ if ($currentDir.StartsWith($WorktreeDir, [System.StringComparison]::OrdinalIgnor
 }
 
 Confirm-PrMergedIntoBase -GitHubCliPath $ghPath -Branch $Branch -PrNumber $PrNumber -BaseBranch $baseBranch
+Assert-WorkUnitIdentity -Slug $Slug -Branch $Branch -RepositoryRoot $repoRoot
 
 Assert-CleanWorktree "antes de actualizar $baseBranch"
 

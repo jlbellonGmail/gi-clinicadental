@@ -71,6 +71,7 @@ hide:
 - [Solicitudes que necesitan revision](estado-comunicacion-leads.md)
 - [Validación del MVP en producción](validacion-mvp-produccion.md)
 - [Identidad, privacidad y white-label](identidad-privacidad-white-label.md)
+- [Validar identidad de work units en lifecycle](validacion-identidad-lifecycle.md)
 
 <!-- FEATURE_LINKS_END -->
 

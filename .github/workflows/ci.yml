@@ -31,6 +31,9 @@ jobs:
       - name: Integridad agentic
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-integrity.ps1
 
+      - name: Identidad de unidades
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/validate-unit-identities.ps1
+
       - name: Sincronización de adaptadores
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/sync-agentic-adapters.ps1 -Check
 

@@ -1,5 +1,7 @@
 ﻿$ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "identity-contract.ps1")
+
 function Get-RepositoryRoot {
     $root = (& git rev-parse --show-toplevel) -join "`n"
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($root)) {
@@ -414,6 +416,8 @@ function Assert-FeatureContract {
     Assert-IndexLink -IndexPath $info.UserIndex -TargetPath $info.UserDoc -Title $info.Title
 
     if ($RequireReadyRoadmap) {
+        $currentBranch = ((& git branch --show-current) -join "`n").Trim()
+        Assert-WorkUnitIdentity -Slug $Slug -Branch $currentBranch -RunPath $info.RunDir -RoadmapState ready
         $roadmap = Get-Content -LiteralPath "ROADMAP.md" -Raw -Encoding UTF8
         $escapedSlug = [regex]::Escape($Slug)
         $readyCount = [regex]::Matches($roadmap, "(?m)^- \[-\] $escapedSlug(?=\s|$).*").Count
