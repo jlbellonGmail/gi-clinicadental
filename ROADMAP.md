@@ -1,4 +1,4 @@
-# Roadmap: gi-clinicadental
+﻿# Roadmap: gi-clinicadental
 
 Cada feature nueva se implementa siguiendo el circuito agéntico de
 [AGENTS.md](AGENTS.md): Analyst → Reviewer → Builder → QA →
@@ -59,7 +59,7 @@ dominio se preservaron al adoptar el circuito.
 
 - [x] 18-validacion-identidad-lifecycle — Validar de forma común la identidad entre rama, manifiesto, run y ROADMAP sin modificar el producto.
 
-- [ ] 19-planificacion-producto-v2 — Planificar el siguiente ciclo funcional del producto v2, sin implementar funcionalidades en esta unidad de transición.
+- [-] 19-planificacion-producto-v2 — Planificar el siguiente ciclo funcional del producto v2, sin implementar funcionalidades en esta unidad de transición.
 
 ### Mapa funcional previsto de ClínicaDental v2
 
@@ -162,6 +162,7 @@ documentacion tecnica y de usuario, PR y HITL-, con la rama
 `feature/vX.Y.Z-<slug>`.
 
 - [x] v1.0.1-identidad-privacidad-white-label — Release de mantenimiento v1.0.1: corregir la marca publica a "Sonría más" en todas las superficies (HTML, metadatos, Open Graph, alt y correos transaccionales); parametrizar el sitio como white-label desde `config/clinic.json` con validacion explicita de la configuracion; permitir leer la politica de privacidad sin salir del formulario ni perder los datos, conservando la pagina independiente en `/politica-de-privacidad`; separar la plantilla legal estable de los datos variables del cliente con un interruptor `demoMode`; y dejar preparada la integracion de imagenes fotograficas reales, cuya produccion requiere intervencion humana.
+
 
 
 
