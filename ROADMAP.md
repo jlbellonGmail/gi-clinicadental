@@ -57,6 +57,8 @@ circuito AI-Native encima.
 
 - [x] 18-validacion-identidad-lifecycle — Validar de forma común la identidad entre rama, manifiesto, run y ROADMAP sin modificar el producto.
 
+- [ ] 19-planificacion-producto-v2 — Planificar el siguiente ciclo funcional del producto v2, sin implementar funcionalidades en esta unidad de transición.
+
 - [ ] 01-formulario-leads-real — Conectar `#leadForm` a un destino real
       (definir en la spec: email transaccional, CRM o base de datos +
       validación server-side + qué pasa con los datos personales/de
