@@ -173,6 +173,9 @@ if (-not $currentBranch.StartsWith("feature/")) {
     throw "La rama actual debe empezar con 'feature/'. Rama actual: $currentBranch"
 }
 
+# La identidad debe validarse antes de cualquier cambio en ROADMAP.
+Assert-WorkUnitIdentity -Slug $Slug -Branch $currentBranch -RunPath (Get-FeatureInfo -Slug $Slug -Version $Version).RunDir
+
 & git diff --quiet
 $unstagedStatus = $LASTEXITCODE
 & git diff --cached --quiet
