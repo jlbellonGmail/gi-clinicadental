@@ -29,9 +29,9 @@ Reemplazar todos los placeholders por información institucional validada de Son
 - Íconos de redes sociales en footer deben tener mismo tamaño y alineación visual.
 
 ## Evidencia
-- `runs/10-actualizacion-datos-contacto/spec.md`
-- `runs/10-actualizacion-datos-contacto/audit-1.md`
-- `runs/10-actualizacion-datos-contacto/decision.md`
+- `runs/v1.0.0-producto/10-actualizacion-datos-contacto/spec.md`
+- `runs/v1.0.0-producto/10-actualizacion-datos-contacto/audit-1.md`
+- `runs/v1.0.0-producto/10-actualizacion-datos-contacto/decision.md`
 - `index.html` modificado con todos los cambios arriba descritos.
 
 ## Riesgos

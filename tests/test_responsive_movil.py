@@ -1,6 +1,6 @@
 """Guardas de regresión del responsive móvil.
 
-Origen: `runs/16-validacion-mvp-produccion/test-report-4.md`. La
+Origen: `runs/v1.0.0-producto/16-validacion-mvp-produccion/test-report-4.md`. La
 validación V12 en un teléfono real falló: la barra de navegación no cabía
 en el viewport, el título del hero se cortaba y el formulario quedaba
 demasiado angosto.

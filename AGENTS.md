@@ -5,12 +5,12 @@
 Las unidades nuevas usan `.agentic/` como fuente canónica de roles, modelos,
 MCP y schemas. Los roles canónicos son Planner, Builder y Reviewer; los
 artefactos y scripts legacy se conservan únicamente para leer y cerrar runs
-históricos. La convención canónica para un hito nuevo es `Feature` sin
-versión de producto: rama `feature/<NN>-<slug>` y artefactos en
-`runs/<NN>-<slug>/`. Las releases de mantenimiento usan explícitamente
-`feature/vX.Y.Z-<slug>` y `runs/vX.Y.Z-<slug>/`. La adopción histórica 17
-conserva su ruta anterior `runs/v2.0.0/17-adopcion-template-v2/` por
-trazabilidad; no es el formato para nuevas unidades.
+históricos. La convención canónica para una unidad nueva es
+`runs/<version>-<tipo>/<NN>-<slug>/`, con `tipo` `producto` o `gobernanza`;
+la rama continúa siendo `feature/<NN>-<slug>` para hitos. Las correcciones de
+mantenimiento conservan `feature/vX.Y.Z-<slug>` y se clasifican bajo
+`runs/vX.Y.Z-<tipo>/<NN>-<slug>/`. La adopción histórica 17 se normaliza como
+`runs/v1.0.2-gobernanza/17-adopcion-template-v2/`.
 
 `CONSTITUTION.md` contiene principios estables y `STATUS.md` resume la
 reentrada. ASSESS determina de forma reproducible LIGHT, STANDARD o FULL;
@@ -100,7 +100,7 @@ estado correcto de `ROADMAP.md`, rama `feature/<NN>-<slug>`, PR contra
 1. `analyst-agent` (read-only, subagente, sesión nueva) → produce `spec.md`.
    El spec SIEMPRE debe incluir como criterios de aceptación la creación
    de `docs/tecnica/<slug>.md`, `docs/usuario/<slug>.md`,
-   `runs/<NN>-<slug>/decision.md`, y enlaces exactos en
+   `runs/<version>-<tipo>/<NN>-<slug>/decision.md`, y enlaces exactos en
    `docs/tecnica/index.md` y `docs/usuario/index.md`.
 2. `reviewer-agent` (read-only, subagente, sesión nueva) → produce
    `audit-N.md` con veredicto `approved` o `rejected`. Rechaza
@@ -110,7 +110,7 @@ estado correcto de `ROADMAP.md`, rama `feature/<NN>-<slug>`, PR contra
 3. Si `approved` → `builder-agent` (write, subagente, en worktree propio)
    → implementa el código Y escribe `docs/tecnica/<slug>.md` y
    `docs/usuario/<slug>.md` como parte de terminar la feature, no aparte.
-   También crea `runs/<NN>-<slug>/decision.md` con decisiones demostrables
+   También crea `runs/<version>-<tipo>/<NN>-<slug>/decision.md` con decisiones demostrables
    desde spec/auditoría/implementación, y ejecuta
    `scripts/update-doc-indexes.ps1 <NN>-<slug> "<Titulo>"`.
 4. `qa-agent` (write, subagente, mismo worktree) → corre tests (pytest y
@@ -262,7 +262,7 @@ merge solo puede quedar pendiente `[ ]` o `READY_FOR_PR` `[-]`.
 
 ## Artefactos
 
-Cada ciclo de feature genera su carpeta en `runs/<NN>-<slug>/` con:
+Cada ciclo de feature genera su carpeta en `runs/<version>-<tipo>/<NN>-<slug>/` con:
 
 - `spec.md`
 - `audit-N.md` (uno por intento del reviewer-agent)
@@ -366,7 +366,7 @@ reglas desde `.codex/prompts/*.md`.
   el job de deploy empieza a ejecutarse en la siguiente corrida.
 
   Contexto completo en `docs/tecnica/validacion-mvp-produccion.md` y
-  `runs/16-validacion-mvp-produccion/decision.md`.
+  `runs/v1.0.0-producto/16-validacion-mvp-produccion/decision.md`.
 - **Rama `develop`**: se crea en esta misma migración a partir de `main`
   (que contiene el baseline de la landing page existente). Quedan
   sincronizadas hasta la primera feature nueva.

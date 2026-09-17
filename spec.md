@@ -54,8 +54,8 @@ Crear un conjunto completo de pruebas automatizadas que cubran: migraciones de b
 - `spec.md` - Este archivo
 - `docs/tecnica/13-pruebas-integrales-y-seguridad.md` - Documentación técnica detallada
 - `docs/usuario/13-pruebas-integrales-y-seguridad.md` - Documentación de usuario
-- `runs/13-pruebas-integrales-y-seguridad/decision.md` - Decisiones del circuito
-- `runs/13-pruebas-integrales-y-seguridad/audit-1.md` - Veredicto del revisor
-- `runs/13-pruebas-integrales-y-seguridad/test-report-1.md` - Reporte de QA
+- `runs/v1.0.0-producto/13-pruebas-integrales-y-seguridad/decision.md` - Decisiones del circuito
+- `runs/v1.0.0-producto/13-pruebas-integrales-y-seguridad/audit-1.md` - Veredicto del revisor
+- `runs/v1.0.0-producto/13-pruebas-integrales-y-seguridad/test-report-1.md` - Reporte de QA
 - Enlaces exactos en `docs/tecnica/index.md` y `docs/usuario/index.md`
 - Todos los tests existentes en `api/leads.test.js` deben seguir pasando (158/158)

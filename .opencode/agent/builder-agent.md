@@ -19,7 +19,7 @@ conectes formularios a endpoints reales sin que el spec lo declare.
 
 Cubrí cada criterio de aceptación y caso borde. Escribí
 `docs/tecnica/<slug>.md` y `docs/usuario/<slug>.md` como parte de
-terminar la feature, ninguno vacío. Creá `runs/<NN>-<slug>/decision.md` y
+terminar la feature, ninguno vacío. Creá `runs/<version>-<tipo>/<NN>-<slug>/decision.md` y
 ejecutá `scripts/update-doc-indexes.ps1`; la validación vive en
 `scripts/feature-contract.ps1`.
 

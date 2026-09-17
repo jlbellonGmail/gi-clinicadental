@@ -266,7 +266,7 @@ release. En los logs se reconoce por `lead_rechazado` con
 ## Qué se valida en Production
 
 Doce comprobaciones (V1-V12) descritas en
-`runs/16-validacion-mvp-produccion/spec.md`, más dos negativos de bajo
+`runs/v1.0.0-producto/16-validacion-mvp-produccion/spec.md`, más dos negativos de bajo
 impacto:
 
 - `GET /api/leads` → **405 `metodo_no_permitido`**. Sirve además como
@@ -355,12 +355,12 @@ Los extractos de logs incluidos como evidencia llevan `request_id` y
 
 ## Referencias
 
-- Spec: `runs/16-validacion-mvp-produccion/spec.md`
-- Auditorías: `runs/16-validacion-mvp-produccion/audit-1.md` (candidato) y
+- Spec: `runs/v1.0.0-producto/16-validacion-mvp-produccion/spec.md`
+- Auditorías: `runs/v1.0.0-producto/16-validacion-mvp-produccion/audit-1.md` (candidato) y
   `audit-2.md` (evidencia)
-- Reportes: `runs/16-validacion-mvp-produccion/test-report-1.md`
+- Reportes: `runs/v1.0.0-producto/16-validacion-mvp-produccion/test-report-1.md`
   (preflight) y `test-report-2.md` (Production)
-- Decisiones: `runs/16-validacion-mvp-produccion/decision.md`
+- Decisiones: `runs/v1.0.0-producto/16-validacion-mvp-produccion/decision.md`
 - Documentación de usuario:
   [Validación del MVP en producción](../usuario/validacion-mvp-produccion.md)
 - `docs/tecnica/pipeline-despliegue-vercel.md` — flujo de despliegue,

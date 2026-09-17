@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "routing": "ADAPTIVE",
-  "assessment": "runs/v2.0.0/17-adopcion-template-v2/assess.jsonl",
+  "assessment": "runs/v1.0.2-gobernanza/17-adopcion-template-v2/assess.jsonl",
   "depth": "FULL",
   "roles": {"planner": "planning", "builder": "implementation", "reviewer": "independent-audit"},
   "fallback": "stop-and-report; no provider fallback is automatic",

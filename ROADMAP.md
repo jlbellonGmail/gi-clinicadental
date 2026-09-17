@@ -4,7 +4,7 @@ Cada feature nueva se implementa siguiendo el circuito agéntico de
 [AGENTS.md](AGENTS.md): Analyst → Reviewer → Builder → QA →
 `[-] READY_FOR_PR` → PR → CI verde → HITL (único punto de aprobación
 humana) → Merge → `[x]`, con su carpeta de evidencia en
-`runs/<NN>-<slug>/` y su documentación en `docs/tecnica/<slug>.md` +
+`runs/<version>-<tipo>/<NN>-<slug>/` y su documentación en `docs/tecnica/<slug>.md` +
 `docs/usuario/<slug>.md`.
 
 Este archivo refleja el estado **verificado** del proyecto (código
@@ -105,7 +105,7 @@ tests, auditoría y cierre conforme a `AGENTS.md`.
    desde `develop` para cambiar `[-]` → `[x]`, commitear y pushear a
    `origin/develop`.
 5. Al arrancar una feature se usa el número/slug de este archivo para
-   crear `runs/<NN>-<slug>/` y la rama `feature/<NN>-<slug>` (en worktree
+   crear `runs/<version>-<tipo>/<NN>-<slug>/` y la rama `feature/<NN>-<slug>` (en worktree
    propio bajo `../worktrees/<slug>/`).
 
 **Patrón del ítem**: `NN` (dos dígitos, numeración secuencial), `slug` en

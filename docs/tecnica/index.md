@@ -75,6 +75,7 @@ hide:
 - [Identidad, privacidad y white-label](identidad-privacidad-white-label.md)
 - [Validar identidad de work units en lifecycle](validacion-identidad-lifecycle.md)
 - [Planificación funcional de ClínicaDental v2](planificacion-producto-v2.md)
+- [Organización de runs por versión](organizacion-runs-por-version.md)
 
 <!-- FEATURE_LINKS_END -->
 

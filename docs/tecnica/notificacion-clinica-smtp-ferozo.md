@@ -4,7 +4,7 @@ Extiende `api/leads.js` (features `03-endpoint-recepcion-leads` y
 `04-proteccion-antispam-y-abuso`, ya mergeadas) para que, tras un
 `INSERT` nuevo exitoso, se envíe una notificación HTML por email a la
 clínica usando Nodemailer contra el SMTP de Ferozo. Spec completo:
-`runs/05-notificacion-clinica-smtp-ferozo/spec.md` (19 criterios de
+`runs/v1.0.0-producto/05-notificacion-clinica-smtp-ferozo/spec.md` (19 criterios de
 aceptación, aprobado en `audit-2.md` tras un intento inicial rechazado en
 `audit-1.md` por ambigüedad sobre el origen de `fecha_creacion` y falta
 de cobertura explícita de header injection).

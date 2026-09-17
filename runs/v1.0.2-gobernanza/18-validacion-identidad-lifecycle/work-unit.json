@@ -6,10 +6,10 @@
   "canonicalSlug": "18-validacion-identidad-lifecycle",
   "branch": "feature/18-validacion-identidad-lifecycle",
   "worktree": "C:/Proyectos/worktrees/18-validacion-identidad-lifecycle",
-  "runPath": "runs/18-validacion-identidad-lifecycle",
+  "runPath": "runs/v1.0.2-gobernanza/18-validacion-identidad-lifecycle",
   "baseCommit": "9e0b4bda3f9df810d3a67a4ab15794821b50a026",
   "currentHead": "9e0b4bda3f9df810d3a67a4ab15794821b50a026",
-  "lifecycle": "ACTIVE",
+  "lifecycle": "CLOSED",
   "provenance": {"purpose": "maintenance of lifecycle identity validation"},
   "productVersion": "1.0.1"
 }

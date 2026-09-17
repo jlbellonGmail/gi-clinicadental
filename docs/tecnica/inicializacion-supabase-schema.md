@@ -51,7 +51,7 @@ depende enteramente de que nunca llegue al cliente/frontend/logs (ver
 
 Se aplicó la migración contra una instancia Postgres real (Docker,
 `postgres:16`) y se verificó con consultas reales — ver
-`runs/02-inicializacion-supabase-schema/test-report-1.md` para la
+`runs/v1.0.0-producto/02-inicializacion-supabase-schema/test-report-1.md` para la
 evidencia completa (comandos y salida capturada).
 
 ## Riesgos / notas técnicas

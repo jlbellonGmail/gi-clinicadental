@@ -17,7 +17,7 @@ estático — HTML/CSS/JS sin build — o declarativo — SQL, `.env.example`).
   exporte un handler se convierte en un endpoint; los archivos bajo
   `api/_lib/` quedan excluidos de ese routing por la convención de
   prefijo `_`, ver criterio 21 de
-  `runs/03-endpoint-recepcion-leads/spec.md`).
+  `runs/v1.0.0-producto/03-endpoint-recepcion-leads/spec.md`).
 - **Por qué ahora**: sin este endpoint no hay nada a lo que conectar el
   formulario (`index.html`/`script.js`) en la feature `08`. Es el primer
   paso indispensable del backend objetivo que `AGENTS.md` ya declaraba
@@ -147,7 +147,7 @@ que es peor: el lead ya está insertado.
   producción en `package.json`, con `package-lock.json` actualizado en
   consecuencia (`npm install nodemailer`, reproducible con `npm ci`).
   Feature `05-notificacion-clinica-smtp-ferozo`
-  (`runs/05-notificacion-clinica-smtp-ferozo/spec.md`).
+  (`runs/v1.0.0-producto/05-notificacion-clinica-smtp-ferozo/spec.md`).
 - **Por qué esta librería**: es el cliente de correo saliente Node.js más
   usado y estable del ecosistema, ya documentado como parte del stack
   objetivo del proyecto en `AGENTS.md` desde antes de esta feature

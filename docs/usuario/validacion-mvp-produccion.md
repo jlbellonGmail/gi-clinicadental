@@ -130,7 +130,7 @@ Tres señales, en este orden:
    una persona, nunca un agente, y sólo cuando se cumplen las tres
    condiciones: producción validada, auditoría independiente aprobada y
    HITL 2 aprobado.
-3. En `runs/16-validacion-mvp-produccion/` están el reporte de la prueba
+3. En `runs/v1.0.0-producto/16-validacion-mvp-produccion/` están el reporte de la prueba
    real (`test-report-2.md`), las capturas y el documento de decisiones.
 
 Si falta cualquiera de las tres, **el MVP no está cerrado**, por más que

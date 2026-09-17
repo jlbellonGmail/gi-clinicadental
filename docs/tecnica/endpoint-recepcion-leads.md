@@ -7,7 +7,7 @@ no los exponga como rutas — criterio 21 del spec):
 `05`/`06` de Nodemailer; **no se invoca desde ningún flujo de email en
 esta feature**, porque ese flujo todavía no existe).
 
-Spec completo: `runs/03-endpoint-recepcion-leads/spec.md` (30 criterios
+Spec completo: `runs/v1.0.0-producto/03-endpoint-recepcion-leads/spec.md` (30 criterios
 de aceptación, aprobado en `audit-3.md`).
 
 ## Orden de evaluación de validaciones
@@ -33,7 +33,7 @@ el primer error que encuentra, sin evaluar los pasos restantes
    Este paso **no** forma parte de los 9 pasos numerados del criterio 3
    del spec (ese criterio solo ordena las validaciones de contenido del
    body) — es una decisión de implementación de este builder, documentada
-   en `runs/03-endpoint-recepcion-leads/decision.md`: se ubica
+   en `runs/v1.0.0-producto/03-endpoint-recepcion-leads/decision.md`: se ubica
    inmediatamente después de confirmar el método `POST` y antes de leer
    el body, para no gastar ciclos parseando contenido de un cliente ya
    limitado y para que una ráfaga con body inválido también cuente
@@ -158,7 +158,7 @@ no disparan `tipo_invalido`), porque la columna en Supabase acepta
 Para los campos **obligatorios** (`nombre`, `email`,
 `version_politica_privacidad`), `null` explícito sí dispara
 `tipo_invalido` (ya cubierto por el ejemplo del propio criterio 9 del
-spec). Ver `runs/03-endpoint-recepcion-leads/decision.md` para el
+spec). Ver `runs/v1.0.0-producto/03-endpoint-recepcion-leads/decision.md` para el
 detalle de esta decisión.
 
 ## Mapeo campo → columna (criterio 16)

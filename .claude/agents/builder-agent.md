@@ -34,7 +34,7 @@ validar. No abras un checkpoint nuevo.
   casos borde) y `docs/usuario/<slug>.md` (propósito, cómo verlo/usarlo)
   como parte de terminar la feature — no es un paso aparte ni opcional.
   Ninguno de los dos puede quedar vacío.
-- Creá `runs/<NN>-<slug>/decision.md` con decisiones demostrables y ejecutá
+- Creá `runs/<version>-<tipo>/<NN>-<slug>/decision.md` con decisiones demostrables y ejecutá
   `scripts/update-doc-indexes.ps1` para enlazar ambos documentos desde los
   índices sin duplicados.
 - Si el spec resulta inviable o ambiguo de un modo que el reviewer no

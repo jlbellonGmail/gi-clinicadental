@@ -8,10 +8,10 @@ PRs relevantes: #54, #55, #56, #57 y #58. Los CI aplicables pasaron; los Preview
 
 ## Siguiente punto de entrada
 
-`19-planificacion-producto-v2` contiene la planificación funcional documentada y tiene HITL aprobado; queda pendiente de PR, CI y merge para su cierre automático. El siguiente trabajo de construcción propuesto es `20-fundacion-tenancy-identidad`; no hay funcionalidades nuevas aprobadas ni implementadas por esta unidad.
+`19-planificacion-producto-v2` está cerrada con planificación funcional documentada, PR #61 integrada y ROADMAP en `[x]`. Sus evidencias se normalizan bajo `runs/v2.0.0-producto/`; el siguiente trabajo de construcción propuesto es `20-fundacion-tenancy-identidad`, aún no iniciado.
 
 ## Guía docente breve
 
 El flujo operativo es Planner → Builder → Reviewer: Planner produce la unidad y su alcance; Builder implementa y conserva evidencias; Reviewer independiente audita en solo lectura. ASSESS selecciona LIGHT, STANDARD o FULL según riesgo y rutas afectadas. Cada reentrada conserva el estado y los intentos. Los gates distinguen pruebas locales, auditoría, CI remoto y verificaciones post-merge; el único control humano es la aceptación de la PR lista.
 
-Práctica aislada: crea una unidad documental temporal con rama y worktree propios, registra su identidad en ROADMAP, `work-unit.json` y `runs/<unitId>/`, ejecuta ASSESS, documenta una pequeña corrección, audítala en solo lectura y justifica el cierre sólo cuando la identidad sea única, el CI pase y no haya cleanup pendiente. Introduce deliberadamente una divergencia entre rama y manifiesto; verifica que gate y cierre rechacen sin escribir ni limpiar recursos.
+Práctica aislada: crea una unidad documental temporal con rama y worktree propios, registra su identidad en ROADMAP, `work-unit.json` y `runs/<version>-<tipo>/<NN>-<slug>/`, ejecuta ASSESS, documenta una pequeña corrección, audítala en solo lectura y justifica el cierre sólo cuando la identidad sea única, el CI pase y no haya cleanup pendiente. Introduce deliberadamente una divergencia entre rama y manifiesto; verifica que gate y cierre rechacen sin escribir ni limpiar recursos.

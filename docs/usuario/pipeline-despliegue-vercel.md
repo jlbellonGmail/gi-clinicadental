@@ -155,8 +155,8 @@ R: No. La configuración es una sola vez (este pipeline). Nuevas features solo r
 
 ## Referencias
 
-- Spec: `runs/14-pipeline-despliegue-vercel/spec.md`
-- Auditoría: `runs/14-pipeline-despliegue-vercel/audit-1.md`
-- Decisiones: `runs/14-pipeline-despliegue-vercel/decision.md`
+- Spec: `runs/v1.0.0-producto/14-pipeline-despliegue-vercel/spec.md`
+- Auditoría: `runs/v1.0.0-producto/14-pipeline-despliegue-vercel/audit-1.md`
+- Decisiones: `runs/v1.0.0-producto/14-pipeline-despliegue-vercel/decision.md`
 - Documentación técnica: `docs/tecnica/14-pipeline-despliegue-vercel.md`
 - AGENTS.md: Sección "Circuito" paso 8 (HITL único)
