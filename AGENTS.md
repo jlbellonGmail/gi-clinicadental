@@ -1,5 +1,23 @@
 # Proyecto: gi-clinicadental
 
+## Adopción operativa de Template v2.0.0
+
+Las unidades nuevas usan `.agentic/` como fuente canónica de roles, modelos,
+MCP y schemas. Los roles canónicos son Planner, Builder y Reviewer; los
+artefactos y scripts legacy se conservan únicamente para leer y cerrar runs
+históricos. La unidad de adopción usa `Feature` sin versión de producto:
+`feature/17-adopcion-template-v2`, con procedencia Template v2.0.0 en
+`runs/v2.0.0/17-adopcion-template-v2/`.
+
+`CONSTITUTION.md` contiene principios estables y `STATUS.md` resume la
+reentrada. ASSESS determina de forma reproducible LIGHT, STANDARD o FULL;
+esta adopción es FULL por afectar automatización, gobernanza y CI. El Reviewer
+permanece independiente y el merge sigue requiriendo decisión humana.
+
+La compatibilidad legacy no habilita una segunda normativa: sus nombres son
+aliases de migración y sus runs no se reescriben. MCP queda vacío y no se
+crean Skills durante esta adopción.
+
 Sitio web de captación de pacientes para una clínica dental: landing
 page informativa con formulario de contacto/leads. Hoy es 100% estático
 (HTML/CSS/JS sin build ni framework); el backend real de captación de

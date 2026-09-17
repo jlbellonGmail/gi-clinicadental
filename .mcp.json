@@ -1,0 +1,4 @@
+{
+  "$schema": "./.agentic/schemas/mcp.schema.json",
+  "servers": {}
+}

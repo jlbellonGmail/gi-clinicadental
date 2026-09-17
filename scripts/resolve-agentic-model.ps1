@@ -1,0 +1,3 @@
+[CmdletBinding()]
+param([Parameter(Mandatory=$true)][ValidateSet('planner','builder','reviewer')][string]$Role)
+$root=git rev-parse --show-toplevel;$data=Get-Content (Join-Path $root '.agentic/models.json') -Raw|ConvertFrom-Json;$entry=$data.roles.$Role;if(!$entry){throw "Rol no configurado: $Role"};$key=$entry.selection;if(!$key){throw "Selección no configurada: $Role"};$selected=$data.catalog.$key;if(!$selected){throw "Catálogo no configurado: $key"};[ordered]@{role=$Role;selection=$key;provider=$selected.provider;model=$selected.model;variant=$selected.variant;source='.agentic/models.json'}|ConvertTo-Json

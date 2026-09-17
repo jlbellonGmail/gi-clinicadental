@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schemaVersion", "version", "mode", "unitId", "canonicalSlug", "branch", "baseCommit", "lifecycle", "provenance", "productVersion"],
+  "properties": {"schemaVersion": {"const": 2}, "version": {"type": "string"}, "mode": {"enum": ["feature", "maintenance"]}, "lifecycle": {"enum": ["ACTIVE", "READY_FOR_PR", "MERGED", "CLOSED"]}, "productVersion": {"type": "string"}}
+}

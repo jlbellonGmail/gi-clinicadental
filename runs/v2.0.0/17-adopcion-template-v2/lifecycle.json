@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "action": "inspect-and-reconcile",
+  "unitId": "17-adopcion-template-v2",
+  "branch": "feature/17-adopcion-template-v2",
+  "baseCommit": "28d27456fc802710231e21386e83fc6d920c58ef",
+  "originDevelop": "28d27456fc802710231e21386e83fc6d920c58ef",
+  "baseVerified": true,
+  "pr": 54,
+  "mergeCommit": "629fa70d029f97a1cab8f4f5dbc8624ecba34711",
+  "roadmapClosureCommit": "b244c98",
+  "postMergeCI": "PASS",
+  "automaticClose": "failed: roadmap slug mismatch; recovered through approved lifecycle invocation",
+  "reconcile": "COMPLETED",
+  "cleanup": "COMPLETED: adoption worktree and local branch removed; evidence preserved",
+  "remoteMutation": "disabled",
+  "lifecycle": "CLOSED"
+}

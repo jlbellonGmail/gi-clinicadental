@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import shutil
 import stat
@@ -111,11 +112,12 @@ def make_case(tmp_path: Path, roadmap: str, gh_state: str = "MERGED", gh_base: s
     return repo, remote, worktree, bin_dir
 
 
-def close_feature(repo: Path, worktree: Path, bin_dir: Path):
+def close_feature(repo: Path, worktree: Path, bin_dir: Path, skip_cleanup: bool = False):
+    cleanup_arg = " -SkipLocalCleanup" if skip_cleanup else ""
     command = (
         "$ErrorActionPreference = 'Stop'; "
         "try { "
-        f"& {ps_quote(SCRIPT)} -Slug {ps_quote(SLUG)} -WorktreeDir {ps_quote(worktree)}; "
+        f"& {ps_quote(SCRIPT)} -Slug {ps_quote(SLUG)} -WorktreeDir {ps_quote(worktree)}{cleanup_arg}; "
         "exit $LASTEXITCODE "
         "} catch { "
         "[Console]::Error.WriteLine($_.Exception.Message); "
@@ -207,6 +209,40 @@ def test_pending_feature_fails_because_only_ready_can_be_closed(tmp_path: Path):
     assert result.returncode != 0
     assert "no esta en READY_FOR_PR" in exception_message(result)
     assert_not_cleaned(repo, worktree)
+
+
+def test_identity_contradiction_fails_before_roadmap_write_and_cleanup(tmp_path: Path):
+    repo, _, worktree, bin_dir = make_case(tmp_path, f"- [-] {SLUG} - Validacion\n")
+    manifest_dir = repo / "runs" / SLUG
+    manifest_dir.mkdir(parents=True)
+    (manifest_dir / "work-unit.json").write_text(json.dumps({
+        "unitId": SLUG,
+        "canonicalSlug": "06-otro",
+        "branch": BRANCH,
+        "runPath": f"runs/{SLUG}",
+    }), encoding="utf-8")
+    result = close_feature(repo, worktree, bin_dir)
+    assert result.returncode != 0
+    assert f"- [-] {SLUG}" in roadmap(repo, "origin/develop")
+    assert_not_cleaned(repo, worktree)
+
+
+def test_skip_local_cleanup_preserves_worktree_after_valid_close(tmp_path: Path):
+    repo, _, worktree, bin_dir = make_case(tmp_path, f"- [-] {SLUG} - Validacion\n")
+    manifest_dir = repo / "runs" / SLUG
+    manifest_dir.mkdir(parents=True)
+    (manifest_dir / "work-unit.json").write_text(json.dumps({
+        "unitId": SLUG,
+        "canonicalSlug": SLUG,
+        "branch": BRANCH,
+        "runPath": f"runs/{SLUG}",
+    }), encoding="utf-8")
+    git(repo, "add", "runs/06-patente/work-unit.json")
+    git(repo, "commit", "-m", "fixture work unit")
+    result = close_feature(repo, worktree, bin_dir, skip_cleanup=True)
+    assert result.returncode == 0, captured_output(result)
+    assert f"- [x] {SLUG}" in roadmap(repo, "origin/develop")
+    assert worktree.exists()
 
 
 def test_pr_not_merged_fails_before_cleanup(tmp_path: Path):

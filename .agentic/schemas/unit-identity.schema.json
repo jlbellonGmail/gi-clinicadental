@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schemaVersion", "version", "mode", "unitId", "canonicalSlug", "branch", "worktree", "runPath", "baseCommit", "currentHead"],
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "version": {"type": "string"},
+    "mode": {"enum": ["feature", "milestone", "maintenance"]},
+    "unitId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$"},
+    "canonicalSlug": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$"},
+    "branch": {"type": "string", "minLength": 1},
+    "worktree": {"type": "string", "minLength": 1},
+    "runPath": {"type": "string", "minLength": 1},
+    "baseCommit": {"type": "string", "minLength": 1},
+    "currentHead": {"type": "string", "minLength": 1},
+    "lifecycle": {"enum": ["ACTIVE", "RECONCILE_REQUIRED", "PR_OPEN", "MERGED", "CLOSING", "CLOSED", "RESIDUAL_WINDOWS", "BLOCKED"]}
+  },
+  "additionalProperties": true
+}

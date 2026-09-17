@@ -52,6 +52,8 @@ hide:
 
 <!-- FEATURE_LINKS_START -->
 
+- [Adopción Template v2.0.0](adopcion-template-v2.md)
+
 - [Redisenio Estetico Y Assets](redisenio-estetico-y-assets.md)
 - [Configuración de variables de entorno](configuracion-variables-entorno.md)
 - [Inicialización del esquema Supabase](inicializacion-supabase-schema.md)
@@ -69,6 +71,7 @@ hide:
 - [Solicitudes que necesitan revision](estado-comunicacion-leads.md)
 - [Validación del MVP en producción](validacion-mvp-produccion.md)
 - [Identidad, privacidad y white-label](identidad-privacidad-white-label.md)
+- [Validar identidad de work units en lifecycle](validacion-identidad-lifecycle.md)
 
 <!-- FEATURE_LINKS_END -->
 

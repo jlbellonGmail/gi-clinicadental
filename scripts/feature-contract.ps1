@@ -1,5 +1,7 @@
 ﻿$ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "identity-contract.ps1")
+
 function Get-RepositoryRoot {
     $root = (& git rev-parse --show-toplevel) -join "`n"
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($root)) {
@@ -80,7 +82,9 @@ function Get-FeatureInfo {
         [Parameter(Mandatory = $true)]
         [string] $Slug,
 
-        [string] $Title = ""
+        [string] $Title = "",
+
+        [string] $Version = ""
     )
 
     # Dos formas validas de identificar una etapa:
@@ -119,12 +123,12 @@ function Get-FeatureInfo {
         Number = $Matches["number"]
         DocSlug = $docSlug
         Title = $Title
-        RunDir = "runs/$Slug"
+        RunDir = if ($Version) { "runs/$Version/$Slug" } else { "runs/$Slug" }
         TechnicalDoc = "docs/tecnica/$docSlug.md"
         UserDoc = "docs/usuario/$docSlug.md"
         TechnicalIndex = "docs/tecnica/index.md"
         UserIndex = "docs/usuario/index.md"
-        Decision = "runs/$Slug/decision.md"
+        Decision = if ($Version) { "runs/$Version/$Slug/decision.md" } else { "runs/$Slug/decision.md" }
     }
 }
 
@@ -256,6 +260,8 @@ function Update-DocsIndex {
         [Parameter(Mandatory = $true)]
         [string] $Title,
 
+        [string] $Version = "",
+
         [switch] $ValidateOnly
     )
 
@@ -335,7 +341,7 @@ function New-DecisionFile {
         [string[]] $Decisions
     )
 
-    $info = Get-FeatureInfo -Slug $Slug -Title $Title
+    $info = Get-FeatureInfo -Slug $Slug -Title $Title -Version $Version
     if (-not (Test-Path -LiteralPath $info.RunDir -PathType Container)) {
         New-Item -ItemType Directory -Path $info.RunDir | Out-Null
     }
@@ -383,10 +389,12 @@ function Assert-FeatureContract {
 
         [string] $Title = "",
 
+        [string] $Version = "",
+
         [switch] $RequireReadyRoadmap
     )
 
-    $info = Get-FeatureInfo -Slug $Slug -Title $Title
+    $info = Get-FeatureInfo -Slug $Slug -Title $Title -Version $Version
     Assert-NonEmptyFile $info.Decision
     Assert-NonEmptyFile "$($info.RunDir)/spec.md"
     Assert-NonEmptyFile $info.TechnicalDoc
@@ -408,6 +416,8 @@ function Assert-FeatureContract {
     Assert-IndexLink -IndexPath $info.UserIndex -TargetPath $info.UserDoc -Title $info.Title
 
     if ($RequireReadyRoadmap) {
+        $currentBranch = ((& git branch --show-current) -join "`n").Trim()
+        Assert-WorkUnitIdentity -Slug $Slug -Branch $currentBranch -RunPath $info.RunDir -RoadmapState ready
         $roadmap = Get-Content -LiteralPath "ROADMAP.md" -Raw -Encoding UTF8
         $escapedSlug = [regex]::Escape($Slug)
         $readyCount = [regex]::Matches($roadmap, "(?m)^- \[-\] $escapedSlug(?=\s|$).*").Count

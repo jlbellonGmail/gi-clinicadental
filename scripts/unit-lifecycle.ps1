@@ -1,0 +1,6 @@
+[CmdletBinding()]
+param([Parameter(Mandatory=$true)][ValidateSet('inspect','reconcile','cleanup')][string]$Action,[string]$RunPath='', [string]$Slug='', [ValidateSet('Feature','Maintenance')][string]$Mode='Feature', [string]$Version='', [string]$Branch='', [string]$BaseCommit='', [int]$PrNumber=0)
+$ErrorActionPreference='Stop';$root=git rev-parse --show-toplevel;$path=Join-Path $root $RunPath;$manifest=Join-Path $path 'work-unit.json';if(!(Test-Path $manifest)){throw "Manifest ausente: $manifest"};$u=Get-Content $manifest -Raw|ConvertFrom-Json
+if($Action -eq 'inspect'){$head=(git rev-parse HEAD).Trim();$origin=(git rev-parse origin/develop).Trim();& git merge-base --is-ancestor $u.baseCommit origin/develop; $ancestor=($LASTEXITCODE -eq 0);[ordered]@{action='inspect';unitId=$u.unitId;mode=$u.mode;branch=$u.branch;worktree=$u.worktree;runPath=$u.runPath;baseCommit=$u.baseCommit;currentHead=$head;originDevelop=$origin;baseIsAncestorOfOriginDevelop=$ancestor;pr=$u.pr;staleEvidence=$u.staleEvidence;workingTreeDirty=$u.workingTreeDirty;lifecycle=$u.lifecycle}|ConvertTo-Json;exit 0}
+if($Action -eq 'reconcile'){[ordered]@{action='reconcile';result='RECONCILE_REQUIRED';reason='PR/merge remoto no verificado; no se modifica Git local'}|ConvertTo-Json;exit 0}
+throw 'cleanup requiere una futura operación autorizada con verificación de PR mergeada y worktree limpio.'
