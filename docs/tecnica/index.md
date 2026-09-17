@@ -73,7 +73,7 @@ hide:
 - [Estado de comunicacion de los leads](estado-comunicacion-leads.md)
 - [Validación del MVP en producción](validacion-mvp-produccion.md)
 - [Identidad, privacidad y white-label](identidad-privacidad-white-label.md)
-- [Validación de identidad del lifecycle](validacion-identidad-lifecycle.md)
+- [Validar identidad de work units en lifecycle](validacion-identidad-lifecycle.md)
 
 <!-- FEATURE_LINKS_END -->
 
