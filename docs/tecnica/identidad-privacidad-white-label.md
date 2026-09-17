@@ -310,11 +310,11 @@ Lo que sí se hizo fue convertir el `INFO` pasivo en un guard activo.
 esté enlazada desde el índice de su área — la discoverability real, que
 es lo que `nav` daría.
 
-**Reparto exacto de las 41 páginas:**
+**Reparto exacto de las 43 páginas:**
 
 | | páginas |
 |---|---|
-| Enlazadas desde su índice, alcanzables | 39 |
+| Enlazadas desde su índice, alcanzables | 41 |
 | Sin enlace en ningún lado | 2 |
 
 Las dos inalcanzables son `docs/tecnica/landing.md` y

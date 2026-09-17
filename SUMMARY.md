@@ -8,7 +8,7 @@ PRs relevantes: #54, #55, #56, #57 y #58. Los CI aplicables pasaron; los Preview
 
 ## Siguiente punto de entrada
 
-`19-planificacion-producto-v2` sigue pendiente (`[ ]`). El siguiente trabajo es ejecutar ASSESS y planificar el producto v2; no hay funcionalidades nuevas aprobadas ni implementadas por esta transición.
+`19-planificacion-producto-v2` contiene la planificación funcional documentada y tiene HITL aprobado; queda pendiente de PR, CI y merge para su cierre automático. El siguiente trabajo de construcción propuesto es `20-fundacion-tenancy-identidad`; no hay funcionalidades nuevas aprobadas ni implementadas por esta unidad.
 
 ## Guía docente breve
 
