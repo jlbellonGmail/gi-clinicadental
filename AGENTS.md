@@ -5,9 +5,12 @@
 Las unidades nuevas usan `.agentic/` como fuente canónica de roles, modelos,
 MCP y schemas. Los roles canónicos son Planner, Builder y Reviewer; los
 artefactos y scripts legacy se conservan únicamente para leer y cerrar runs
-históricos. La unidad de adopción usa `Feature` sin versión de producto:
-`feature/17-adopcion-template-v2`, con procedencia Template v2.0.0 en
-`runs/v2.0.0/17-adopcion-template-v2/`.
+históricos. La convención canónica para un hito nuevo es `Feature` sin
+versión de producto: rama `feature/<NN>-<slug>` y artefactos en
+`runs/<NN>-<slug>/`. Las releases de mantenimiento usan explícitamente
+`feature/vX.Y.Z-<slug>` y `runs/vX.Y.Z-<slug>/`. La adopción histórica 17
+conserva su ruta anterior `runs/v2.0.0/17-adopcion-template-v2/` por
+trazabilidad; no es el formato para nuevas unidades.
 
 `CONSTITUTION.md` contiene principios estables y `STATUS.md` resume la
 reentrada. ASSESS determina de forma reproducible LIGHT, STANDARD o FULL;
@@ -19,9 +22,11 @@ aliases de migración y sus runs no se reescriben. MCP queda vacío y no se
 crean Skills durante esta adopción.
 
 Sitio web de captación de pacientes para una clínica dental: landing
-page informativa con formulario de contacto/leads. Hoy es 100% estático
-(HTML/CSS/JS sin build ni framework); el backend real de captación de
-leads todavía no existe (ver "Estado actual" en `ROADMAP.md`).
+page informativa con formulario de contacto/leads. El frontend continúa
+siendo HTML/CSS/JS sin framework ni build; el backend actual de captación
+es una función serverless Node en `api/leads.js` respaldada por Supabase y
+correo SMTP. La evolución integral de gestión clínica sigue siendo futura
+(ver "Estado actual" en `ROADMAP.md`).
 
 ## Stack
 

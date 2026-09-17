@@ -19,12 +19,13 @@ clínica (email, CRM o base de datos — a definir).
 
 ---
 
-## Estado actual verificado (2026-08-19)
+## Estado actual verificado (2026-09-17)
 
-No había Git inicializado hasta esta migración. El repo llegó como 3
-archivos sueltos (`index.html`, `style.css`, `script.js`): una landing
-page completa y funcional **a nivel visual**, verificada por lectura
-directa del código:
+El baseline histórico llegó como 3 archivos sueltos (`index.html`,
+`style.css`, `script.js`): una landing page completa y funcional **a nivel
+visual**. Desde entonces se incorporaron el backend de captación, Supabase,
+correo transaccional, pruebas, CI y tooling; la planificación de v2 debe
+partir del estado implementado actual, no de aquella fotografía histórica:
 
 - Hero, stats, 6 tarjetas de servicios, sección de equipo, formulario de
   contacto (nombre/email/servicio/mensaje), footer.
@@ -35,19 +36,20 @@ directa del código:
 Gaps verificados (ver [docs/tecnica/landing.md](docs/tecnica/landing.md)
 para el detalle):
 
-- **El formulario de contacto está simulado** (`setTimeout` en
-  `script.js`, comentario literal `// Simulate API call`): ningún lead
-  se guarda ni se envía a ningún lado. Es el gap más importante para un
-  MVP operable real.
+- **El formulario actual ya tiene captación implementada**: `script.js`
+  usa `fetch('/api/leads')` y `api/leads.js` valida y persiste leads en
+  Supabase, con correo y estados de comunicación. La evolución pendiente es
+  convertir esa captación aislada en gestión integral de clínica.
 - 3 imágenes referenciadas en `index.html` no existen en el repo
   (rotas).
 - Datos de contacto (teléfono, dirección, email) y enlaces de footer
   son placeholders de plantilla, no verificados como reales.
 
-No hay backend, no hay tests de producto, no había CI. Se preservó el
-código existente sin modificarlo (commit baseline
-`chore(baseline): landing page estática existente`), y se agregó el
-circuito AI-Native encima.
+El backend actual sólo resuelve captación de leads; no hay todavía usuarios,
+pacientes, agenda, mensajería multicanal, historia clínica, finanzas, chatbot
+ni voz. Los tests de producto existentes cubren la API y el frontend; CI
+ejecuta además los tests del circuito. El código público y las reglas de
+dominio se preservaron al adoptar el circuito.
 
 ---
 
@@ -58,6 +60,28 @@ circuito AI-Native encima.
 - [x] 18-validacion-identidad-lifecycle — Validar de forma común la identidad entre rama, manifiesto, run y ROADMAP sin modificar el producto.
 
 - [ ] 19-planificacion-producto-v2 — Planificar el siguiente ciclo funcional del producto v2, sin implementar funcionalidades en esta unidad de transición.
+
+### Mapa funcional previsto de ClínicaDental v2
+
+Estas unidades son planificación futura; todas permanecen pendientes y no
+implican funcionalidad implementada. Cada una tendrá su propio spec, ASSESS,
+tests, auditoría y cierre conforme a `AGENTS.md`.
+
+- [ ] 20-fundacion-tenancy-identidad — Aislar clínicas y sedes, autenticar usuarios y aplicar roles/autorización; incluye contexto de clínica, identidad, mínimo privilegio y auditoría; depende de ninguna unidad v2.
+- [ ] 21-configuracion-operativa-clinica — Administrar sedes, consultorios, servicios, especialidades, horarios, duraciones, restricciones y canales; depende de 20.
+- [ ] 22-profesionales-pacientes-administrativos — Gestionar perfiles profesionales y fichas administrativas de pacientes, preferencias y consentimientos; depende de 20–21.
+- [ ] 23-agenda-central-y-disponibilidad — Crear la fuente única de disponibilidad con horarios, bloqueos, ausencias, sedes, consultorios y duración; depende de 21–22.
+- [ ] 24-casos-de-uso-de-turnos — Reservar, confirmar, reprogramar, cancelar y gestionar espera con persistencia, idempotencia y trazabilidad; depende de 23.
+- [ ] 25-reserva-web-y-recepcion — Exponer reserva directa mediante web y recepción usando los mismos casos de uso y reglas de agenda; depende de 24.
+- [ ] 26-captacion-seguimiento-bandeja — Convertir consultas en pacientes, turnos y tareas con origen, responsable, prioridad y próxima acción; depende de 22 y 24.
+- [ ] 27-mensajeria-y-recordatorios — Relacionar correo y futuros canales con paciente, consulta y turno, registrando entrega, errores, reintentos y derivación; depende de 24 y 26.
+- [ ] 28-historia-clinica-y-consentimientos — Separar y proteger historia, evolución, diagnósticos y consentimientos clínicos; depende de 20 y 22.
+- [ ] 29-odontograma-tratamientos — Añadir odontograma, planes y tratamientos con versionado, permisos y trazabilidad; depende de 28.
+- [ ] 30-documentos-clinicos — Custodiar imágenes, documentos, recetas y adjuntos con acceso temporal, backups, retención y recuperación; depende de 28–29.
+- [ ] 31-panel-operativo — Mostrar agenda diaria, consultas, tareas, cancelaciones, ausencias, espera e incidencias autorizadas; depende de 24, 26 y 27.
+- [ ] 32-chatbot-administrativo — Responder información aprobada y operar reservas mediante el núcleo común, con derivación humana y sin diagnóstico; depende de 24, 26 y 27.
+- [ ] 33-asistente-telefonico — Reutilizar el núcleo por voz para información, turnos, transferencias y tareas, sin reglas exclusivas de voz; depende de 32 y 27.
+- [ ] 34-finanzas-integradas — Evaluar pagos, facturación, conciliación y ledger como dominio separado de la historia clínica; depende de 22, 24 y 29.
 
 - [ ] 01-formulario-leads-real — Conectar `#leadForm` a un destino real
       (definir en la spec: email transaccional, CRM o base de datos +
@@ -129,8 +153,9 @@ minúsculas con guiones, seguido de `—` y descripción corta en español.
 
 Correcciones y mejoras sobre una version ya liberada. **No consumen un
 numero de hito**: se identifican por la version que preparan. El roadmap
-de hitos sigue su propia numeracion, y H17 en adelante pertenece a la
-v2.0.0.
+de hitos sigue su propia numeracion, y los hitos 17 en adelante pertenecen al
+roadmap del producto v2; eso no es una versión del Template ni una release
+del producto.
 
 Siguen el mismo circuito que un hito -spec, auditoria, QA, `decision.md`,
 documentacion tecnica y de usuario, PR y HITL-, con la rama

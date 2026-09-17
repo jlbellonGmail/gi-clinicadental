@@ -72,6 +72,7 @@ hide:
 - [Validación del MVP en producción](validacion-mvp-produccion.md)
 - [Identidad, privacidad y white-label](identidad-privacidad-white-label.md)
 - [Validar identidad de work units en lifecycle](validacion-identidad-lifecycle.md)
+- [Planificación funcional de ClínicaDental v2](planificacion-producto-v2.md)
 
 <!-- FEATURE_LINKS_END -->
 
