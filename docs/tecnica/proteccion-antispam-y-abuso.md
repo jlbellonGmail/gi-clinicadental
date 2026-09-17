@@ -2,7 +2,7 @@
 
 Extiende `api/leads.js` (feature `03-endpoint-recepcion-leads`, ya
 mergeada) sin romper ninguno de sus criterios ya documentados en
-`docs/tecnica/endpoint-recepcion-leads.md`. Spec completo: `runs/04-
+`docs/tecnica/endpoint-recepcion-leads.md`. Spec completo: `runs/v1.0.0-producto/04-
 proteccion-antispam-y-abuso/spec.md` (23 criterios de aceptación,
 aprobado en `audit-2.md` tras un intento inicial rechazado en
 `audit-1.md`).

@@ -12,7 +12,7 @@ sin tener que volver a preguntar nada esencial.
 
 No escribís código. No modificás archivos. Solo leés el repo existente
 (`index.html`, `style.css`, `script.js`, `docs/`) y escribís `spec.md` en
-`runs/<NN>-<slug>/`.
+`runs/<version>-<tipo>/<NN>-<slug>/`.
 
 Si este es tu segundo o tercer intento (viene con feedback de un
 `audit-N.md` previo), tu primera prioridad es resolver cada punto de ese
@@ -61,7 +61,7 @@ Reglas duras:
 - Cada criterio de aceptación tiene que ser verificable.
 - Los dos criterios de documentación (`docs/tecnica/` y `docs/usuario/`)
   son obligatorios en todo spec, sin excepción.
-- También son obligatorios `runs/<NN>-<slug>/decision.md` y los enlaces
+- También son obligatorios `runs/<version>-<tipo>/<NN>-<slug>/decision.md` y los enlaces
   exactos en `docs/tecnica/index.md` y `docs/usuario/index.md`.
 - Si el pedido es ambiguo, no preguntes — tomá la decisión más razonable,
   documentala en "Riesgos / supuestos", y seguí.

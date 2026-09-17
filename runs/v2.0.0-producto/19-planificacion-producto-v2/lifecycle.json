@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "action": "inspect-and-reconcile",
+  "unitId": "19-planificacion-producto-v2",
+  "branch": "feature/19-planificacion-producto-v2",
+  "baseCommit": "35737852297ee7d02c7f2e8023d1ff4e5b423b46",
+  "originDevelop": "35737852297ee7d02c7f2e8023d1ff4e5b423b46",
+  "baseVerified": true,
+  "pr": 61,
+  "mergeCommit": "dbb20fd1ab5023e58d9beb4bd867423f969838b0",
+  "roadmapClosureCommit": "afbdc3ce809d2a5e9f31252564336cff9e891fe0",
+  "postMergeCI": "PASS",
+  "automaticClose": "COMPLETED",
+  "reconcile": "COMPLETED",
+  "cleanup": "COMPLETED: feature branch and worktree removed after integration",
+  "remoteMutation": "disabled",
+  "lifecycle": "CLOSED"
+}

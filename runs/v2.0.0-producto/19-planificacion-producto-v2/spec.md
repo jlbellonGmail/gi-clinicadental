@@ -30,8 +30,8 @@ releases ni cambios en main, Template, secretos o infraestructura.
 
 1. `docs/tecnica/planificacion-producto-v2.md` contiene baseline, brechas, mapa funcional, dependencias, roadmap, primera unidad, riesgos, decisiones confirmadas, pendientes y criterios.
 2. `docs/usuario/planificacion-producto-v2.md` explica el alcance y el siguiente flujo sin presentar planificación como funcionalidad existente.
-3. `runs/19-planificacion-producto-v2/decision.md` registra decisiones demostrables y el modo SDD obtenido por ASSESS.
-4. `runs/19-planificacion-producto-v2/work-unit.json` mantiene identidad exacta entre ROADMAP, rama, unitId, canonicalSlug y runPath, sin usar `v2.0.0` como versión de producto.
+3. `runs/v2.0.0-producto/19-planificacion-producto-v2/decision.md` registra decisiones demostrables y el modo SDD obtenido por ASSESS.
+4. `runs/v2.0.0-producto/19-planificacion-producto-v2/work-unit.json` mantiene identidad exacta entre ROADMAP, rama, unitId, canonicalSlug y runPath, sin usar `v2.0.0` como versión de producto.
 5. Los índices técnico y de usuario contienen un enlace exacto a la documentación.
 6. Cada unidad futura tiene criterios verificables, evidencias esperadas y condición de cierre.
 7. La revisión final confirma que no se modificó funcionalidad ni se crearon artefactos fuera del alcance.

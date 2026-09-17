@@ -9,7 +9,9 @@ param(
     # etapa no tiene entrada en scripts/feature-titles.json.
     [string] $DocTitle = "",
 
-    [string] $Version = ""
+    [string] $Version = "",
+
+    [string] $ReleaseType = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -163,7 +165,7 @@ $currentBranch = Get-CheckedOutput "git" @("branch", "--show-current")
 # resultante no coincidia con ningun indice y el contrato fallaba.
 # Ahora son dos cosas distintas: $prTitle es de la PR, y el de la
 # documentacion sale del registro canonico (o de -DocTitle).
-$info = Get-FeatureInfo -Slug $Slug -Title $docTitle -Version $Version
+$info = Get-FeatureInfo -Slug $Slug -Title $docTitle -Version $Version -ReleaseType $ReleaseType
 
 if ($currentBranch -eq $baseBranch -or $currentBranch -eq "main") {
     throw "Este script debe correr en una rama de feature, no en $currentBranch."
@@ -174,7 +176,7 @@ if (-not $currentBranch.StartsWith("feature/")) {
 }
 
 # La identidad debe validarse antes de cualquier cambio en ROADMAP.
-Assert-WorkUnitIdentity -Slug $Slug -Branch $currentBranch -RunPath (Get-FeatureInfo -Slug $Slug -Version $Version).RunDir
+Assert-WorkUnitIdentity -Slug $Slug -Branch $currentBranch -RunPath $info.RunDir
 
 & git diff --quiet
 $unstagedStatus = $LASTEXITCODE
@@ -209,7 +211,7 @@ else {
     Invoke-Checked "git" @("commit", "-m", "docs: marcar $Slug como ready for PR")
 }
 
-Assert-FeatureContract -Slug $Slug -Title $info.Title -Version $Version -RequireReadyRoadmap
+Assert-FeatureContract -Slug $Slug -Title $info.Title -Version $Version -ReleaseType $ReleaseType -RequireReadyRoadmap
 
 Write-Host "==> Pusheando $currentBranch..."
 Invoke-Checked "git" @("push", "-u", "origin", $currentBranch)

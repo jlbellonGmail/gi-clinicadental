@@ -4,7 +4,7 @@ Extiende `api/leads.js` y `api/_lib/mailer.js` (features `03`, `04` y
 `05`, ya mergeadas) para que, en el mismo bloque donde ya se envía la
 notificación a la clínica, se envíe **además** un segundo correo
 transaccional al propio paciente confirmando que su solicitud fue
-recibida. Spec completo: `runs/06-confirmacion-automatica-paciente/spec.md`
+recibida. Spec completo: `runs/v1.0.0-producto/06-confirmacion-automatica-paciente/spec.md`
 (26 criterios de aceptación, aprobado en `audit-1.md` en el primer
 intento, con tres observaciones no bloqueantes incorporadas más abajo).
 

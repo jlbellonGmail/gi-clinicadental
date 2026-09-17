@@ -84,7 +84,9 @@ function Get-FeatureInfo {
 
         [string] $Title = "",
 
-        [string] $Version = ""
+        [string] $Version = "",
+
+        [string] $ReleaseType = ""
     )
 
     # Dos formas validas de identificar una etapa:
@@ -102,6 +104,8 @@ function Get-FeatureInfo {
     }
 
     $docSlug = $Matches["docSlug"]
+    $legacyPrefix = ($Slug -split "-", 2)[0]
+    $legacyVersion = if ($legacyPrefix -cmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { $legacyPrefix } else { "" }
 
     # Orden de resolucion del titulo, de mas explicito a menos:
     #   1. el -Title que recibio esta funcion;
@@ -118,17 +122,46 @@ function Get-FeatureInfo {
         }) -join " "
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($Version) -and [string]::IsNullOrWhiteSpace($ReleaseType)) {
+        throw "ReleaseType es obligatorio cuando se usa Version; valores validos: producto o gobernanza."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Version) -and -not [string]::IsNullOrWhiteSpace($ReleaseType)) {
+        throw "Version es obligatoria cuando se usa ReleaseType."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ReleaseType) -and $ReleaseType -cnotin @("producto", "gobernanza")) {
+        throw "ReleaseType invalido '$ReleaseType'. Valores validos: producto o gobernanza."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($Version) -and $Version -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+        throw "Version invalida '$Version'. Debe tener formato vX.Y.Z."
+    }
+
+    $runDir = if ($Version) {
+        "runs/$Version-$ReleaseType/$Slug"
+    }
+    elseif ($legacyVersion -and
+            (Test-Path -LiteralPath "runs/$legacyVersion-producto/$Slug" -PathType Container)) {
+        # Compatibilidad explícita con la release histórica cuyo slug ya
+        # contiene su versión; no se aplica a slugs normales ni deduce tipos.
+        "runs/$legacyVersion-producto/$Slug"
+    }
+    else {
+        "runs/$Slug"
+    }
+
     return [pscustomobject]@{
         Slug = $Slug
         Number = $Matches["number"]
         DocSlug = $docSlug
         Title = $Title
-        RunDir = if ($Version) { "runs/$Version/$Slug" } else { "runs/$Slug" }
+        RunDir = $runDir
         TechnicalDoc = "docs/tecnica/$docSlug.md"
         UserDoc = "docs/usuario/$docSlug.md"
         TechnicalIndex = "docs/tecnica/index.md"
         UserIndex = "docs/usuario/index.md"
-        Decision = if ($Version) { "runs/$Version/$Slug/decision.md" } else { "runs/$Slug/decision.md" }
+        Decision = "$runDir/decision.md"
     }
 }
 
@@ -262,6 +295,8 @@ function Update-DocsIndex {
 
         [string] $Version = "",
 
+        [string] $ReleaseType = "",
+
         [switch] $ValidateOnly
     )
 
@@ -341,7 +376,7 @@ function New-DecisionFile {
         [string[]] $Decisions
     )
 
-    $info = Get-FeatureInfo -Slug $Slug -Title $Title -Version $Version
+    $info = Get-FeatureInfo -Slug $Slug -Title $Title -Version $Version -ReleaseType $ReleaseType
     if (-not (Test-Path -LiteralPath $info.RunDir -PathType Container)) {
         New-Item -ItemType Directory -Path $info.RunDir | Out-Null
     }
@@ -391,10 +426,12 @@ function Assert-FeatureContract {
 
         [string] $Version = "",
 
+        [string] $ReleaseType = "",
+
         [switch] $RequireReadyRoadmap
     )
 
-    $info = Get-FeatureInfo -Slug $Slug -Title $Title -Version $Version
+    $info = Get-FeatureInfo -Slug $Slug -Title $Title -Version $Version -ReleaseType $ReleaseType
     Assert-NonEmptyFile $info.Decision
     Assert-NonEmptyFile "$($info.RunDir)/spec.md"
     Assert-NonEmptyFile $info.TechnicalDoc

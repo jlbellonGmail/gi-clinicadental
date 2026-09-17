@@ -26,7 +26,7 @@ name: Docs
 # Por que no `mkdocs gh-deploy`: publica empujando la rama `gh-pages`, lo
 # que exige Source = "Deploy from a branch" y ademas requiere Pages igual.
 # Ver docs/tecnica/validacion-mvp-produccion.md y
-# runs/16-validacion-mvp-produccion/decision.md.
+# runs/v1.0.0-producto/16-validacion-mvp-produccion/decision.md.
 
 on:
   push:

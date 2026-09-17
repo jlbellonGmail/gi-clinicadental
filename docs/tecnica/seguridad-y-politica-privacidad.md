@@ -1,6 +1,6 @@
 # Seguridad y política de privacidad — documentación técnica
 
-Cierra, del lado del frontend, la brecha detectada en el spec (`runs/07-
+Cierra, del lado del frontend, la brecha detectada en el spec (`runs/v1.0.0-producto/07-
 seguridad-y-politica-privacidad/spec.md`): `supabase/migrations/20260819210130_create_leads_table.sql`
 y `api/leads.js` (feature `03-endpoint-recepcion-leads`) ya esperan
 `consentimiento_privacidad boolean not null` y

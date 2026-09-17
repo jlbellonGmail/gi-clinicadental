@@ -1,6 +1,6 @@
 """Guardas del diálogo de resultado del formulario.
 
-Origen: `runs/16-validacion-mvp-produccion/test-report-7.md`. El diálogo
+Origen: `runs/v1.0.0-producto/16-validacion-mvp-produccion/test-report-7.md`. El diálogo
 "Solicitud enviada" **se veía al entrar al sitio**, sin haber enviado
 nada.
 

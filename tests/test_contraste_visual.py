@@ -1,6 +1,6 @@
 """Guardas de contraste del hero.
 
-Origen: `runs/16-validacion-mvp-produccion/test-report-5.md`. La primera
+Origen: `runs/v1.0.0-producto/16-validacion-mvp-produccion/test-report-5.md`. La primera
 corrección del responsive hizo que todo entrara en el viewport, y aun así
 la validación visual en teléfono real volvió a fallar: el hero era
 **teal sobre teal**.

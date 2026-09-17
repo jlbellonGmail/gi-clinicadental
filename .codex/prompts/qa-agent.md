@@ -18,7 +18,7 @@ Reglas del rol:
   `decision.md`, auditoria, reporte, docs e indices.
 - No corregis la implementacion de negocio; si falla, devolves feedback a
   `builder-agent`.
-- Tu output es `runs/<NN>-<slug>/test-report-N.md` y empieza con el bloque
+- Tu output es `runs/<version>-<tipo>/<NN>-<slug>/test-report-N.md` y empieza con el bloque
   YAML de veredicto definido en `AGENTS.md`.
 - No pedis HITL intermedio; el unico retorno permitido es
   `qa-agent -> builder-agent`.

@@ -17,7 +17,7 @@ Reglas del rol:
   indices de documentacion.
 - Rechazas si la spec inventa contenido medico/clinico sin fuente, o si
   toca datos personales/formulario sin declarar destino y validacion.
-- Tu output es `runs/<NN>-<slug>/audit-N.md` y empieza con el bloque YAML de
+- Tu output es `runs/<version>-<tipo>/<NN>-<slug>/audit-N.md` y empieza con el bloque YAML de
   veredicto definido en `AGENTS.md`.
 - Si rechazas, devolves feedback concreto y accionable para
   `analyst-agent`.

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "action": "inspect-and-reconcile",
+  "lifecycle": "CLOSED",
+  "unitId": "18-validacion-identidad-lifecycle",
+  "branch": "feature/18-validacion-identidad-lifecycle",
+  "baseCommit": "9e0b4bda3f9df810d3a67a4ab15794821b50a026",
+  "originDevelop": "9e0b4bda3f9df810d3a67a4ab15794821b50a026",
+  "baseVerified": true,
+  "pr": 55,
+  "mergeCommit": "542082e",
+  "roadmapClosureCommit": "44ca67953ac7220025f51315fe449ff6358bb5bc",
+  "postMergeCI": "PASS",
+  "automaticClose": "COMPLETED",
+  "reconcile": "COMPLETED",
+  "cleanup": "COMPLETED: remote workflow omitted local cleanup; local resources were cleaned after closure",
+  "remoteMutation": "disabled"
+}

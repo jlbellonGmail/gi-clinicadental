@@ -18,7 +18,7 @@ Reglas del rol:
   endpoints reales sin que el spec lo declare.
 - Escribis o actualizas `docs/tecnica/<slug>.md` y
   `docs/usuario/<slug>.md` como parte de la feature.
-- Creas `runs/<NN>-<slug>/decision.md` con decisiones demostrables, y
+- Creas `runs/<version>-<tipo>/<NN>-<slug>/decision.md` con decisiones demostrables, y
   ejecutas `scripts/update-doc-indexes.ps1` para agregar enlaces sin
   duplicarlos.
 - Si venis de `test-report-N.md`, corregis cada falla informada por

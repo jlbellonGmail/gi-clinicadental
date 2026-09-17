@@ -72,9 +72,32 @@ def test_el_contrato_acepta_las_dos_formas(slug: str, doc_slug: str):
     assert salida[0].strip() == doc_slug, (
         f"el slug de documentacion de '{slug}' deberia ser '{doc_slug}'"
     )
-    assert salida[1].strip() == f"runs/{slug}", (
+    expected_run = (
+        "runs/v1.0.1-producto/v1.0.1-identidad-privacidad-white-label"
+        if slug == "v1.0.1-identidad-privacidad-white-label"
+        else f"runs/{slug}"
+    )
+    assert salida[1].strip() == expected_run, (
         "la carpeta de artefactos usa el identificador completo, no el slug corto"
     )
+
+
+def test_el_contrato_resuelve_la_ruta_canonica_por_version_y_tipo():
+    comando = (
+        f". '{CONTRACT}'; "
+        "$i = Get-FeatureInfo -Slug '20-fundacion-tenancy-identidad' "
+        "-Version 'v2.0.0' -ReleaseType 'producto'; "
+        "Write-Output $i.RunDir"
+    )
+    resultado = subprocess.run(
+        [powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", comando],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert resultado.returncode == 0, resultado.stderr
+    assert resultado.stdout.strip() == "runs/v2.0.0-producto/20-fundacion-tenancy-identidad"
 
 
 @pytest.mark.parametrize("slug", RECHAZADOS)
@@ -139,7 +162,7 @@ def test_esta_release_no_ocupa_un_numero_de_hito():
 
 
 def test_los_artefactos_de_la_etapa_viven_bajo_el_nombre_de_release():
-    directorio = ROOT / "runs" / "v1.0.1-identidad-privacidad-white-label"
+    directorio = ROOT / "runs" / "v1.0.1-producto" / "v1.0.1-identidad-privacidad-white-label"
     assert directorio.is_dir(), "falta la carpeta de artefactos de la release"
 
     for obligatorio in ("spec.md", "decision.md"):
@@ -224,7 +247,7 @@ def test_la_correccion_de_nomenclatura_queda_documentada():
     quedó rastro de la corrección, este falla.
     """
     decision = (
-        ROOT / "runs" / "v1.0.1-identidad-privacidad-white-label" / "decision.md"
+        ROOT / "runs" / "v1.0.1-producto" / "v1.0.1-identidad-privacidad-white-label" / "decision.md"
     ).read_text(encoding="utf-8")
 
     assert "17-identidad-privacidad-y-white-label" in decision, (
@@ -249,7 +272,7 @@ def test_la_exclusion_de_las_actas_no_es_una_via_de_escape():
     )
     assert not patron.search("la etapa 17 del roadmap"), "el patrón se dispara con prosa"
 
-    etapa = ROOT / "runs" / "v1.0.1-identidad-privacidad-white-label"
+    etapa = ROOT / "runs" / "v1.0.1-producto" / "v1.0.1-identidad-privacidad-white-label"
 
     citan = [
         a

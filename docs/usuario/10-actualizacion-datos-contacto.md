@@ -46,7 +46,7 @@ Si los datos de contacto cambian (nuevo teléfono, dirección, horarios, o actua
 1. Actualizar este documento
 2. Modificar `index.html` con los nuevos valores
 3. Verificar que todos los enlaces funcionen correctamente
-4. Crear un nuevo entry en `runs/<NN>-<slug>/` con spec, audit y decision
+4. Crear un nuevo entry en `runs/<version>-<tipo>/<NN>-<slug>/` con spec, audit y decision
 
 ## Preguntas frecuentes
 **¿Los enlaces de redes sociales se abren en la misma ventana?**

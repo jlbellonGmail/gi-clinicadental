@@ -1,7 +1,0 @@
-{
-  "schemaVersion": 1,
-  "lifecycle": "ACTIVE",
-  "unitId": "18-validacion-identidad-lifecycle",
-  "branch": "feature/18-validacion-identidad-lifecycle",
-  "baseCommit": "9e0b4bda3f9df810d3a67a4ab15794821b50a026"
-}

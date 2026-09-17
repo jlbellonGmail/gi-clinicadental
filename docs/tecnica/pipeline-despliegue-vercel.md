@@ -180,8 +180,8 @@ git push origin main      # Despliega automáticamente versión anterior
 
 ## Referencias
 
-- Spec: `runs/14-pipeline-despliegue-vercel/spec.md`
-- Auditoría: `runs/14-pipeline-despliegue-vercel/audit-1.md`
-- Decisiones: `runs/14-pipeline-despliegue-vercel/decision.md`
+- Spec: `runs/v1.0.0-producto/14-pipeline-despliegue-vercel/spec.md`
+- Auditoría: `runs/v1.0.0-producto/14-pipeline-despliegue-vercel/audit-1.md`
+- Decisiones: `runs/v1.0.0-producto/14-pipeline-despliegue-vercel/decision.md`
 - Documentación de usuario: `docs/usuario/14-pipeline-despliegue-vercel.md`
 - AGENTS.md: Secciones Stack, Hosting, CI/CD, Git, Variables de entorno

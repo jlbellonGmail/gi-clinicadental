@@ -218,7 +218,7 @@ def test_las_imagenes_referenciadas_por_el_html_existen():
     No verifica el contenido de los pixeles, solo que el archivo exista.
     `favicon.ico` y `apple-touch-icon.png` quedan fuera a proposito: su
     ausencia es un hallazgo preexistente ya registrado en
-    `runs/16-validacion-mvp-produccion/test-report-1.md`.
+    `runs/v1.0.0-producto/16-validacion-mvp-produccion/test-report-1.md`.
     """
     faltantes = []
     for nombre in HTML_PUBLICOS:
