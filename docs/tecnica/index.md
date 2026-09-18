@@ -76,6 +76,7 @@ hide:
 - [Validar identidad de work units en lifecycle](validacion-identidad-lifecycle.md)
 - [Planificación funcional de ClínicaDental v2](planificacion-producto-v2.md)
 - [Organización de runs por versión](organizacion-runs-por-version.md)
+- [Integración con GI-PLATFORM-CORE](integracion-core-platform.md)
 
 <!-- FEATURE_LINKS_END -->
 
