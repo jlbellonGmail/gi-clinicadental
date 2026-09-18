@@ -10,6 +10,8 @@ La identidad se resuelve desde el Bearer JWT de Supabase Auth. La solicitud
 debe aportar `x-organization-id` y puede aportar `x-site-id`. El módulo
 construye `TenantContext`, consulta memberships, roles, permisos y `site_access`
 con deny-by-default, y registra cada decisión en `core.audit_events`.
+Las consultas a nivel Organization no exigen artificialmente un Site; cuando
+se solicita un Site, el acceso explícito en `site_access` es obligatorio.
 
 La migración fuente de las tablas `core.*` vive en GI-PLATFORM-CORE:
 `supabase/migrations/20260918000000_core_schema.sql`. Debe aplicarse antes de

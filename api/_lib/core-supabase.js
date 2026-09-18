@@ -70,6 +70,42 @@ async function listOrganizations(userId, client = getSupabaseClient()) {
   return data || [];
 }
 
+async function listSites(userId, organizationId, client = getSupabaseClient()) {
+  const core = coreClient(client);
+  const memberships = await core.from('organization_memberships').select('id').eq('user_id', userId).eq('organization_id', organizationId).eq('active', true);
+  if (memberships.error) throw memberships.error;
+  const membershipIds = (memberships.data || []).map((row) => row.id);
+  if (!membershipIds.length) return [];
+  const access = await core.from('site_access').select('site_id').in('membership_id', membershipIds).eq('active', true);
+  if (access.error) throw access.error;
+  const siteIds = (access.data || []).map((row) => row.site_id);
+  if (!siteIds.length) return [];
+  const sites = await core.from('sites').select('*').in('id', siteIds).eq('organization_id', organizationId).eq('active', true);
+  if (sites.error) throw sites.error;
+  return sites.data || [];
+}
+
+async function listMemberships(userId, client = getSupabaseClient()) {
+  const core = coreClient(client);
+  const result = await core.from('organization_memberships').select('*').eq('user_id', userId).eq('active', true);
+  if (result.error) throw result.error;
+  return result.data || [];
+}
+
+async function listRoles(organizationId, client = getSupabaseClient()) {
+  const core = coreClient(client);
+  const result = await core.from('roles').select('*').eq('organization_id', organizationId).eq('active', true);
+  if (result.error) throw result.error;
+  return result.data || [];
+}
+
+async function listPermissions(client = getSupabaseClient()) {
+  const core = coreClient(client);
+  const result = await core.from('permissions').select('*').eq('active', true);
+  if (result.error) throw result.error;
+  return result.data || [];
+}
+
 async function createSite(organizationId, name, actorUserId, client = getSupabaseClient()) {
   const core = coreClient(client);
   const result = await core.from('sites').insert({ organization_id: organizationId, name }).select('*').single();
@@ -101,7 +137,8 @@ async function grantSiteAccess(membershipId, siteId, organizationId, actorUserId
 
 async function authorize(context, permissionCode, client = getSupabaseClient()) {
   const core = coreClient(client);
-  let query = core.from('organization_memberships').select('id,user_id,organization_id,active,site_access!inner(site_id,active),membership_roles!inner(role_id,roles!inner(organization_id,active,permission_codes))').eq('user_id', context.userId).eq('organization_id', context.organizationId).eq('active', true);
+  const siteRelation = context.siteId ? 'site_access!inner(site_id,active)' : 'site_access(site_id,active)';
+  let query = core.from('organization_memberships').select(`id,user_id,organization_id,active,${siteRelation},membership_roles!inner(role_id,roles!inner(organization_id,active,permission_codes))`).eq('user_id', context.userId).eq('organization_id', context.organizationId).eq('active', true);
   if (context.siteId) query = query.eq('site_access.site_id', context.siteId).eq('site_access.active', true);
   const { data, error } = await query.maybeSingle();
   if (error) throw error;
@@ -145,6 +182,10 @@ module.exports = {
   ensureUserProfile,
   grantSiteAccess,
   listOrganizations,
+  listPermissions,
+  listMemberships,
+  listRoles,
+  listSites,
   recordAudit,
   resolveIdentity,
   upsertMembership,
