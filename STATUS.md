@@ -7,7 +7,7 @@ Rama/worktree: eliminados tras integración y verificación
 Base de esta unidad: `develop@35737852297ee7d02c7f2e8023d1ff4e5b423b46`
 Template adoptado: `v2.0.0@f5d4b6cc029c34c0d0c05831bfd28134276fa167`
 
-Estado: transición Template v2 y planificación funcional v2 cerradas; unidad `19-planificacion-producto-v2` CLOSED. Se añadió localmente la composición de GI-PLATFORM-CORE en `api/_lib/core-supabase.js`, sin tocar `public.leads`. Validación local vigente: npm test `341 passed`.
+Estado: transición Template v2 y planificación funcional v2 cerradas; unidad `19-planificacion-producto-v2` CLOSED. Se añadió localmente la composición de GI-PLATFORM-CORE en `api/_lib/core-supabase.js`, sin tocar `public.leads`. Validación local vigente: npm test `341 passed`; RLS Core validado en PostgreSQL efímero.
 Validaciones históricas de transición: pytest 165/165 y npm test 337/337 en CI/entorno validado; en esta unidad npm test 337/337 y pytest local 145/165 con 20 fallos ambientales de serialización PowerShell, no declarados PASS.
 Auditoría independiente OpenCode de unidad 18: APPROVED; critical/high/medium/low = 0.
 Merges: PR #54 hacia develop, PR #55 (`542082e...`), PR #56 hacia main (`374bf99...`), PR #57 hacia main (`91cce2e6085b75c741715a86399a3be08e0d15ed`) y PR #58 hacia develop (`f09e718cc66bc59b7ea5492205bc1224743634a0`).
