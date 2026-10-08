@@ -17,3 +17,12 @@ Deployment: Preview de PR #57 y PR #58 completados; no hay evidencia de un deplo
 Próximo paso: aplicar la migración Core desde GI-PLATFORM-CORE en un proyecto Supabase real, configurar credenciales server-side y validar una sesión Auth real con Organization/Site antes de crear una PR.
 
 No se modificaron secretos, `public.leads` ni el comportamiento del endpoint de leads. Los cambios locales de integración Core están pendientes de revisión/commit.
+
+<!-- STATUS:AUTO:BEGIN -->
+
+## Estado verificado automáticamente
+
+- Gobernanza: AI-Native v3.0.1 (ver `ai-native.lock.json`); el gate L3 `l3 / l3-consumer` valida este bloque.
+- Rama y HEAD: no se registran aquí (se derivan de Git; el bloque no los fija para no quedar obsoleto).
+
+<!-- STATUS:AUTO:END -->

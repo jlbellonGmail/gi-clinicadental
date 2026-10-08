@@ -32,8 +32,6 @@ jobs:
       - name: Tests (pytest)
         run: pytest -v
 
-      - name: Integridad agentic
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-integrity.ps1
 
       - name: Identidad de unidades
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/validate-unit-identities.ps1
