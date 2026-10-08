@@ -314,7 +314,7 @@ es lo que `nav` daría.
 
 | | páginas |
 |---|---|
-| Enlazadas desde su índice, alcanzables | 42 |
+| Enlazadas desde su índice, alcanzables | 44 |
 | Sin enlace en ningún lado | 2 |
 
 Las dos inalcanzables son `docs/tecnica/landing.md` y
