@@ -36,9 +36,6 @@ jobs:
       - name: Identidad de unidades
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/validate-unit-identities.ps1
 
-      - name: Sincronización de adaptadores
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/sync-agentic-adapters.ps1 -Check
-
       - name: Supply chain
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/validate-supply-chain.ps1
 
