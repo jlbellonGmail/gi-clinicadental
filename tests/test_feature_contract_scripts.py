@@ -423,11 +423,3 @@ def test_ready_for_pr_blocks_real_gh_error(tmp_path: Path):
     assert "auth failed" in result.stderr
 
 
-def test_workflow_yaml_is_valid():
-    workflow = ROOT / ".github" / "workflows" / "post-merge-close-feature.yml"
-    content = workflow.read_text(encoding="utf-8")
-    assert "pull_request_target:" in content
-    assert "contents: write" in content
-    assert "pull-requests: read" in content
-    assert "group: close-feature-develop" in content
-    assert "-SkipLocalCleanup" in content

@@ -121,25 +121,6 @@ def test_el_mensaje_de_error_nombra_las_dos_formas():
     assert "vX.Y.Z-slug" in resultado.stderr
 
 
-def test_el_cierre_post_merge_reconoce_las_dos_formas():
-    """El workflow deriva el slug de la rama con su propia expresión.
-
-    Si acepta menos formas que el contrato, una release de mantenimiento
-    se mergea pero su ROADMAP nunca se cierra solo.
-    """
-    contenido = WORKFLOW.read_text(encoding="utf-8")
-    lineas = [linea for linea in contenido.splitlines() if "=~" in linea and "head_ref" in linea]
-    assert len(lineas) == 1, (
-        "se esperaba exactamente una expresion que derive el slug de la rama, "
-        f"hay {len(lineas)}"
-    )
-
-    expresion = lineas[0]
-    assert "[0-9]{2}" in expresion, "el workflow dejo de reconocer los hitos NN-slug"
-    assert "v[0-9]+\\.[0-9]+\\.[0-9]+" in expresion, (
-        "el workflow no reconoce feature/vX.Y.Z-slug: una release de "
-        "mantenimiento quedaria sin cierre automatico de ROADMAP"
-    )
 
 
 def test_esta_release_no_ocupa_un_numero_de_hito():

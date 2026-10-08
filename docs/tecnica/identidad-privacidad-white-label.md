@@ -310,7 +310,7 @@ Lo que sí se hizo fue convertir el `INFO` pasivo en un guard activo.
 esté enlazada desde el índice de su área — la discoverability real, que
 es lo que `nav` daría.
 
-**Reparto exacto de las 44 páginas:**
+**Reparto exacto de las 46 páginas:**
 
 | | páginas |
 |---|---|
