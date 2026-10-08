@@ -32,17 +32,14 @@ jobs:
       - name: Tests (pytest)
         run: pytest -v
 
-      - name: Integridad agentic
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-integrity.ps1
 
       - name: Identidad de unidades
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/validate-unit-identities.ps1
 
-      - name: Sincronización de adaptadores
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/sync-agentic-adapters.ps1 -Check
-
       - name: Supply chain
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/validate-supply-chain.ps1
+
+
 
       - name: Instalar Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "d864c263012576a3dad5d33f327e82a7736cd32a",
+  "platform": {
+    "repo": "github:jlbellonGmail/ai-native",
+    "version": "v3.0.1",
+    "commit": "da84fb1fb4cb0164300857f77fcf06b16f7202d7",
+    "digest": "sha256:73c30a1cb9dc5b1c830a48e62c113945cf971ea128777aba68ae10f050c4c52c"
+  },
+  "retired": [
+    {
+      "path": ".agentic/mcp.json",
+      "sha256": "sha256:6270b542b246c9ef9583999d97744a610fa9218bbf60e1c14d8dcaf647206db2"
+    },
+    {
+      "path": ".claude/rules/.gitkeep",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".claude/skills/.gitkeep",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".opencode/skills/.gitkeep",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "sha256:336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+    },
+    {
+      "path": "pytest.ini",
+      "sha256": "sha256:37b7898dd0df68d7bacac4726b4836010200403a1abe9542fe229caebe39b8a3"
+    }
+  ],
+  "replaced": [
+    {
+      "path": "CLAUDE.md",
+      "sha256": "sha256:336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+    }
+  ],
+  "created": [
+    {
+      "path": ".claude/skills/delivery-governance/SKILL.md",
+      "sha256": "sha256:1c2953436c12f88c6b5175e160a8096fb199ad7e6ca0d0b6af8dee799e8ed7c6"
+    },
+    {
+      "path": ".claude/skills/product-context/SKILL.md",
+      "sha256": "sha256:fc64be8c7047db58e8deca92fbe55fffd951859c62c6c16f3b0dbf586ce0bf9b"
+    },
+    {
+      "path": ".claude/skills/recovery/SKILL.md",
+      "sha256": "sha256:bac93b7a4bd1b7b8fe45d7788ae62a3309dc19606183c45c5613648becbfd0c0"
+    },
+    {
+      "path": ".claude/skills/task-execution/SKILL.md",
+      "sha256": "sha256:7513c1c87bb58a4afb0becdd259871d85040161075d18136b89b1acbdfe23911"
+    },
+    {
+      "path": ".codex/builder.config.toml",
+      "sha256": "sha256:645b87e0d91250b4b626e98a1105a4b25aaf5ccc2ea5f5d65d35a380a6716ca5"
+    },
+    {
+      "path": ".codex/reviewer.config.toml",
+      "sha256": "sha256:645b87e0d91250b4b626e98a1105a4b25aaf5ccc2ea5f5d65d35a380a6716ca5"
+    },
+    {
+      "path": ".github/workflows/ai-native.yml",
+      "sha256": "sha256:6d461fab2302cdc0323ba24bb279149f2dfe7d74a1aa0a6bf0f96a21f743c340"
+    },
+    {
+      "path": ".opencode/roles/builder.md",
+      "sha256": "sha256:0225db2b1c6f6da7a816e35294f99d2d0c4eb663a914fb6f49a1af3789c99317"
+    },
+    {
+      "path": ".opencode/roles/planner.md",
+      "sha256": "sha256:6d2207d0055958b021f84b125ed48941e99d552c520ff220303879d2a30d938c"
+    },
+    {
+      "path": ".opencode/roles/reviewer.md",
+      "sha256": "sha256:492d576ca628e65dcc84d976f482fd94fd6ff87898ea27cf4af93f1c3833ee1a"
+    },
+    {
+      "path": ".opencode/skills/delivery-governance/SKILL.md",
+      "sha256": "sha256:1c2953436c12f88c6b5175e160a8096fb199ad7e6ca0d0b6af8dee799e8ed7c6"
+    },
+    {
+      "path": ".opencode/skills/product-context/SKILL.md",
+      "sha256": "sha256:fc64be8c7047db58e8deca92fbe55fffd951859c62c6c16f3b0dbf586ce0bf9b"
+    },
+    {
+      "path": ".opencode/skills/recovery/SKILL.md",
+      "sha256": "sha256:bac93b7a4bd1b7b8fe45d7788ae62a3309dc19606183c45c5613648becbfd0c0"
+    },
+    {
+      "path": ".opencode/skills/task-execution/SKILL.md",
+      "sha256": "sha256:7513c1c87bb58a4afb0becdd259871d85040161075d18136b89b1acbdfe23911"
+    },
+    {
+      "path": "ai-native.lock.json",
+      "sha256": "sha256:21a77daa3cd4c67027365080f5877fcf725d634acfd649e52373969758668c30"
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "sha256:336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+    }
+  ],
+  "kept": [
+    {
+      "path": ".claude/agents/builder.md",
+      "reason": "MODIFIED_FROM_TEMPLATE v2 file (yours or product-owned)"
+    },
+    {
+      "path": ".claude/agents/planner.md",
+      "reason": "MODIFIED_FROM_TEMPLATE v2 file (yours or product-owned)"
+    },
+    {
+      "path": ".claude/agents/reviewer.md",
+      "reason": "MODIFIED_FROM_TEMPLATE v2 file (yours or product-owned)"
+    },
+    {
+      "path": ".codex/README.md",
+      "reason": "MODIFIED_FROM_TEMPLATE v2 file (yours or product-owned)"
+    },
+    {
+      "path": ".codex/config.toml",
+      "reason": "MODIFIED_FROM_TEMPLATE v2 file (yours or product-owned)"
+    },
+    {
+      "path": ".codex/planner.config.toml",
+      "reason": "MODIFIED_FROM_TEMPLATE v2 file (yours or product-owned)"
+    },
+    {
+      "path": ".mcp.json",
+      "reason": "MODIFIED_FROM_TEMPLATE v2 file (yours or product-owned)"
+    },
+    {
+      "path": "opencode.json",
+      "reason": "MODIFIED_FROM_TEMPLATE v2 file (yours or product-owned)"
+    }
+  ],
+  "keptIdentical": 0,
+  "keptLocal": 194
+}

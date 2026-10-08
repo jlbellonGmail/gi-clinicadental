@@ -1,0 +1,14 @@
+# M6 / gate L3 de AI-Native: el perfil python-service ejecuta `pip install . -r requirements-dev.txt`.
+# gi-clinicadental es un sitio web con tests Python (pip + requirements), no un paquete: se declara un paquete vacio
+# solo para que `pip install .` sea valido. Las dependencias de test siguen en requirements-dev.txt.
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gi-clinicadental"
+version = "0.0.0"
+requires-python = ">=3.12"
+
+[tool.setuptools]
+packages = []
