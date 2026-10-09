@@ -1,5 +1,7 @@
 # Proyecto: gi-clinicadental
 
+> **Estado de plataforma (M7):** este repositorio esta migrado a AI-Native v3.0.1 (`ai-native.lock.json`, `.ai-native/migration-journal.json`); Template v2.x es LEGACY/TRANSITION. El resto de este manual describe el circuito Template original y se conserva como referencia. No existen en este arbol y no deben invocarse: `.github/workflows/post-merge-close-feature.yml`.
+
 ## Adopción operativa de Template v2.0.0
 
 Las unidades nuevas usan `.agentic/` como fuente canónica de roles, modelos,
